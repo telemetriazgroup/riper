@@ -227,7 +227,7 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
         color: 'text-orange-600', 
         bg: 'bg-orange-100', 
         icon: Timer,
-        disabled: true // Disabled as per requirement
+        disabled: false
       };
     }
     return { 
@@ -240,23 +240,26 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
   };
 
   const status = getStatusDisplay();
-  const controlsDisabled = !isPoweredOn || status.disabled;
+  const controlsDisabled = status.disabled;
+  const conexionLabel = device?.estado_conexion === 'online' ? 'Conexión: En línea' : device?.estado_conexion === 'wait' ? 'Conexión: Espera' : 'Conexión: Desconectado';
+  const equipoLabel = isPoweredOn ? 'Equipo: ON' : 'Equipo: OFF';
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
         <div className="flex items-center gap-3">
           <div className={cn("h-10 w-10 rounded-full flex items-center justify-center", status.bg, status.color)}>
             <status.icon className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-medium text-gray-900">{t('device_status')}</div>
+            <div className="font-medium text-gray-900">{t('equipo_estado_actual')}</div>
             <div className={cn("text-xs font-bold", status.color)}>
-              {status.text} • {isPoweredOn ? t('status_powered_on') : t('status_powered_off')}
+              {conexionLabel} • {equipoLabel}
             </div>
+            <p className="text-xs text-gray-500 mt-1">{t('controls_available_when_on')}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
             <span className="text-sm font-medium text-gray-500">
                 {isPoweredOn ? t('turn_off') : t('turn_on')}
             </span>

@@ -75,27 +75,23 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
   };
 
   const getStatusBadge = () => {
+    const base = 'shrink-0 whitespace-nowrap px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1';
     if (connectionStatus === 'offline') {
-      return <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-600 text-xs font-bold flex items-center gap-1"><WifiOff className="w-3 h-3"/> {t('status_offline').toUpperCase()}</span>;
+      return <span className={cn(base, 'bg-gray-200 text-gray-600')}><WifiOff className="w-3 h-3 shrink-0"/> OFFLINE</span>;
     }
-    
     if (connectionStatus === 'standby') {
-      return <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center gap-1"><Timer className="w-3 h-3"/> {t('status_standby').toUpperCase()}</span>;
+      return <span className={cn(base, 'bg-orange-100 text-orange-700')}><Timer className="w-3 h-3 shrink-0"/> ESPERA</span>;
     }
-
-    // Online
     if (isPoweredOff) {
-      return <span className="px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1"><Power className="w-3 h-3"/> {t('status_powered_off').toUpperCase()}</span>;
+      return <span className={cn(base, 'bg-gray-200 text-gray-700')}><Power className="w-3 h-3 shrink-0"/> APAGADO</span>;
     }
-
     if (device.status === 'alarm') {
-      return <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">{t('status_alarm').toUpperCase()}</span>;
+      return <span className={cn(base, 'bg-red-100 text-red-700')}>ALARMA</span>;
     }
     if (device.status === 'warning') {
-      return <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-xs font-bold">{t('status_warning').toUpperCase()}</span>;
+      return <span className={cn(base, 'bg-yellow-100 text-yellow-700')}>AVISO</span>;
     }
-    
-    return <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-bold">{t('status_active').toUpperCase()}</span>;
+    return <span className={cn(base, 'bg-green-100 text-green-700')}>ACTIVO</span>;
   };
 
   const formatLastSeen = () => {
@@ -109,11 +105,11 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
 
   return (
     <Card 
-      className={cn("cursor-pointer hover:shadow-md transition-shadow", getStatusColor())}
+      className={cn("cursor-pointer hover:shadow-md transition-shadow overflow-hidden", getStatusColor())}
       onClick={() => onClick(device.id)}
     >
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0 relative z-10">
-        <div className="flex-1 mr-2" onClick={(e) => isEditing && e.stopPropagation()}>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2 space-y-0 relative z-10 overflow-hidden min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden mr-2" onClick={(e) => isEditing && e.stopPropagation()}>
           {isEditing ? (
             <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-200">
               <input
@@ -157,7 +153,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
             <span className="text-[10px] text-gray-400">• {formatLastSeen()}</span>
           </div>
         </div>
-        {getStatusBadge()}
+        <div className="flex-shrink-0">{getStatusBadge()}</div>
       </CardHeader>
       
       <CardContent>

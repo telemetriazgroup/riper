@@ -64,6 +64,11 @@ function AppContent() {
     setActiveView('device-detail');
   };
 
+  const handleChangeView = (view: string) => {
+    setActiveView(view);
+    if (view !== 'device-detail') setSelectedDeviceId(null);
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
@@ -72,7 +77,7 @@ function AppContent() {
         return selectedDeviceId 
           ? <DeviceDetail 
               deviceId={selectedDeviceId} 
-              onBack={() => setActiveView('dashboard')} 
+              onBack={() => { setActiveView('dashboard'); setSelectedDeviceId(null); }} 
               initialView={deviceDetailTab}
             />
           : <Dashboard onSelectDevice={handleDeviceSelect} />;
@@ -124,8 +129,8 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-background flex font-sans text-foreground transition-colors duration-200">
       <Sidebar 
-        activeView={activeView} 
-        onChangeView={setActiveView} 
+        activeView={activeView === 'device-detail' ? 'dashboard' : activeView} 
+        onChangeView={handleChangeView} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />

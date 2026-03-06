@@ -113,6 +113,8 @@ export interface Device {
   id: string;
   name: string;
   status: 'active' | 'warning' | 'alarm' | 'offline';
+  /** Estado de conexión de la API: online | wait | offline */
+  estado_conexion?: string;
   last_seen: string;
   telemetry: TelemetryData;
   operational: OperationalData;
@@ -123,6 +125,142 @@ export interface Device {
     endTime: string;
     currentPhase?: string;
     timeLeft?: string;
+  };
+}
+
+// --- TermoKing API (estado_general) ---
+export interface TermoKingUltimoValor {
+  valor: number;
+  fecha: string | null;
+  batch_id: string | null;
+}
+
+export interface TermoKingDispositivo {
+  imei: string;
+  descripcion: string;
+  estado_conexion: string;
+  ultimo_dato_recibido: string | null;
+  minutos_desde_ultimo_dato?: number | null;
+  proceso_activo?: boolean;
+  power_state_texto?: string;
+  en_rango?: boolean;
+  ultimo_set_point?: TermoKingUltimoValor | null;
+  ultimo_temp_supply?: TermoKingUltimoValor | null;
+  ultimo_return_air?: TermoKingUltimoValor | null;
+  ultimo_relative_humidity?: TermoKingUltimoValor | null;
+  ultimo_co2_reading?: TermoKingUltimoValor | null;
+  ultimo_ethylene?: TermoKingUltimoValor | null;
+  ultimo_encendido?: { fecha: string | null; batch_id: string | null };
+  ultimo_apagado?: { fecha: string | null; batch_id: string | null };
+  ultimo_batch_id?: string | null;
+}
+
+export interface TermoKingEstadoGeneralResponse {
+  data?: {
+    resumen?: Record<string, unknown>;
+    dispositivos: TermoKingDispositivo[];
+  };
+  code?: number;
+  message?: string;
+}
+
+// --- TermoKing API (historial) ---
+export interface TermoKingTrama {
+  fecha: string;
+  temp_supply_1?: number | null;
+  return_air?: number | null;
+  relative_humidity?: number | null;
+  co2_reading?: number | null;
+  o2_reading?: number | null;
+  ethylene?: number | null;
+  sp_ethyleno?: number | null;
+  supply_air_temp?: number | null;
+  return_air_temp?: number | null;
+  set_point?: number | null;
+  evaporation_coil?: number | null;
+  condensation_coil?: number | null;
+  compress_coil_1?: number | null;
+  ambient_air?: number | null;
+  cargo_1_temp?: number | null;
+  cargo_2_temp?: number | null;
+  cargo_3_temp?: number | null;
+  cargo_4_temp?: number | null;
+  avl?: number | null;
+  line_voltage?: number | null;
+  line_frequency?: number | null;
+  capacity_load?: number | null;
+  power_state?: number | null;
+  humidity_set_point?: number | null;
+  set_point_o2?: number | null;
+  set_point_co2?: number | null;
+  iCtrlRip?: number | null;
+  power_consumption?: number | null;
+  power_kwh?: number | null;
+}
+
+export interface TermoKingHistorialResponse {
+  data?: {
+    imei: string;
+    descripcion: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+    total_tramas: number;
+    tramas: TermoKingTrama[];
+  };
+  code?: number;
+  message?: string;
+}
+
+/** Mapea un dispositivo de estado_general a Device, con valores por defecto para campos faltantes. */
+export function mapTermoKingDispositivoToDevice(d: TermoKingDispositivo): Device {
+  const lastSeen = d.ultimo_dato_recibido ?? new Date().toISOString();
+  const mins = d.minutos_desde_ultimo_dato ?? 999;
+  let status: Device['status'] = 'active';
+  if (d.estado_conexion === 'offline' || mins > 720) status = 'offline';
+  else if (mins > 30 || d.estado_conexion === 'wait') status = 'warning';
+  else if (d.en_rango === false) status = 'alarm';
+
+  const powerState: 0 | 1 = (d.power_state_texto?.toLowerCase() === 'on') ? 1 : 0;
+  const v = (x: TermoKingUltimoValor | null | undefined, def: number) =>
+    x?.valor != null ? Number(x.valor) : def;
+
+  return {
+    id: d.imei,
+    name: d.descripcion || d.imei || 'Dispositivo',
+    status,
+    estado_conexion: d.estado_conexion ?? (status === 'offline' ? 'offline' : status === 'warning' ? 'wait' : 'online'),
+    last_seen: lastSeen,
+    telemetry: {
+      temp_supply_1: v(d.ultimo_temp_supply, 0),
+      return_air: v(d.ultimo_return_air, 0),
+      relative_humidity: v(d.ultimo_relative_humidity, 0),
+      ethylene: v(d.ultimo_ethylene, 0) || null,
+      co2_reading: v(d.ultimo_co2_reading, 0) || null,
+      set_point: v(d.ultimo_set_point, 18),
+      stateProcess: d.proceso_activo ? 'Ripening' : 'None',
+      power_state: powerState,
+      alarm_present: 0,
+    },
+    operational: {
+      evaporation_coil: 0,
+      condensation_coil: 0,
+      ambient_air: 0,
+      power_consumption: 0,
+      power_kwh: 0,
+      battery_voltage: 0,
+      defrost_interval: 6,
+      fresh_air_ex_mode: 0,
+    },
+    process: d.proceso_activo
+      ? {
+          name: 'Proceso activo',
+          progress: 50,
+          startTime: d.ultimo_encendido?.fecha ?? lastSeen,
+          endTime: lastSeen,
+          currentPhase: 'Maduración',
+          timeLeft: '--',
+        }
+      : undefined,
   };
 }
 
@@ -282,11 +420,13 @@ const mapRawToDevice = (raw: RawApiData, name: string, statusOverride?: string, 
   else if (raw.alarm_present) status = 'alarm';
 
   if (statusOverride) status = statusOverride as any;
+  const estado_conexion = status === 'offline' ? 'offline' : status === 'warning' ? 'wait' : 'online';
 
   return {
     id: raw.device,
     name: name,
     status: status,
+    estado_conexion,
     last_seen: raw.created_at.$date,
     telemetry: {
       temp_supply_1: raw.temp_supply_1,

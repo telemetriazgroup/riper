@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { useDevice } from '@/app/hooks/useDevices';
+import React, { useState, useMemo } from 'react';
+import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
 import { WeeklySummary } from './WeeklySummary';
-import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap } from 'lucide-react';
 import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
@@ -17,9 +17,20 @@ interface DeviceDetailProps {
 
 export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, initialView = 'operation' }) => {
   const { device, isLoading } = useDevice(deviceId);
+  const { history } = useDeviceHistory(deviceId);
   const [controlMode, setControlMode] = useState('manual');
   const [activeView, setActiveView] = useState(initialView);
   const { t, convertTemp, tempUnit } = useSettings();
+
+  const consumptionKwhPeriod = useMemo(() => {
+    if (!history || history.length < 2) return null;
+    const first = history[0] as { power_kwh?: number | null };
+    const last = history[history.length - 1] as { power_kwh?: number | null };
+    const a = first?.power_kwh ?? 0;
+    const b = last?.power_kwh ?? 0;
+    const diff = b - a;
+    return diff >= 0 ? diff : null;
+  }, [history]);
 
   if (isLoading) {
     return (
@@ -41,14 +52,18 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
           </Button>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">{device.name}</h2>
-            <div className="text-sm text-gray-500 flex items-center gap-2">
-              ID: {device.id} • 
+            <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+              <span>ID: {device.id}</span>
+              <span>•</span>
               <span className={
-                device.status === 'active' ? "text-green-600 font-bold" :
-                device.status === 'warning' ? "text-yellow-600 font-bold" :
-                device.status === 'alarm' ? "text-red-600 font-bold" : "text-gray-500"
+                device.estado_conexion === 'online' ? "text-green-600 font-bold" :
+                device.estado_conexion === 'wait' ? "text-amber-600 font-bold" : "text-gray-500"
               }>
-                {t(`status_${device.status}`).toUpperCase()}
+                {device.estado_conexion === 'online' ? 'En línea' : device.estado_conexion === 'wait' ? 'Espera' : 'Desconectado'}
+              </span>
+              <span>•</span>
+              <span className={device.telemetry.power_state === 1 ? "text-green-600 font-bold" : "text-gray-500"}>
+                {device.telemetry.power_state === 1 ? 'Equipo ON' : 'Equipo OFF'}
               </span>
             </div>
           </div>
@@ -139,6 +154,14 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                <div className="bg-white p-6 rounded-lg border shadow-sm">
                   <h3 className="font-semibold mb-4 text-gray-800">{t('operational_data')}</h3>
                   <div className="space-y-3 text-sm">
+                     {consumptionKwhPeriod != null && (
+                       <div className="flex justify-between border-b border-gray-50 pb-2">
+                         <span className="text-gray-500 flex items-center gap-1">
+                           <Zap className="h-4 w-4" /> {t('energy_consumption_period')}
+                         </span>
+                         <span className="font-mono font-medium">{consumptionKwhPeriod.toFixed(1)} kWh</span>
+                       </div>
+                     )}
                      <div className="flex justify-between border-b border-gray-50 pb-2">
                        <span className="text-gray-500">{t('power_consumption')}</span>
                        <span className="font-mono">{device.operational.power_consumption} kW</span>

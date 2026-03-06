@@ -1,0 +1,264 @@
+{
+    "data": {
+      "resumen": {
+        "total": 5,
+        "online": 5,
+        "wait": 0,
+        "offline": 0,
+        "proceso_activo": 2,
+        "power_on": 4,
+        "power_off": 1,
+        "en_rango": 5,
+        "zona_horaria": "GMT-5"
+      },
+      "dispositivos": [
+        {
+          "imei": "CC:DB:A7:9D:F3:E8",
+          "descripcion": "GREENBOX ZGRU9803515",
+          "estado_conexion": "online",
+          "ultimo_dato_recibido": "2026-03-06T06:47:59.788000",
+          "minutos_desde_ultimo_dato": 21.7,
+          "proceso_activo": true,
+          "power_state_texto": "on",
+          "en_rango": true,
+          "ultimo_set_point": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_temp_supply": {
+            "valor": 22.9,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_return_air": {
+            "valor": 24.2,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_relative_humidity": {
+            "valor": 94,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_co2_reading": {
+            "valor": 2.1,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_ethylene": {
+            "valor": 146.2,
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_encendido": {
+            "fecha": "2026-03-06T06:47:59.788000",
+            "batch_id": "69aabef3d77be04eb719e759"
+          },
+          "ultimo_apagado": {
+            "fecha": "2026-03-06T06:23:57.893000",
+            "batch_id": "69aabef3d77be04eb719e731"
+          },
+          "ultimo_batch_id": "69aabef3d77be04eb719e759"
+        },
+        {
+          "imei": "0C:B8:15:F2:C7:A0",
+          "descripcion": "GREENBOX ZGRU0048736",
+          "estado_conexion": "online",
+          "ultimo_dato_recibido": "2026-03-06T06:47:29.828000",
+          "minutos_desde_ultimo_dato": 22.2,
+          "proceso_activo": false,
+          "power_state_texto": "on",
+          "en_rango": true,
+          "ultimo_set_point": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_temp_supply": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_return_air": {
+            "valor": 23.7,
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_relative_humidity": {
+            "valor": 94,
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_co2_reading": {
+            "valor": 1.4,
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_ethylene": {
+            "valor": 92,
+            "fecha": "2026-03-06T06:44:58.933000",
+            "batch_id": "69aabef0d77be04eb719dff6"
+          },
+          "ultimo_encendido": {
+            "fecha": "2026-03-06T06:47:29.828000",
+            "batch_id": "69aabef0d77be04eb719dffb"
+          },
+          "ultimo_apagado": {
+            "fecha": "2026-03-06T06:36:47.643000",
+            "batch_id": "69aabef0d77be04eb719dfe6"
+          },
+          "ultimo_batch_id": "69aabef0d77be04eb719dffb"
+        },
+        {
+          "imei": "28:05:A5:2B:E9:88",
+          "descripcion": "GREENBOX ZGRU9803691",
+          "estado_conexion": "online",
+          "ultimo_dato_recibido": "2026-03-06T06:47:47.071000",
+          "minutos_desde_ultimo_dato": 21.9,
+          "proceso_activo": false,
+          "power_state_texto": "off",
+          "en_rango": true,
+          "ultimo_set_point": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:47.071000",
+            "batch_id": "69aabef1d77be04eb719e29d"
+          },
+          "ultimo_temp_supply": {
+            "valor": 23.2,
+            "fecha": "2026-03-06T06:47:47.071000",
+            "batch_id": "69aabef1d77be04eb719e29d"
+          },
+          "ultimo_return_air": {
+            "valor": 22.4,
+            "fecha": "2026-03-06T06:47:47.071000",
+            "batch_id": "69aabef1d77be04eb719e29d"
+          },
+          "ultimo_relative_humidity": {
+            "valor": 91,
+            "fecha": "2026-03-06T06:28:31.299000",
+            "batch_id": "69aabef1d77be04eb719e277"
+          },
+          "ultimo_co2_reading": {
+            "valor": 0.3,
+            "fecha": "2026-03-06T06:28:31.299000",
+            "batch_id": "69aabef1d77be04eb719e277"
+          },
+          "ultimo_ethylene": {
+            "valor": 5.6,
+            "fecha": "2026-03-06T06:47:47.071000",
+            "batch_id": "69aabef1d77be04eb719e29d"
+          },
+          "ultimo_encendido": {
+            "fecha": "2026-03-06T06:26:30.760000",
+            "batch_id": "69aabef1d77be04eb719e273"
+          },
+          "ultimo_apagado": {
+            "fecha": "2026-03-06T06:47:47.071000",
+            "batch_id": "69aabef1d77be04eb719e29d"
+          },
+          "ultimo_batch_id": "69aabef1d77be04eb719e29d"
+        },
+        {
+          "imei": "28:05:A5:2A:FA:04",
+          "descripcion": "GREENBOX ZGRU1040025",
+          "estado_conexion": "online",
+          "ultimo_dato_recibido": "2026-03-06T06:47:29.288000",
+          "minutos_desde_ultimo_dato": 22.2,
+          "proceso_activo": false,
+          "power_state_texto": "on",
+          "en_rango": true,
+          "ultimo_set_point": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_temp_supply": {
+            "valor": 23.1,
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_return_air": {
+            "valor": 23.1,
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_relative_humidity": {
+            "valor": 89,
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_co2_reading": {
+            "valor": 2.4,
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_ethylene": {
+            "valor": 116.4,
+            "fecha": "2026-03-06T06:44:28.263000",
+            "batch_id": "69aabeefd77be04eb719dd56"
+          },
+          "ultimo_encendido": {
+            "fecha": "2026-03-06T06:47:29.288000",
+            "batch_id": "69aabeefd77be04eb719dd5c"
+          },
+          "ultimo_apagado": {
+            "fecha": null,
+            "batch_id": null
+          },
+          "ultimo_batch_id": "69aabeefd77be04eb719dd5c"
+        },
+        {
+          "imei": "28:05:A5:2C:A9:E4",
+          "descripcion": "GREENBOX ZGRU003388",
+          "estado_conexion": "online",
+          "ultimo_dato_recibido": "2026-03-06T06:47:51.663000",
+          "minutos_desde_ultimo_dato": 21.8,
+          "proceso_activo": true,
+          "power_state_texto": "on",
+          "en_rango": true,
+          "ultimo_set_point": {
+            "valor": 24,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_temp_supply": {
+            "valor": 23.1,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_return_air": {
+            "valor": 24.6,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_relative_humidity": {
+            "valor": 93,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_co2_reading": {
+            "valor": 2.5,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_ethylene": {
+            "valor": 139.7,
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_encendido": {
+            "fecha": "2026-03-06T06:47:51.663000",
+            "batch_id": "69aabef2d77be04eb719e4d9"
+          },
+          "ultimo_apagado": {
+            "fecha": null,
+            "batch_id": null
+          },
+          "ultimo_batch_id": "69aabef2d77be04eb719e4d9"
+        }
+      ]
+    },
+    "code": 200,
+    "message": "Estado general recuperado correctamente."
+  }
