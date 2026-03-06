@@ -19,56 +19,205 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const [downloading, setDownloading] = useState(false);
 
-  const downloadExecutiveSummary = () => {
+  const downloadExecutiveSummary = async () => {
     setDownloading(true);
     toast.info(t('language') === 'es' ? 'Generando resumen ejecutivo...' : 'Generating executive summary...');
     try {
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const margin = 18;
-      let y = margin;
-      const lineHeight = 7;
-      const pageH = pdf.internal.pageSize.getHeight();
-      const maxW = pdf.internal.pageSize.getWidth() - margin * 2;
+      const pageW = 210;
+      const pageH = 297;
+      const margin = 12;
+      const maxW = pageW - margin * 2;
 
-      const addText = (text: string, fontSize = 10, font: 'normal' | 'bold' = 'normal') => {
+      let logoDataUrl: string | null = null;
+      try {
+        const logoUrl = `${window.location.origin}${import.meta.env.BASE_URL}logo.png`;
+        const resp = await fetch(logoUrl);
+        if (resp.ok) {
+          const blob = await resp.blob();
+          logoDataUrl = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+        }
+      } catch {
+        logoDataUrl = null;
+      }
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      let y = margin;
+
+      const addText = (text: string, x: number, fontSize = 10, font: 'normal' | 'bold' = 'normal') => {
         pdf.setFontSize(fontSize);
         pdf.setFont('helvetica', font);
         const lines = pdf.splitTextToSize(text, maxW);
         lines.forEach((line: string) => {
-          if (y > pageH - 25) { pdf.addPage(); y = margin; }
-          pdf.text(line, margin, y);
-          y += lineHeight * (fontSize / 10);
+          if (y > pageH - 18) { pdf.addPage(); y = margin; }
+          pdf.text(line, x, y);
+          y += fontSize * 0.4;
         });
       };
 
-      addText('ZTRACK TELEMETRY', 18, 'bold');
+      const drawRect = (x: number, y0: number, w: number, h: number) => {
+        pdf.setDrawColor(0, 0, 0);
+        pdf.rect(x, y0, w, h, 'S');
+      };
+
+      // --- Cabecera con logo (sin fondo, solo borde negro abajo) ---
+      const headerH = 28;
+      pdf.setDrawColor(0, 0, 0);
+      pdf.line(0, headerH, pageW, headerH);
+      pdf.setTextColor(0, 0, 0);
+
+      const logoW = 20;
+      const logoH = 20;
+      if (logoDataUrl) {
+        try {
+          pdf.addImage(logoDataUrl, 'PNG', margin, 4, logoW, logoH);
+        } catch {
+          // si falla addImage, seguir sin logo
+        }
+      }
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('ZTRACK TELEMETRY', margin + logoW + 6, 12);
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(t('executive_summary'), margin + logoW + 6, 18);
+      pdf.text(format(new Date(), "dd/MM/yyyy HH:mm"), pageW - margin - 40, 14);
+      pdf.setTextColor(0, 0, 0);
+      y = headerH + margin;
+
+      // --- Estadísticas reales de la flota ---
+      const activeCount = devices.filter(d => d.status === 'active' || d.status === 'warning').length;
+      const alarmCount = devices.filter(d => d.status === 'alarm').length;
+      const totalKwh = devices.reduce((acc, d) => acc + (d.operational?.power_kwh ?? 0), 0);
+      const onlineCount = devices.filter(d => d.estado_conexion === 'online').length;
+      const totalDevices = devices.length;
+
+      pdf.setFontSize(8);
+      pdf.setTextColor(0.4, 0.4, 0.45);
+      addText((t('fleet_status') as string).toLowerCase() + ' · ' + format(new Date(), "dd/MM/yyyy HH:mm"), margin);
+      pdf.setTextColor(0, 0, 0);
+      y += 4;
+
+      // --- KPIs: sin fondo, solo borde negro ---
+      const kpiW = (pageW - margin * 2 - 6) / 2;
+      const kpiH = 16;
+      const kpiLabels = [t('active_units'), t('active_alarms'), t('total_consumption'), t('units_online')];
+      const kpiValues = [
+        `${activeCount} / ${totalDevices}`,
+        String(alarmCount),
+        totalKwh > 0 ? `${Math.round(totalKwh).toLocaleString()} kWh` : '—',
+        `${onlineCount} / ${totalDevices}`,
+      ];
+      for (let i = 0; i < 4; i++) {
+        const x0 = margin + (i % 2) * (kpiW + 6);
+        const y0 = y + Math.floor(i / 2) * (kpiH + 4);
+        drawRect(x0, y0, kpiW, kpiH);
+        pdf.setFontSize(7);
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(kpiLabels[i], x0 + 3, y0 + 6);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(0, 0, 0);
+        pdf.text(kpiValues[i], x0 + 3, y0 + 12);
+        pdf.setFont('helvetica', 'normal');
+      }
+      y += kpiH * 2 + 4 + 6;
+
+      // --- Tabla que cabe en el lienzo (ancho total <= pageW - 2*margin) ---
+      const tableTotalW = pageW - margin * 2;
+      const colW = [26, 14, 12, 10, 12, 10, 12, 12, 22];
+      const sumColW = colW.reduce((a, b) => a + b, 0);
+      const scaleW = sumColW > 0 ? tableTotalW / sumColW : 1;
+      const colWScaled = colW.map(w => Math.round(w * scaleW));
+      const finalTableW = colWScaled.reduce((a, b) => a + b, 0);
+
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(0.15, 0.15, 0.2);
+      addText(t('fleet_status'), margin);
       y += 2;
-      addText(t('executive_summary'), 14, 'bold');
-      addText(format(new Date(), "dd/MM/yyyy HH:mm"), 9);
-      y += lineHeight;
 
-      addText('—', 9);
-      addText(t('active_units') + ': ' + devices.filter(d => d.status === 'active' || d.status === 'warning').length + ' / ' + devices.length, 10);
-      addText(t('active_alarms') + ': ' + devices.filter(d => d.status === 'alarm').length, 10);
-      const rawKwhPdf = devices.reduce((acc, d) => acc + (d.operational?.power_kwh ?? 0), 0);
-      addText(t('total_consumption') + ': ' + (rawKwhPdf > 0 ? Math.round(rawKwhPdf) : 145) + ' kWh', 10);
-      addText(t('completed_processes') + ': 12 (' + t('this_week') + ')', 10);
-      y += lineHeight;
+      const headers = [
+        t('device'),
+        t('status'),
+        t('connection'),
+        t('equipment'),
+        `T (°${tempUnit})`,
+        'HR%',
+        t('ethylene'),
+        'CO₂%',
+        t('last_data'),
+      ];
+      const tableX = margin;
+      const rowH = 5.5;
+      const headH = 6;
 
-      addText(t('fleet_status'), 12, 'bold');
-      y += 2;
-
-      devices.forEach((d: Device, idx: number) => {
-        if (y > pageH - 35) { pdf.addPage(); y = margin; }
-        addText(`${idx + 1}. ${d.name} (${d.id})`, 10, 'bold');
-        const status = d.status === 'active' ? t('status_active') : d.status === 'alarm' ? t('status_alarm') : d.status === 'warning' ? t('status_warning') : t('status_offline');
-        const conn = d.estado_conexion === 'online' ? 'En línea' : d.estado_conexion === 'wait' ? 'Espera' : 'Desconectado';
-        const power = d.telemetry?.power_state === 1 ? 'ON' : 'OFF';
-        addText(`   Estado: ${status} | Conexión: ${conn} | Equipo: ${power}`, 9);
-        addText(`   Temp: ${convertTemp(d.telemetry?.temp_supply_1 ?? 0).toFixed(1)}°${tempUnit} | HR: ${d.telemetry?.relative_humidity ?? 0}% | Etileno: ${d.telemetry?.ethylene ?? 0} ppm | CO₂: ${(d.telemetry?.co2_reading ?? 0).toFixed(2)}%`, 9);
-        addText(`   Último dato: ${d.last_seen ? format(new Date(d.last_seen), 'dd/MM/yyyy HH:mm') : '—'}`, 9);
-        y += lineHeight;
+      // Encabezado tabla: sin fondo, solo borde negro
+      drawRect(tableX, y, finalTableW, headH);
+      pdf.setFontSize(6);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(0, 0, 0);
+      let xCol = tableX + 2;
+      headers.forEach((h, i) => {
+        pdf.text(String(h).substring(0, 10), xCol, y + 4);
+        xCol += colWScaled[i];
       });
+      y += headH;
+
+      const formatLast = (d: Device) => d.last_seen ? format(new Date(d.last_seen), 'dd/MM HH:mm') : '—';
+      const spaceFirstPage = pageH - y - 14;
+      const spaceNextPage = pageH - margin - headH - 14;
+      const maxRowsPerPage = Math.max(1, Math.min(
+        Math.floor(spaceFirstPage / rowH),
+        Math.floor(spaceNextPage / rowH)
+      ));
+
+      devices.forEach((d, idx) => {
+        if (idx > 0 && idx % maxRowsPerPage === 0) {
+          pdf.addPage();
+          y = margin;
+          drawRect(tableX, y, finalTableW, headH);
+          xCol = tableX + 2;
+          headers.forEach((h, i) => {
+            pdf.text(String(h).substring(0, 10), xCol, y + 4);
+            xCol += colWScaled[i];
+          });
+          y += headH;
+        }
+        const status = d.status === 'active' ? t('status_active') : d.status === 'alarm' ? t('status_alarm') : d.status === 'warning' ? t('status_warning') : t('status_offline');
+        const conn = d.estado_conexion === 'online' ? t('online') : d.estado_conexion === 'wait' ? t('wait') : t('offline');
+        const power = d.telemetry?.power_state === 1 ? 'ON' : 'OFF';
+        const temp = d.telemetry?.temp_supply_1 != null ? convertTemp(d.telemetry.temp_supply_1).toFixed(1) : '—';
+        const hr = d.telemetry?.relative_humidity ?? '—';
+        const eth = d.telemetry?.ethylene != null ? (d.telemetry.ethylene === 0 ? 'NA' : d.telemetry.ethylene.toFixed(2)) : '—';
+        const co2 = d.telemetry?.co2_reading != null ? Number(d.telemetry.co2_reading).toFixed(2) : '—';
+        const row: string[] = [d.name || d.id, status, conn, power, temp, String(hr), String(eth), String(co2), formatLast(d)];
+
+        drawRect(tableX, y, finalTableW, rowH);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(5.5);
+        pdf.setTextColor(0, 0, 0);
+        xCol = tableX + 2;
+        row.forEach((cell, i) => {
+          pdf.text(String(cell).substring(0, 9), xCol, y + 3.8);
+          xCol += colWScaled[i];
+        });
+        y += rowH;
+      });
+
+      pdf.setFont('helvetica', 'normal');
+      y = pageH - 10;
+      pdf.setFontSize(6);
+      pdf.setTextColor(0.5, 0.5, 0.55);
+      pdf.text(
+        t('executive_summary') + ' · ZTRACK TELEMETRY · ' + format(new Date(), "dd/MM/yyyy HH:mm"),
+        margin,
+        y
+      );
 
       pdf.save(`ZTRACK_Resumen_Ejecutivo_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`);
       toast.success(t('language') === 'es' ? 'Resumen descargado.' : 'Summary downloaded.');

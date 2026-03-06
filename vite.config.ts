@@ -6,6 +6,9 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const proxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:9055'
+  // Base path: "/" para dominio raíz (ztrack.app). "/beta_ripener/" para subpath (somos.com/beta_ripener). Definir VITE_BASE_PATH en .env si usas subpath.
+  const basePath = env.VITE_BASE_PATH ?? '/'
+  const base = basePath === '/' || basePath === '' ? '/' : basePath.endsWith('/') ? basePath : basePath + '/'
 
   return {
     plugins: [
@@ -18,8 +21,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     assetsInclude: ['**/*.svg', '**/*.csv'],
-    // Subpath para Apache: somos.com/beta_ripener/ → ProxyPass a este servidor
-    base: '/beta_ripener/',
+    base,
     server: {
       host: '0.0.0.0',
       port: 6600,

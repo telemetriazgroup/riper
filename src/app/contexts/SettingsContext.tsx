@@ -60,6 +60,14 @@ const translations: Record<Language, Record<string, string>> = {
     'require_attention': 'Requieren atención',
     'this_week': 'Esta semana',
     'historical_accumulated': 'Acumulado histórico',
+    'units_online': 'Unidades en línea',
+    'device': 'Unidad',
+    'last_data': 'Último dato',
+    'online': 'En línea',
+    'wait': 'Espera',
+    'offline': 'Desconectado',
+    'connection': 'Conexión',
+    'equipment': 'Equipo',
     'error_loading_devices': 'Error al cargar dispositivos',
 
     // Device Detail
@@ -412,6 +420,14 @@ const translations: Record<Language, Record<string, string>> = {
     'require_attention': 'Require attention',
     'this_week': 'This week',
     'historical_accumulated': 'Historical accumulated',
+    'units_online': 'Units online',
+    'device': 'Unit',
+    'last_data': 'Last data',
+    'online': 'Online',
+    'wait': 'Wait',
+    'offline': 'Offline',
+    'connection': 'Connection',
+    'equipment': 'Equipment',
     'error_loading_devices': 'Error loading devices',
 
     // Device Detail

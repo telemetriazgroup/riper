@@ -28,4 +28,15 @@ VITE_API_BASE_URL=/api
 VITE_API_PROXY_TARGET=http://192.168.1.10:9055
 ```
 
+## Despliegue y "demasiadas redirecciones"
+
+Si al abrir la app en el hosting (ej. **ztrack.app**) ves "Esta página ha redirigido demasiadas veces", suele deberse a que el build se generó con una ruta base que no coincide con la URL donde se sirve.
+
+- **App en la raíz del dominio** (ej. https://ztrack.app/): no definas `VITE_BASE_PATH` o usa `VITE_BASE_PATH=/`. Es el valor por defecto.
+- **App en un subpath** (ej. https://somos.com/beta_ripener/): antes del build define en `.env`:
+  ```env
+  VITE_BASE_PATH=/beta_ripener/
+  ```
+  Vuelve a generar el build (`npm run build`) y despliega. En el servidor (Apache/Nginx) el proxy debe apuntar ese subpath al servidor que sirve la app.
+
   
