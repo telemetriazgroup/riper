@@ -1,0 +1,76 @@
+# Dependencias
+node_modules
+.pnpm-store
+.npm
+.yarn
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# Build y salida
+dist
+dist-ssr
+*.local
+build
+out
+.next
+.nuxt
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Logs y caché
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.cache
+.parcel-cache
+.vite
+.turbo
+.eslintcache
+*.tsbuildinfo
+
+# Tests y cobertura
+coverage
+.nyc_output
+*.lcov
+.jest
+
+# IDE y editores
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings
+
+# Sistema operativo
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# Supabase (CLI local)
+supabase/.branches
+supabase/.temp
+supabase/functions/.env
+
+# Docker (archivos locales, no el Dockerfile)
+.docker/
+
+# Misc
+*.bak
+*.tmp
+*.temp
+.cursor
