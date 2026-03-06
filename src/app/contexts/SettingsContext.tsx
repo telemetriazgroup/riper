@@ -80,7 +80,15 @@ const translations: Record<Language, Record<string, string>> = {
     'estimated_end': 'Fin Estimado',
     'back': 'Volver',
     'historical_data': 'Datos Históricos',
+    'historical_data_table': 'Datos en tabla',
     'last_12_hours': 'Últimas 12 Horas',
+    'preset_last12': 'Últimas 12 h',
+    'preset_basic': 'Básico (Temp, HR, Etileno, CO₂)',
+    'preset_temperatures': 'Solo temperaturas',
+    'preset_gases': 'Gases y humedad',
+    'preset_full': 'Completo',
+    'columns_to_show': 'Columnas a mostrar',
+    'search_by_date': 'Buscar por fecha',
 
     // Control Panel
     'manual_mode': 'Manual',
@@ -419,7 +427,15 @@ const translations: Record<Language, Record<string, string>> = {
     'estimated_end': 'Estimated End',
     'back': 'Back',
     'historical_data': 'Historical Data',
+    'historical_data_table': 'Data in table',
     'last_12_hours': 'Last 12 Hours',
+    'preset_last12': 'Last 12 h',
+    'preset_basic': 'Basic (Temp, RH, Ethylene, CO₂)',
+    'preset_temperatures': 'Temperatures only',
+    'preset_gases': 'Gases & humidity',
+    'preset_full': 'Full',
+    'columns_to_show': 'Columns to show',
+    'search_by_date': 'Search by date',
 
     // Control Panel
     'manual_mode': 'Manual',

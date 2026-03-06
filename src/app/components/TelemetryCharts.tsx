@@ -7,7 +7,7 @@ import { useDeviceHistory } from '@/app/hooks/useDevices';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { Loader2, History, Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { Loader2, History, Calendar as CalendarIcon, Filter, Table2 } from 'lucide-react';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import {
   Dialog,
@@ -158,6 +158,7 @@ interface TelemetryChartsProps {
 export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
@@ -194,10 +195,14 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     <Card className="col-span-1 lg:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle>{t('last_12_hours')}</CardTitle>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => setIsModalOpen(true)}>
             <History className="h-4 w-4 mr-2" />
             {t('historical_data')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setIsTableModalOpen(true)}>
+            <Table2 className="h-4 w-4 mr-2" />
+            {t('historical_data_table')}
           </Button>
         </div>
       </CardHeader>
@@ -248,6 +253,11 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
       <HistoricalDataModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
+        deviceId={deviceId}
+      />
+      <HistoricalDataTableModal 
+        isOpen={isTableModalOpen} 
+        onClose={() => setIsTableModalOpen(false)} 
         deviceId={deviceId}
       />
     </Card>
@@ -508,6 +518,203 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                 <History className="h-14 w-14 mb-3 opacity-30" />
                 <p className="text-base font-medium">Sin datos en el rango seleccionado</p>
                 <p className="text-sm mt-1">Elija fechas y pulse «Generar gráfico»</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const tempKeysTable = ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1', 'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point'];
+
+const TABLE_PRESETS = [
+  { id: 'last12', columns: ['temp_supply_1', 'return_air', 'relative_humidity', 'ethylene', 'co2_reading', 'set_point'] },
+  { id: 'basic', columns: ['temp_supply_1', 'return_air', 'relative_humidity', 'ethylene', 'co2_reading'] },
+  { id: 'temperatures', columns: ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'set_point'] },
+  { id: 'gases', columns: ['relative_humidity', 'ethylene', 'co2_reading', 'o2_reading', 'avl_pct'] },
+  { id: 'full', columns: CHART_METRIC_KEYS },
+];
+
+const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean; onClose: () => void; deviceId?: string }) => {
+  const { t, convertTemp, tempUnit } = useSettings();
+  const [dateRange, setDateRange] = useState({
+    start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
+    end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+  });
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(TABLE_PRESETS[0].columns);
+  const [tableData, setTableData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadData = async () => {
+    if (!deviceId) return;
+    setIsLoading(true);
+    try {
+      const startStr = dateRange.start.length === 16 ? dateRange.start + ':00' : dateRange.start;
+      const endStr = dateRange.end.length === 16 ? dateRange.end + ':00' : dateRange.end;
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      if (start.getTime() >= end.getTime()) {
+        setTableData([]);
+        return;
+      }
+      const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
+      const data = history.map((h: any) => {
+        const d = new Date(h.timestamp);
+        const timeStr = format(d, 'dd/MM/yyyy HH:mm');
+        const row: any = { timeStr, timestamp: d.getTime() };
+        CHART_METRIC_KEYS.forEach((key) => {
+          let v = h[key];
+          if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
+          if (key === 'ethylene') row[key] = v != null ? Number(v) : null;
+          else {
+            v = Number(v ?? 0);
+            row[key] = tempKeysTable.includes(key) ? Number(convertTemp(v).toFixed(2)) : Number(v.toFixed(2));
+          }
+        });
+        return row;
+      });
+      const ethyleneSeries = regularizeSeries(data.map((d: any) => d.ethylene), { lowThreshold: 20, highThreshold: 50 });
+      setTableData(data.map((row: any, i: number) => ({ ...row, ethylene: ethyleneSeries[i] })));
+    } catch (e) {
+      console.error(e);
+      setTableData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      setDateRange({
+        start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
+        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      });
+      setTableData([]);
+    }
+  }, [isOpen]);
+
+  const applyPreset = (presetId: string) => {
+    const preset = TABLE_PRESETS.find((p) => p.id === presetId);
+    if (preset) setSelectedColumns(preset.columns);
+    if (presetId === 'last12') {
+      setDateRange({
+        start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
+        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      });
+    }
+  };
+
+  const toggleColumn = (key: string) => {
+    setSelectedColumns((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
+        <DialogHeader className="flex-shrink-0 py-2">
+          <DialogTitle>{t('historical_data_table')}</DialogTitle>
+          <DialogDescription>{t('viewing_history')} — {deviceId} · {t('search_by_date')}</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-1 min-h-0 gap-4 pt-2">
+          <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
+            <div>
+              <h4 className="font-medium text-sm text-gray-900 flex items-center gap-2 mb-2">
+                <CalendarIcon className="h-4 w-4" /> {t('date_range')}
+              </h4>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-gray-500">Inicio</label>
+                  <input
+                    type="datetime-local"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, start: e.target.value }))}
+                    className="w-full border rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">Fin</label>
+                  <input
+                    type="datetime-local"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, end: e.target.value }))}
+                    className="w-full border rounded px-2 py-1.5 text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" onClick={loadData} disabled={isLoading}>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              {t('generate_chart')}
+            </Button>
+            <div>
+              <h4 className="font-medium text-sm text-gray-900 mb-2">Vistas predefinidas</h4>
+              <div className="space-y-1">
+                {TABLE_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyPreset(p.id)}
+                    className="w-full text-left px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    {t(`preset_${p.id}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="font-medium text-sm text-gray-900 mb-2">{t('columns_to_show')}</h4>
+              <div className="space-y-1 max-h-[30vh] overflow-y-auto">
+                {CHART_METRIC_KEYS.map((key) => (
+                  <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1.5 rounded">
+                    <input
+                      type="checkbox"
+                      checked={selectedColumns.includes(key)}
+                      onChange={() => toggleColumn(key)}
+                      className="rounded border-gray-300 text-blue-600"
+                    />
+                    <span className="truncate">{CHART_METRIC_LABELS[key]}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
+            {tableData.length > 0 ? (
+              <div className="flex-1 overflow-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead className="sticky top-0 bg-gray-100 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Fecha / Hora</th>
+                      {selectedColumns.map((key) => (
+                        <th key={key} className="text-right px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">
+                          {CHART_METRIC_LABELS[key]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableData.map((row: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.timeStr}</td>
+                        {selectedColumns.map((key) => (
+                          <td key={key} className="px-3 py-2 text-right font-mono whitespace-nowrap">
+                            {row[key] != null ? String(row[key]) : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
+                <Table2 className="h-14 w-14 mb-3 opacity-30" />
+                <p className="text-base font-medium">Sin datos en el rango seleccionado</p>
+                <p className="text-sm mt-1">Elija fechas y pulse «Generar gráfico» para cargar la tabla</p>
               </div>
             )}
           </div>

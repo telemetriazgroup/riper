@@ -18,7 +18,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     assetsInclude: ['**/*.svg', '**/*.csv'],
-    base: '',
+    // Subpath para Apache: somos.com/beta_ripener/ → ProxyPass a este servidor
+    base: '/beta_ripener/',
     server: {
       host: '0.0.0.0',
       port: 6600,

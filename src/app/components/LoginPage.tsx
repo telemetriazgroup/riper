@@ -97,7 +97,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-lg border border-gray-100">
           <div className="flex flex-col items-center">
             <img
-              src="/logo.png"
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="ZTRACK Live Telemetry"
               className="h-20 sm:h-24 md:h-28 lg:h-32 w-auto max-w-full object-contain mb-6"
             />
