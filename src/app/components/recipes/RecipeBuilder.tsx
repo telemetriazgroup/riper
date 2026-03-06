@@ -109,6 +109,9 @@ const getPhaseConfig = (phases: PhaseConfig[], type: PhaseType): PhaseConfig => 
     duration: 24,
   };
 
+  if (type === 'homogenization') {
+    defaults.humidity = 95;
+  }
   if (type === 'ripening') {
     defaults.ethylene = 100;
     defaults.co2Limit = 1.0;
@@ -296,6 +299,9 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSav
                           <>
                             <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
                               <input type="number" step="0.1" value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                            </InputGroup>
+                            <InputGroup label={t('set_humidity')} icon={Droplets} unit="%">
+                              <input type="number" step="1" min={80} max={98} value={config.humidity ?? 95} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                             <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_hours')}>
                               <input type="number" step="1" value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />

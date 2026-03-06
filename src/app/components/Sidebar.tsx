@@ -42,7 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
       )}>
         <div className="p-4 border-b border-slate-700 flex items-center gap-2">
           <div className="h-8 w-8 bg-blue-500 rounded-md flex items-center justify-center font-bold">RM</div>
-          <span className="font-bold text-lg">Reefer Manager</span>
+          <span className="font-bold text-lg">ZTRACK TELEMETRY</span>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">

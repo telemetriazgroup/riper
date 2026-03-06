@@ -26,7 +26,7 @@ export const LoginInterface: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold mb-2" style={{ color: 'rgb(15, 23, 42)' }}>Reefer Manager</h1>
+          <h1 className="text-3xl font-bold mb-2" style={{ color: 'rgb(15, 23, 42)' }}>ZTRACK TELEMETRY</h1>
           <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
             {t('language') === 'es' 
               ? 'Sistema de gestión para maduradores móviles' 
@@ -141,7 +141,7 @@ export const LoginInterface: React.FC = () => {
         {/* Footer */}
         <div className="text-center mt-6">
           <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
-            © 2026 Reefer Manager. {t('language') === 'es' ? 'Todos los derechos reservados' : 'All rights reserved'}.
+            © 2026 ZTRACK TELEMETRY. {t('language') === 'es' ? 'Todos los derechos reservados' : 'All rights reserved'}.
           </p>
         </div>
       </div>

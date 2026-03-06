@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, title, userEmail, o
           <Menu className="h-5 w-5" />
         </Button>
         <h1 className="text-xl font-bold text-foreground hidden md:block">{title || t('dashboard')}</h1>
-        <div className="md:hidden font-semibold text-foreground">{title || 'Reefer Manager'}</div>
+        <div className="md:hidden font-semibold text-foreground">{title || 'ZTRACK TELEMETRY'}</div>
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">

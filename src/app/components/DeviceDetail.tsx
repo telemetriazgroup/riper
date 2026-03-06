@@ -3,7 +3,8 @@ import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
 import { WeeklySummary } from './WeeklySummary';
-import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap } from 'lucide-react';
+import { EventLog } from './EventLog';
+import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap, ClipboardList } from 'lucide-react';
 import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
@@ -12,7 +13,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 interface DeviceDetailProps {
   deviceId: string;
   onBack: () => void;
-  initialView?: 'operation' | 'analysis';
+  initialView?: 'operation' | 'analysis' | 'log';
 }
 
 export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, initialView = 'operation' }) => {
@@ -104,6 +105,16 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                 <BarChart2 className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('monitoring')}</span>
               </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="log" 
+                className={clsx(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                  activeView === 'log' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                <ClipboardList className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('event_log')}</span>
+              </Tabs.Trigger>
             </Tabs.List>
           </Tabs.Root>
         </div>
@@ -182,6 +193,10 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                </div>
             </div>
           </div>
+        </div>
+      ) : activeView === 'log' ? (
+        <div className="min-h-[400px]">
+          <EventLog deviceId={deviceId} />
         </div>
       ) : (
         <div className="bg-white p-6 rounded-lg border shadow-sm min-h-[600px]">

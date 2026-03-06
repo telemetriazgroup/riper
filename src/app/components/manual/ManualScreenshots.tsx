@@ -30,7 +30,7 @@ export const LoginScreenshot: React.FC = () => {
           <div className="h-12 w-12 bg-blue-600 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-xl">RM</span>
           </div>
-          <span className="text-2xl font-bold text-slate-900 dark:text-white">Reefer Manager</span>
+          <span className="text-2xl font-bold text-slate-900 dark:text-white">ZTRACK TELEMETRY</span>
         </div>
         <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2 text-center">
           {t('welcome_back')}

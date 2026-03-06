@@ -413,7 +413,7 @@ export const UserManual: React.FC = () => {
         heightAdded += pageHeight;
       }
       
-      const fileName = `Reefer_Manager_Manual_${t('language') === 'es' ? 'ES' : 'EN'}.pdf`;
+      const fileName = `ZTRACK_Telemetry_Manual_${t('language') === 'es' ? 'ES' : 'EN'}.pdf`;
       pdf.save(fileName);
       
       toast.success(t('language') === 'es' ? 'Manual descargado exitosamente' : 'Manual downloaded successfully');

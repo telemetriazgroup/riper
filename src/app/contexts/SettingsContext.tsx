@@ -40,7 +40,7 @@ const translations: Record<Language, Record<string, string>> = {
     'enter_credentials': 'Ingresa tus credenciales para acceder al panel de control',
     'password': 'Contraseña',
     'login_button': 'Iniciar Sesión',
-    'login_subtitle': 'Sistema de gestión y monitoreo en tiempo real para contenedores refrigerados.',
+    'login_subtitle': 'Sistema de gestión y monitoreo en tiempo real para soluciones refrigeradas de ZGROUP.',
     'configuring': 'Configurando...',
     'init_admin': 'Inicializar cuenta Admin (Dev)',
     'session_success': 'Sesión iniciada correctamente',
@@ -166,6 +166,8 @@ const translations: Record<Language, Record<string, string>> = {
     'turn_off': 'Apagar',
     'device_on': 'Dispositivo Encendido',
     'device_off': 'Dispositivo Apagado',
+    'confirm_power_on': 'Encender equipo',
+    'confirm_power_on_desc': 'Control no está activado para este equipo.',
 
     // Historical Modal
     'date_range': 'Rango de Fechas',
@@ -186,6 +188,22 @@ const translations: Record<Language, Record<string, string>> = {
     'error_updating_name': 'Error al actualizar nombre',
     'device_disconnected': 'Dispositivo Desconectado',
     'last_connection': 'Última conexión',
+
+    // Bitácora
+    'event_log': 'Bitácora',
+    'event_log_desc': 'Eventos y muestreos del equipo',
+    'log_type': 'Tipo',
+    'log_event': 'Evento',
+    'log_sampling': 'Muestreo',
+    'log_date_time': 'Fecha y hora',
+    'log_description': 'Descripción',
+    'log_temp': 'T°',
+    'log_humidity': 'HR%',
+    'log_ethylene': 'Etileno',
+    'log_co2': 'CO₂%',
+    'log_filter_all': 'Todos',
+    'log_filter_events': 'Solo eventos',
+    'log_filter_samplings': 'Solo muestreos',
 
     // Recipes
     'recipe_library': 'Biblioteca de Recetas',
@@ -485,6 +503,8 @@ const translations: Record<Language, Record<string, string>> = {
     'turn_off': 'Turn Off',
     'device_on': 'Device On',
     'device_off': 'Device Off',
+    'confirm_power_on': 'Turn on device',
+    'confirm_power_on_desc': 'Control is not enabled for this device.',
 
     // Historical Modal
     'date_range': 'Date Range',
@@ -505,6 +525,22 @@ const translations: Record<Language, Record<string, string>> = {
     'error_updating_name': 'Error updating name',
     'device_disconnected': 'Device Disconnected',
     'last_connection': 'Last connection',
+
+    // Event log
+    'event_log': 'Event Log',
+    'event_log_desc': 'Events and samplings for this unit',
+    'log_type': 'Type',
+    'log_event': 'Event',
+    'log_sampling': 'Sampling',
+    'log_date_time': 'Date & time',
+    'log_description': 'Description',
+    'log_temp': 'Temp',
+    'log_humidity': 'RH%',
+    'log_ethylene': 'Ethylene',
+    'log_co2': 'CO₂%',
+    'log_filter_all': 'All',
+    'log_filter_events': 'Events only',
+    'log_filter_samplings': 'Samplings only',
 
     // Recipes
     'recipe_library': 'Recipe Library',

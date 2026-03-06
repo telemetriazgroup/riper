@@ -27,8 +27,31 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
   const [selectedProcess, setSelectedProcess] = useState<any | null>(null);
   const { t } = useSettings();
 
-  // --- RICH MOCK DATA ---
+  // --- RICH MOCK DATA (incl. registro de referencia tipo prueba) ---
   const activeProcesses = [
+    {
+      id: "PROC-PRUEBA-01",
+      client: { name: "Prueba Sistema / Demo", type: "internal" },
+      batch: {
+        product: "Banano Prueba",
+        origin: "Lote referencia - Prueba de seguimiento",
+        quantity_kg: 500,
+        quantity_m3: 2.0,
+        box_count: 40,
+        entry_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+      },
+      status: "active",
+      phase: "Homogenización",
+      start_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      progress: 22,
+      recipe: {
+        name: "Receta prueba seguimiento",
+        duration_hours: 48,
+        targets: { brix: "18-20", firmness: "8-10", color: "5-6" }
+      },
+      image: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=400",
+      timeline: []
+    },
     {
       id: "PROC-2024-88",
       client: { name: "Mango Aérea de Colombia S.A.", type: "external" },

@@ -219,7 +219,7 @@ export const DetailedUserManual: React.FC = () => {
       return;
     }
     
-    const fileName = `Reefer_Manager_Manual_Detallado_ES.pdf`;
+    const fileName = `ZTRACK_Telemetry_Manual_Detallado_ES.pdf`;
     const link = document.createElement('a');
     link.href = URL.createObjectURL(pdfBlob);
     link.download = fileName;

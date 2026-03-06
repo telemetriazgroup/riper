@@ -14,7 +14,7 @@ export const LoginStep1: React.FC = () => {
                   <LogIn className="h-8 w-8 text-white" />
                 </div>
                 <h1 className="text-3xl font-bold mb-2" style={{ color: 'rgb(15, 23, 42)' }}>
-                  Reefer Manager
+                  ZTRACK TELEMETRY
                 </h1>
                 <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
                   Sistema de Control de Maduradores
@@ -54,7 +54,7 @@ export const LoginStep1: React.FC = () => {
         <div className="flex items-start gap-2">
           <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">1</div>
           <p className="text-sm font-semibold" style={{ color: 'rgb(37, 99, 235)' }}>
-            Abra la aplicación Reefer Manager. Verá la pantalla de inicio de sesión con el logo y los campos de acceso
+            Abra la aplicación ZTRACK TELEMETRY. Verá la pantalla de inicio de sesión con el logo y los campos de acceso
           </p>
         </div>
       </div>
@@ -70,7 +70,7 @@ export const LoginStep2: React.FC = () => {
         <div className="w-full max-w-md">
           <div className="rounded-xl p-8" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
             <div className="text-center mb-8 opacity-30">
-              <h1 className="text-3xl font-bold mb-2">Reefer Manager</h1>
+              <h1 className="text-3xl font-bold mb-2">ZTRACK TELEMETRY</h1>
               <p className="text-sm">Sistema de Control de Maduradores</p>
             </div>
             
@@ -128,7 +128,7 @@ export const LoginStep3: React.FC = () => {
         <div className="w-full max-w-md">
           <div className="rounded-xl p-8" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
             <div className="text-center mb-8 opacity-30">
-              <h1 className="text-3xl font-bold mb-2">Reefer Manager</h1>
+              <h1 className="text-3xl font-bold mb-2">ZTRACK TELEMETRY</h1>
             </div>
             
             <div className="space-y-4">
@@ -188,7 +188,7 @@ export const LoginStep4: React.FC = () => {
         <div className="w-full max-w-md">
           <div className="rounded-xl p-8" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
             <div className="text-center mb-8 opacity-30">
-              <h1 className="text-3xl font-bold mb-2">Reefer Manager</h1>
+              <h1 className="text-3xl font-bold mb-2">ZTRACK TELEMETRY</h1>
             </div>
             
             <div className="space-y-4 opacity-30">

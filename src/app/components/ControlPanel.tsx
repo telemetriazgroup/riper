@@ -278,9 +278,9 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
       <AlertDialog open={isPowerConfirmOpen} onOpenChange={setIsPowerConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('confirm_power_on') || "¿Encender dispositivo?"}</AlertDialogTitle>
+            <AlertDialogTitle>{t('confirm_power_on')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t('confirm_power_on_desc') || "¿Está seguro de que desea encender el equipo? Esto activará los sistemas de control y climatización."}
+              {t('confirm_power_on_desc')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -400,6 +400,7 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
 const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: boolean }) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const [temp, setTemp] = useState(18);
+  const [humidity, setHumidity] = useState(95);
   const [duration, setDuration] = useState(6);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -411,6 +412,7 @@ const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disa
         type: 'Homogenization',
         name: 'Homogenización Manual',
         setPoint: temp,
+        humiditySetPoint: humidity,
         durationHours: duration
       });
       toast.success(t('start') + " OK");
@@ -425,7 +427,7 @@ const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disa
     <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
       <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex gap-2">
         <Thermometer className="h-5 w-5 shrink-0" />
-        <p>La homogenización eleva gradualmente la temperatura del producto para prepararlo para la maduración. Típico: {convertTemp(8)}°{tempUnit} a {convertTemp(18)}°{tempUnit}.</p>
+        <p>La homogenización eleva gradualmente la temperatura del producto para prepararlo para la maduración. Mantenga humedad alta (90–98%). Típico: {convertTemp(8)}°{tempUnit} a {convertTemp(18)}°{tempUnit}.</p>
       </div>
       
       <ControlGroup title={t('settings')}>
@@ -441,12 +443,21 @@ const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disa
           }} 
           disabled={disabled}
         />
+        <RangeControl 
+          label={t('relative_humidity')} 
+          value={humidity} 
+          unit="%" 
+          min={80} 
+          max={98} 
+          onChange={setHumidity} 
+          disabled={disabled}
+        />
         <RangeControl label={t('estimated_duration')} value={duration} unit="Horas" min={1} max={24} onChange={setDuration} disabled={disabled} />
       </ControlGroup>
 
       <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
         <p className="text-sm text-gray-500 mb-1">{t('preview')}</p>
-        <p className="font-medium text-gray-900">De ~{convertTemp(8)}°{tempUnit} a {convertTemp(temp)}°{tempUnit} en {duration} horas</p>
+        <p className="font-medium text-gray-900">De ~{convertTemp(8)}°{tempUnit} a {convertTemp(temp)}°{tempUnit}, humedad {humidity}%, en {duration} h</p>
       </div>
 
       <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleStart} disabled={isSubmitting || disabled}>
