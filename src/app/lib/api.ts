@@ -1,10 +1,9 @@
 import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistorialResponse, mapTermoKingDispositivoToDevice } from '@/app/data';
-
-const TERMOKING_API_BASE = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_TERMOKING_API_URL) || 'http://localhost:9055';
+import { API_BASE_URL } from '@/app/config';
 
 /** GET TermoKing estado_general → lista de dispositivos */
 async function fetchEstadoGeneral(): Promise<Device[]> {
-  const res = await fetch(`${TERMOKING_API_BASE}/TermoKing/estado_general/`, {
+  const res = await fetch(`${API_BASE_URL}/TermoKing/estado_general/`, {
     method: 'GET',
     headers: { Accept: 'application/json' },
   });
@@ -86,7 +85,7 @@ export async function fetchDeviceHistory(
   const fecha_fin = options.fecha_fin ?? toISOLocal(now);
 
   const macEncoded = encodeURIComponent(id);
-  const url = `${TERMOKING_API_BASE}/TermoKing/historial/${macEncoded}/?fecha_inicio=${encodeURIComponent(fecha_inicio)}&fecha_fin=${encodeURIComponent(fecha_fin)}`;
+  const url = `${API_BASE_URL}/TermoKing/historial/${macEncoded}/?fecha_inicio=${encodeURIComponent(fecha_inicio)}&fecha_fin=${encodeURIComponent(fecha_fin)}`;
 
   try {
     const res = await fetch(url, { method: 'GET', headers: { Accept: 'application/json' } });

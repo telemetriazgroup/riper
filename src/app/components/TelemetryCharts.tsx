@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  ComposedChart, ReferenceArea, TooltipProps,
+  ComposedChart, ReferenceArea, LabelList, TooltipProps,
 } from 'recharts';
 import { useDeviceHistory } from '@/app/hooks/useDevices';
 import { fetchDeviceHistory } from '@/app/lib/api';
@@ -269,6 +269,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(defaultMetrics);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [metricColors, setMetricColors] = useState<Record<string, string>>({});
+  const getLineColor = (key: string) => metricColors[key] ?? METRIC_COLORS[key] ?? '#64748b';
 
   const tempKeys = ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1', 'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point'];
   /** Eje Y2: porcentaje 0–100 (sombreados y humedad, ventilación, capacidad) */
@@ -290,8 +292,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
       }
       const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
       const data = history.map((h: any) => {
-        const timeStr = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const row: any = { timeStr, timestamp: new Date(h.timestamp).getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
+        const d = new Date(h.timestamp);
+        const timeStr = format(d, 'dd/MM HH:mm');
+        const row: any = { timeStr, timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
         CHART_METRIC_KEYS.forEach((key) => {
           let v = h[key];
           if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
@@ -387,6 +390,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     );
   };
 
+  const dataLen = chartData.length;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
@@ -396,8 +401,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         </DialogHeader>
 
         <div className="flex flex-1 min-h-0 gap-4 pt-2">
-          {/* Sidebar: rango y métricas */}
-          <div className="w-52 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
+          {/* Sidebar: rango y métricas + color por línea */}
+          <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
             <div>
               <h4 className="font-medium text-sm text-gray-900 flex items-center gap-2 mb-2">
                 <CalendarIcon className="h-4 w-4" /> {t('date_range')}
@@ -424,55 +429,77 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
             </div>
             <div>
               <h4 className="font-medium text-sm text-gray-900 flex items-center gap-2 mb-2">
-                <Filter className="h-4 w-4" /> Variables a graficar
+                <Filter className="h-4 w-4" /> Variables y color
               </h4>
               <div className="space-y-1 max-h-[45vh] overflow-y-auto">
                 {CHART_METRIC_KEYS.map((key) => (
-                  <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1.5 rounded">
-                    <input type="checkbox" checked={selectedMetrics.includes(key)} onChange={() => toggleMetric(key)} className="rounded border-gray-300 text-blue-600" />
-                    <span className="truncate" style={{ color: METRIC_COLORS[key] ?? '#374151' }}>{CHART_METRIC_LABELS[key]}</span>
-                  </label>
+                  <div key={key} className="flex items-center gap-2 text-xs hover:bg-gray-50 p-1.5 rounded group">
+                    <input type="checkbox" id={`m-${key}`} checked={selectedMetrics.includes(key)} onChange={() => toggleMetric(key)} className="rounded border-gray-300 text-blue-600 shrink-0" />
+                    <label htmlFor={`m-${key}`} className="truncate flex-1 cursor-pointer min-w-0" style={{ color: getLineColor(key) }} title={CHART_METRIC_LABELS[key]}>
+                      {CHART_METRIC_LABELS[key]}
+                    </label>
+                    <input
+                      type="color"
+                      value={getLineColor(key)}
+                      onChange={(e) => setMetricColors((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className="w-6 h-6 rounded border border-gray-200 cursor-pointer shrink-0"
+                      title={`Color de ${CHART_METRIC_LABELS[key]}`}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Área gráfica a máximo tamaño */}
+          {/* Área gráfica */}
           <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
             {chartData.length > 0 ? (
               <div className="flex-1 w-full min-h-[400px]" style={{ height: 'calc(96vh - 140px)' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 12, right: 56, bottom: 20, left: 44 }}>
+                  <ComposedChart data={chartData} margin={{ top: 12, right: 80, bottom: 20, left: 44 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="timeStr" stroke="#6b7280" fontSize={10} tickLine={false} />
-                    {/* Y1: temperatura */}
+                    <XAxis dataKey="timeStr" stroke="#6b7280" fontSize={10} tickLine={false} tick={{ fontSize: 9 }} />
                     <YAxis yAxisId="left" stroke="#64748b" fontSize={10} tickLine={false} tickFormatter={(v) => Number(v).toFixed(1)} domain={leftDomain} width={36} />
-                    {/* Y2: porcentaje 0–100 (sombreados y series en %) — 1 = 100 */}
                     <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} stroke="#6366f1" fontSize={10} tickLine={false} tickFormatter={(v) => String(Number(v))} width={32} />
-                    {/* Y3: etileno, voltaje, etc. Escala dinámica desde 0 */}
                     <YAxis yAxisId="right" orientation="right" domain={y3Domain} stroke="#10b981" fontSize={10} tickLine={false} tickFormatter={(v) => Number(v).toFixed(0)} width={36} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend wrapperStyle={{ paddingTop: '6px' }} formatter={(value) => CHART_METRIC_LABELS[value] ?? value} />
-                    {/* Sombreados en eje porcentaje (0–100): equipo encendido e inyección gas */}
                     {powerStateSegments.map((seg, idx) => (
                       <ReferenceArea key={`p-${idx}`} x1={seg.x1} x2={seg.x2} y1={0} y2={100} yAxisId="percent" fill="#22c55e" fillOpacity={0.2} />
                     ))}
                     {iCtrlRipSegments.map((seg, idx) => (
                       <ReferenceArea key={`c-${idx}`} x1={seg.x1} x2={seg.x2} y1={0} y2={100} yAxisId="percent" fill="#3b82f6" fillOpacity={0.15} />
                     ))}
-                    {selectedMetrics.map((key) => (
-                      <Line
-                        key={key}
-                        yAxisId={getYAxisId(key)}
-                        type="monotone"
-                        dataKey={key}
-                        stroke={METRIC_COLORS[key] ?? '#64748b'}
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 5 }}
-                        name={CHART_METRIC_LABELS[key]}
-                      />
-                    ))}
+                    {selectedMetrics.map((key, lineIndex) => {
+                      const color = getLineColor(key);
+                      const labelOffset = lineIndex * 14;
+                      return (
+                        <Line
+                          key={key}
+                          yAxisId={getYAxisId(key)}
+                          type="monotone"
+                          dataKey={key}
+                          stroke={color}
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 5 }}
+                          name={CHART_METRIC_LABELS[key]}
+                        >
+                          <LabelList
+                            content={(props: { index?: number; value?: number; x?: number; y?: number }) => {
+                              const { index, value, x, y } = props;
+                              if (index !== dataLen - 1 || value == null || x == null || y == null) return null;
+                              const text = typeof value === 'number' ? value.toFixed(1) : String(value);
+                              return (
+                                <text x={x} y={y} dx={6} dy={labelOffset} textAnchor="start" fill={color} fontSize={10} fontWeight={500}>
+                                  {text}
+                                </text>
+                              );
+                            }}
+                          />
+                        </Line>
+                      );
+                    })}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
