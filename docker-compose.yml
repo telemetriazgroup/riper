@@ -1,0 +1,25 @@
+services:
+  # Desarrollo: Vite dev server con hot reload (puerto 6600)
+  app-dev:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm run dev"
+    ports:
+      - "6600:6600"
+    volumes:
+      - .:/app
+      # Evitar que node_modules del host sobrescriba los del contenedor
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    stdin_open: true
+    tty: true
+
+  # Producción: build + Nginx (puerto 80)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped

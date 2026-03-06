@@ -1,0 +1,54 @@
+# Dependencias
+node_modules
+.pnpm-store
+
+# Build output (se genera dentro del contenedor)
+dist
+dist-ssr
+*.local
+
+# Git y control de versiones
+.git
+.gitignore
+.gitattributes
+
+# IDE y editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Logs y caché
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.cache
+
+# Tests y cobertura
+coverage
+.nyc_output
+*.test.*
+*.spec.*
+
+# Documentación y misc (opcional)
+README.md
+ATTRIBUTIONS.md
+guidelines
+*.md
+!package.json
+
+# Docker (evitar contexto recursivo)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Variables de entorno locales
+.env
+.env.*
+!.env.example
+
+# Supabase local (si no quieres incluirlo en la imagen)
+# supabase/.branches
+# supabase/.temp
