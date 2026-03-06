@@ -241,16 +241,16 @@ export const DataTable: React.FC<{ highlightColor: string }> = ({ highlightColor
                   {row.time}
                 </td>
                 <td className="px-4 py-3 text-sm text-center" style={{ color: 'rgb(239, 68, 68)' }}>
-                  {row.temperatura.toFixed(1)}°C
+                  {Number(row.temperatura).toFixed(2)}°C
                 </td>
                 <td className="px-4 py-3 text-sm text-center" style={{ color: 'rgb(34, 197, 94)' }}>
-                  {row.humedad}%
+                  {Number(row.humedad).toFixed(2)}%
                 </td>
                 <td className="px-4 py-3 text-sm text-center" style={{ color: 'rgb(234, 88, 12)' }}>
-                  {row.etileno} ppm
+                  {row.etileno === 0 ? 'NA' : `${Number(row.etileno).toFixed(2)} ppm`}
                 </td>
                 <td className="px-4 py-3 text-sm text-center" style={{ color: 'rgb(147, 51, 234)' }}>
-                  {row.co2.toFixed(1)}%
+                  {Number(row.co2).toFixed(2)}%
                 </td>
                 <td className="px-4 py-3 text-center">
                   {index < historicalData.length - 1 && (
@@ -274,19 +274,25 @@ export const DataTable: React.FC<{ highlightColor: string }> = ({ highlightColor
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Temperatura</p>
-            <p style={{ color: 'rgb(239, 68, 68)' }}>Min: 19.8°C | Max: 20.5°C</p>
+            <p style={{ color: 'rgb(239, 68, 68)' }}>Min: {Math.min(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C | Max: {Math.max(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C</p>
           </div>
           <div>
             <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Humedad</p>
-            <p style={{ color: 'rgb(34, 197, 94)' }}>Min: 87% | Max: 90%</p>
+            <p style={{ color: 'rgb(34, 197, 94)' }}>Min: {Math.min(...historicalData.map((r) => r.humedad)).toFixed(2)}% | Max: {Math.max(...historicalData.map((r) => r.humedad)).toFixed(2)}%</p>
           </div>
           <div>
             <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Etileno</p>
-            <p style={{ color: 'rgb(234, 88, 12)' }}>Min: 95 ppm | Max: 101 ppm</p>
+            <p style={{ color: 'rgb(234, 88, 12)' }}>
+              {(() => {
+                const vals = historicalData.map((r) => r.etileno).filter((v) => v !== 0);
+                if (vals.length === 0) return 'NA';
+                return `Min: ${Math.min(...vals).toFixed(2)} ppm | Max: ${Math.max(...vals).toFixed(2)} ppm`;
+              })()}
+            </p>
           </div>
           <div>
             <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>CO₂</p>
-            <p style={{ color: 'rgb(147, 51, 234)' }}>Min: 2.5% | Max: 3.1%</p>
+            <p style={{ color: 'rgb(147, 51, 234)' }}>Min: {Math.min(...historicalData.map((r) => r.co2)).toFixed(2)}% | Max: {Math.max(...historicalData.map((r) => r.co2)).toFixed(2)}%</p>
           </div>
         </div>
       </div>

@@ -7,7 +7,9 @@ import { useDeviceHistory } from '@/app/hooks/useDevices';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { Loader2, History, Calendar as CalendarIcon, Filter, Table2 } from 'lucide-react';
+import { Loader2, History, Calendar as CalendarIcon, Filter, Table2, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import * as XLSX from 'xlsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import {
   Dialog,
@@ -612,6 +614,69 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     );
   };
 
+  const formatCellForExport = (row: any, key: string): string => {
+    const v = row[key];
+    if (v == null) return '—';
+    if (key === 'ethylene' && Number(v) === 0) return 'NA';
+    if (typeof v === 'number') return Number(v).toFixed(2);
+    return String(v);
+  };
+
+  const exportRows = [...tableData].reverse();
+  const exportHeader = ['Fecha / Hora', ...selectedColumns.map((k) => CHART_METRIC_LABELS[k])];
+
+  const downloadPDF = () => {
+    const pdf = new jsPDF('l', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const fontSize = 7;
+    pdf.setFontSize(fontSize);
+    const colCount = selectedColumns.length + 1;
+    const colW = (pageW - margin * 2) / colCount;
+    const rowH = 5;
+    let y = margin;
+
+    const drawRow = (cells: string[]) => {
+      if (y > pageH - 15) { pdf.addPage('l', 'a4'); y = margin; }
+      let x = margin;
+      cells.forEach((cell) => {
+        pdf.text(cell, x, y, { maxWidth: colW - 2 });
+        x += colW;
+      });
+      y += rowH;
+    };
+
+    drawRow(exportHeader);
+    exportRows.forEach((row: any) => {
+      drawRow([row.timeStr, ...selectedColumns.map((k) => formatCellForExport(row, k))]);
+    });
+    pdf.save(`datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`);
+  };
+
+  const downloadCSV = () => {
+    const escape = (s: string) => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    const headerLine = exportHeader.map(escape).join(',');
+    const dataLines = exportRows.map((row: any) =>
+      [row.timeStr, ...selectedColumns.map((k) => formatCellForExport(row, k))].map(escape).join(',')
+    );
+    const csv = '\uFEFF' + [headerLine, ...dataLines].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const downloadExcel = () => {
+    const rows = [exportHeader, ...exportRows.map((row: any) => [row.timeStr, ...selectedColumns.map((k) => formatCellForExport(row, k))])];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+    XLSX.writeFile(wb, `datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
@@ -648,7 +713,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
             </div>
             <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" onClick={loadData} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {t('generate_chart')}
+              {t('generate_table')}
             </Button>
             <div>
               <h4 className="font-medium text-sm text-gray-900 mb-2">Vistas predefinidas</h4>
@@ -684,7 +749,19 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
           </div>
           <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
             {tableData.length > 0 ? (
-              <div className="flex-1 overflow-auto">
+              <>
+                <div className="flex-shrink-0 flex flex-wrap items-center gap-2 p-2 border-b border-gray-200 bg-gray-50">
+                  <Button type="button" variant="outline" size="sm" onClick={downloadPDF} className="gap-1">
+                    <Download className="h-3.5 w-3" /> {t('download_pdf')}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={downloadCSV} className="gap-1">
+                    <Download className="h-3.5 w-3" /> {t('download_csv')}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={downloadExcel} className="gap-1">
+                    <Download className="h-3.5 w-3" /> {t('download_excel')}
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-auto">
                 <table className="w-full text-sm border-collapse">
                   <thead className="sticky top-0 bg-gray-100 border-b border-gray-200">
                     <tr>
@@ -697,24 +774,25 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                     </tr>
                   </thead>
                   <tbody>
-                    {tableData.map((row: any, i: number) => (
+                    {[...tableData].reverse().map((row: any, i: number) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.timeStr}</td>
                         {selectedColumns.map((key) => (
                           <td key={key} className="px-3 py-2 text-right font-mono whitespace-nowrap">
-                            {row[key] != null ? String(row[key]) : '—'}
+                            {row[key] == null ? '—' : key === 'ethylene' && Number(row[key]) === 0 ? 'NA' : typeof row[key] === 'number' ? Number(row[key]).toFixed(2) : String(row[key])}
                           </td>
                         ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             ) : (
               <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
                 <Table2 className="h-14 w-14 mb-3 opacity-30" />
                 <p className="text-base font-medium">Sin datos en el rango seleccionado</p>
-                <p className="text-sm mt-1">Elija fechas y pulse «Generar gráfico» para cargar la tabla</p>
+                <p className="text-sm mt-1">{t('generate_table_to_load')}</p>
               </div>
             )}
           </div>
