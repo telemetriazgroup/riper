@@ -50,7 +50,47 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
         targets: { brix: "18-20", firmness: "8-10", color: "5-6" }
       },
       image: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=400",
-      timeline: []
+      timeline: [
+        {
+          id: 'ev-prueba-3',
+          type: 'sampling',
+          title: 'Muestreo de Cierre / Liberación',
+          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          user: 'Operador Demo',
+          data: [
+            { id: '1', name: 'Grados Brix', value: '18.2', unit: '°Brix', target: '18-20' },
+            { id: '2', name: 'Firmeza', value: '8.5', unit: 'N', target: '8-10' },
+            { id: '3', name: 'Color', value: '5.5', unit: 'Escala', target: '5-6' }
+          ],
+          images: []
+        },
+        {
+          id: 'ev-prueba-2',
+          type: 'sampling',
+          title: 'Muestreo de Seguimiento',
+          timestamp: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
+          user: 'Operador Demo',
+          data: [
+            { id: '1', name: 'Grados Brix', value: '14.0', unit: '°Brix', target: '18-20' },
+            { id: '2', name: 'Firmeza', value: '12.0', unit: 'N', target: '8-10' },
+            { id: '3', name: 'Color', value: '3.5', unit: 'Escala', target: '5-6' }
+          ],
+          images: []
+        },
+        {
+          id: 'ev-prueba-1',
+          type: 'sampling',
+          title: 'Muestreo Inicial / Recepción',
+          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          user: 'Operador Demo',
+          data: [
+            { id: '1', name: 'Grados Brix', value: '8.5', unit: '°Brix', target: '18-20' },
+            { id: '2', name: 'Firmeza', value: '22.0', unit: 'N', target: '8-10' },
+            { id: '3', name: 'Color', value: '1.5', unit: 'Escala', target: '5-6' }
+          ],
+          images: []
+        }
+      ]
     },
     {
       id: "PROC-2024-88",

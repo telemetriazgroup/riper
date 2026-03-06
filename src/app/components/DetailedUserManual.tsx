@@ -90,145 +90,70 @@ export const DetailedUserManual: React.FC = () => {
   const { t } = useSettings();
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
-  const [pdfReady, setPdfReady] = useState(false);
   const manualRef = useRef<HTMLDivElement>(null);
 
-  // Generar PDF automáticamente al montar el componente
-  React.useEffect(() => {
-    const generatePDFAutomatically = async () => {
-      if (!manualRef.current || pdfReady) return;
-      
-      setIsGeneratingPDF(true);
-      console.log('Generando PDF automáticamente...');
-      
-      try {
-        const element = manualRef.current;
-        const htmlElement = document.documentElement;
-        const originalTheme = htmlElement.classList.contains('dark');
-        
-        if (originalTheme) {
-          htmlElement.classList.remove('dark');
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        const clone = element.cloneNode(true) as HTMLElement;
-        const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top = '-9999px';
-        container.style.left = '-9999px';
-        container.style.width = element.offsetWidth + 'px';
-        container.style.backgroundColor = 'rgb(255, 255, 255)';
-        container.style.color = 'rgb(15, 23, 42)';
-        document.body.appendChild(container);
-        container.appendChild(clone);
-        
-        const allElements = clone.querySelectorAll('*');
-        allElements.forEach((el: any) => {
-          const computed = window.getComputedStyle(el);
-          
-          const colorProps = ['backgroundColor', 'color', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'fill', 'stroke'];
-          
-          colorProps.forEach(prop => {
-            const value = computed.getPropertyValue(prop === 'backgroundColor' ? 'background-color' : 
-                                                     prop === 'borderTopColor' ? 'border-top-color' :
-                                                     prop === 'borderRightColor' ? 'border-right-color' :
-                                                     prop === 'borderBottomColor' ? 'border-bottom-color' :
-                                                     prop === 'borderLeftColor' ? 'border-left-color' : prop);
-            
-            if (value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent') {
-              el.style[prop] = value;
-            }
-          });
-          
-          if (el instanceof SVGElement) {
-            el.removeAttribute('class');
-          } else {
-            el.className = '';
-          }
-        });
-        
-        clone.querySelectorAll('style, link[rel="stylesheet"]').forEach(el => el.remove());
-        
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        const canvas = await html2canvas(clone, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          backgroundColor: '#ffffff',
-          windowWidth: clone.scrollWidth,
-          windowHeight: clone.scrollHeight
-        });
-        
-        document.body.removeChild(container);
-        
-        if (originalTheme) {
-          htmlElement.classList.add('dark');
-        }
-        
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
-        const imgX = (pdfWidth - imgWidth * ratio) / 2;
-        
-        const pageHeight = pdfHeight;
-        const heightLeft = imgHeight * ratio;
-        
-        pdf.addImage(imgData, 'PNG', imgX, 0, imgWidth * ratio, imgHeight * ratio);
-        let heightAdded = pageHeight;
-        
-        while (heightAdded < heightLeft) {
-          const position = heightAdded - heightLeft;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', imgX, position, imgWidth * ratio, imgHeight * ratio);
-          heightAdded += pageHeight;
-        }
-        
-        const blob = pdf.output('blob');
-        setPdfBlob(blob);
-        setPdfReady(true);
-        
-        console.log('PDF generado exitosamente y listo para descargar');
-        toast.success('Manual PDF generado y listo para descargar');
-      } catch (error) {
-        console.error('Error generando PDF:', error);
-        toast.error(`Error al generar el PDF: ${error}`);
-      } finally {
-        setIsGeneratingPDF(false);
-      }
-    };
-
-    // Esperar a que el DOM esté completamente cargado
-    const timeout = setTimeout(() => {
-      generatePDFAutomatically();
-    }, 2000);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  const downloadPDF = () => {
-    if (!pdfBlob) {
-      toast.error('El PDF aún no está listo. Por favor espere...');
+  const downloadPDF = async () => {
+    if (!manualRef.current) {
+      toast.error(t('language') === 'es' ? 'Contenido no disponible para exportar.' : 'Content not available to export.');
       return;
     }
-    
-    const fileName = `ZTRACK_Telemetry_Manual_Detallado_ES.pdf`;
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(pdfBlob);
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
-    
-    toast.success('Manual descargado exitosamente');
+    setIsGeneratingPDF(true);
+    toast.info(t('language') === 'es' ? 'Generando PDF, espere...' : 'Generating PDF, please wait...');
+    try {
+      const element = manualRef.current;
+      const htmlElement = document.documentElement;
+      const originalTheme = htmlElement.classList.contains('dark');
+      if (originalTheme) htmlElement.classList.remove('dark');
+      await new Promise((r) => setTimeout(r, 400));
+
+      const clone = element.cloneNode(true) as HTMLElement;
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.top = '-9999px';
+      container.style.left = '-9999px';
+      container.style.width = String(element.offsetWidth) + 'px';
+      container.style.backgroundColor = '#fff';
+      container.style.color = 'rgb(15, 23, 42)';
+      document.body.appendChild(container);
+      container.appendChild(clone);
+      clone.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => el.remove());
+      clone.querySelectorAll('*').forEach((el) => {
+        if (!(el instanceof SVGElement)) (el as HTMLElement).className = '';
+      });
+      await new Promise((r) => setTimeout(r, 200));
+
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        windowWidth: clone.scrollWidth,
+        windowHeight: clone.scrollHeight,
+      });
+      document.body.removeChild(container);
+      if (originalTheme) htmlElement.classList.add('dark');
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pdfW / canvas.width, pdfH / canvas.height);
+      const imgX = (pdfW - canvas.width * ratio) / 2;
+      pdf.addImage(imgData, 'PNG', imgX, 0, canvas.width * ratio, canvas.height * ratio);
+      let h = pdfH;
+      while (h < canvas.height * ratio) {
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', imgX, h - canvas.height * ratio, canvas.width * ratio, canvas.height * ratio);
+        h += pdfH;
+      }
+      pdf.save('ZTRACK_Telemetry_Manual_Detallado_ES.pdf');
+      toast.success(t('language') === 'es' ? 'Manual descargado.' : 'Manual downloaded.');
+    } catch (err) {
+      console.error('Error generando PDF:', err);
+      toast.error(t('language') === 'es' ? 'No se pudo generar el PDF. Pruebe de nuevo.' : 'Could not generate PDF. Try again.');
+    } finally {
+      setIsGeneratingPDF(false);
+    }
   };
 
   const scrollToSection = (sectionId: string) => {

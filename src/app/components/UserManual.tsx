@@ -219,11 +219,12 @@ export const UserManual: React.FC = () => {
   };
 
   const downloadPDF = async () => {
-    if (!manualRef.current) return;
-    
+    if (!manualRef.current) {
+      toast.error(t('language') === 'es' ? 'Contenido no disponible para exportar.' : 'Content not available to export.');
+      return;
+    }
     setIsGeneratingPDF(true);
     toast.info(t('language') === 'es' ? 'Generando PDF, por favor espere...' : 'Generating PDF, please wait...');
-    
     try {
       const element = manualRef.current;
       
@@ -419,7 +420,7 @@ export const UserManual: React.FC = () => {
       toast.success(t('language') === 'es' ? 'Manual descargado exitosamente' : 'Manual downloaded successfully');
     } catch (error) {
       console.error('Error generating PDF:', error);
-      toast.error(t('language') === 'es' ? `Error al generar el PDF: ${error}` : `Error generating PDF: ${error}`);
+      toast.error(t('language') === 'es' ? 'No se pudo generar el PDF. Pruebe de nuevo más tarde.' : 'Could not generate PDF. Try again later.');
     } finally {
       setIsGeneratingPDF(false);
     }
