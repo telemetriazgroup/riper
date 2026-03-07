@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ComposedChart, ReferenceArea, LabelList, TooltipProps,
@@ -20,6 +20,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { clsx } from 'clsx';
 import { format, subHours, subDays } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 /** Etiquetas en español para cada campo de la gráfica histórica */
 export const CHART_METRIC_LABELS: Record<string, string> = {
@@ -50,21 +51,65 @@ export const CHART_METRIC_LABELS: Record<string, string> = {
 
 const CHART_METRIC_KEYS = Object.keys(CHART_METRIC_LABELS);
 
-/** Segmentos contiguos donde value === 1 para sombreado (power_state / iCtrlRip) */
-function computeOnSegments(data: { timeStr: string }[], getValue: (i: number) => number): { x1: string; x2: string }[] {
-  const segments: { x1: string; x2: string }[] = [];
+/** Segmentos contiguos donde value === 1 para sombreado (power_state / iCtrlRip). Incluye índices para recortar al rango visible. */
+function computeOnSegments(
+  data: { timeStr: string }[],
+  getValue: (i: number) => number
+): { x1: string; x2: string; startIndex: number; endIndex: number }[] {
+  const segments: { x1: string; x2: string; startIndex: number; endIndex: number }[] = [];
   let start: number | null = null;
   for (let i = 0; i < data.length; i++) {
     if (getValue(i) === 1) {
       if (start === null) start = i;
     } else {
       if (start !== null) {
-        segments.push({ x1: data[start].timeStr, x2: data[i - 1].timeStr });
+        segments.push({ x1: data[start].timeStr, x2: data[i - 1].timeStr, startIndex: start, endIndex: i - 1 });
         start = null;
       }
     }
   }
-  if (start !== null) segments.push({ x1: data[start].timeStr, x2: data[data.length - 1].timeStr });
+  if (start !== null)
+    segments.push({ x1: data[start].timeStr, x2: data[data.length - 1].timeStr, startIndex: start, endIndex: data.length - 1 });
+  return segments;
+}
+
+/** Tipo de sombreado: solo encendido (power_state=1), solo inyección (iCtrlRip=1), o ambos en 1. */
+type ShadingSegmentType = 'power' | 'injection' | 'both';
+
+/** Segmentos combinados por estado: encendido = verde, inyección = azul, ambos = violeta. Solo se sombrea donde el valor es 1. */
+function computeCombinedShadingSegments(
+  data: { timeStr: string; power_state?: number; iCtrlRip?: number }[]
+): { startIndex: number; endIndex: number; type: ShadingSegmentType }[] {
+  const segments: { startIndex: number; endIndex: number; type: ShadingSegmentType }[] = [];
+  if (!data.length) return segments;
+  const getType = (i: number): ShadingSegmentType | null => {
+    const p = data[i].power_state === 1 ? 1 : 0;
+    const inj = data[i].iCtrlRip === 1 ? 1 : 0;
+    if (p && inj) return 'both';
+    if (p) return 'power';
+    if (inj) return 'injection';
+    return null;
+  };
+  let start: number | null = null;
+  let currentType: ShadingSegmentType | null = null;
+  for (let i = 0; i < data.length; i++) {
+    const t = getType(i);
+    if (currentType !== null && start !== null && t !== currentType) {
+      segments.push({ startIndex: start, endIndex: i - 1, type: currentType });
+    }
+    if (t !== null) {
+      if (t !== currentType) {
+        start = i;
+        currentType = t;
+      }
+    } else {
+      start = null;
+      currentType = null;
+    }
+  }
+  if (currentType !== null && start !== null) {
+    segments.push({ startIndex: start, endIndex: data.length - 1, type: currentType });
+  }
   return segments;
 }
 
@@ -126,6 +171,65 @@ function regularizeSeries(values: (number | null)[], options: { lowThreshold?: n
   return out.map((x) => x ?? 0);
 }
 
+/**
+ * Segundo filtro para etileno: corrige errores de lectura del sensor (picos imposibles).
+ * Ej: 35.1, 290, 285, 36 en 2 min → 35.1, 35.4, 35.7, 36.
+ * Si la tendencia es real (35, 70, 170, 230) no se corrige.
+ * Criterio: salto máximo razonable entre lecturas consecutivas; si hay un "bache" que vuelve al nivel anterior en pocos puntos, se interpola.
+ */
+function correctEthyleneSensorErrors(values: number[]): number[] {
+  if (values.length <= 2) return values;
+  const out = [...values];
+  const maxStep = 35;
+  const maxRunToCorrect = 6;
+
+  for (let i = 1; i < out.length - 1; i++) {
+    const prev = out[i - 1], curr = out[i], next = out[i + 1];
+    if (Math.abs(curr - prev) > maxStep && Math.abs(curr - next) > maxStep && Math.abs(prev - next) <= maxStep)
+      out[i] = (prev + next) / 2;
+  }
+
+  let i = 1;
+  while (i < out.length - 1) {
+    const prev = out[i - 1];
+    if (Math.abs(out[i] - prev) <= maxStep) { i++; continue; }
+    let j = i;
+    while (j < out.length && Math.abs(out[j] - prev) > maxStep) j++;
+    if (j < out.length && (j - i) <= maxRunToCorrect && (j - i) >= 1) {
+      const vStart = out[i - 1], vEnd = out[j];
+      for (let k = i; k < j; k++)
+        out[k] = vStart + (vEnd - vStart) * (k - (i - 1)) / (j - (i - 1));
+    }
+    i = j > i ? j + 1 : i + 1;
+  }
+  return out;
+}
+
+/**
+ * Humedad: trata 0 como dato erróneo (sensor) y lo reemplaza por interpolación.
+ * Ej: 88, 0, 90 → 88, 89, 90; 88, 0, 88 → 88, 88, 88. Evita distorsionar la gráfica.
+ */
+function regularizeHumiditySeries(values: (number | null)[]): number[] {
+  const out: (number | null)[] = values.map((v) => {
+    if (v == null) return null;
+    if (v === 0) return null;
+    return v;
+  });
+  for (let i = 0; i < out.length; i++) {
+    if (out[i] !== null) continue;
+    let prev: number | null = null;
+    let next: number | null = null;
+    for (let j = i - 1; j >= 0; j--) {
+      if (out[j] != null && out[j] !== 0) { prev = out[j] as number; break; }
+    }
+    for (let j = i + 1; j < out.length; j++) {
+      if (out[j] != null && out[j] !== 0) { next = out[j] as number; break; }
+    }
+    out[i] = interpolate(prev, next, 85);
+  }
+  return out.map((x) => x ?? 85);
+}
+
 /** Regulariza cualquier serie: reemplaza outliers (saltos bruscos) por interpolación lineal. */
 function regularizeSeriesSmooth(values: (number | null)[], maxJumpRatio = 0.5): number[] {
   const out = values.map((v) => v ?? NaN);
@@ -182,8 +286,9 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     co2Raw: h.co2_reading != null ? Number(h.co2_reading) : null,
   }));
   const temp = regularizeSeriesSmooth(raw.map((d: any) => d.tempRaw)).map((v) => Number(v.toFixed(2)));
-  const humidity = regularizeSeriesSmooth(raw.map((d: any) => d.humidityRaw)).map((v) => Number(v.toFixed(2)));
-  const ethylene = regularizeSeries(raw.map((d: any) => d.ethyleneRaw), { lowThreshold: 20, highThreshold: 50 });
+  const humidity = regularizeHumiditySeries(raw.map((d: any) => d.humidityRaw)).map((v) => Number(v.toFixed(2)));
+  const ethyleneRaw = regularizeSeries(raw.map((d: any) => d.ethyleneRaw), { lowThreshold: 20, highThreshold: 50 });
+  const ethylene = correctEthyleneSensorErrors(ethyleneRaw);
   const co2 = regularizeSeriesSmooth(raw.map((d: any) => d.co2Raw)).map((v) => Number(v.toFixed(2)));
   const data = raw.map((d: any, i: number) => ({
     ...d,
@@ -282,7 +387,20 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [metricColors, setMetricColors] = useState<Record<string, string>>({});
+  const [zoomRange, setZoomRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>(() => {
+    const o: Record<string, boolean> = {};
+    defaultMetrics.forEach((k) => { o[k] = true; });
+    return o;
+  });
+  const [showPowerShading, setShowPowerShading] = useState(true);
+  const [showInjectionShading, setShowInjectionShading] = useState(false);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const pinchStartRef = useRef<{ distance: number; startIndex: number; endIndex: number } | null>(null);
+  const dragStartRef = useRef<{ clientX: number; startIndex: number; endIndex: number } | null>(null);
+  const touchPanRef = useRef<{ clientX: number; startIndex: number; endIndex: number } | null>(null);
   const getLineColor = (key: string) => metricColors[key] ?? METRIC_COLORS[key] ?? '#64748b';
+  const toggleLabels = (key: string) => setShowLabelsByMetric((prev) => ({ ...prev, [key]: !(prev[key] !== false) }));
 
   const tempKeys = ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1', 'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point'];
   /** Eje Y2: porcentaje 0–100 (sombreados y humedad, ventilación, capacidad) */
@@ -303,10 +421,13 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         return;
       }
       const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
-      const data = history.map((h: any) => {
+      const data = history.map((h: any, i: number) => {
         const d = new Date(h.timestamp);
         const timeStr = format(d, 'dd/MM HH:mm');
-        const row: any = { timeStr, timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
+        const prevDay = i > 0 ? new Date(history[i - 1].timestamp) : null;
+        const sameDay = prevDay && format(d, 'yyyy-MM-dd') === format(prevDay, 'yyyy-MM-dd');
+        const timeAxisLabel = sameDay ? format(d, 'HH:mm') : format(d, "d MMM 'a las' HH:mm", { locale: es });
+        const row: any = { timeStr, timeAxisLabel, timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
         CHART_METRIC_KEYS.forEach((key) => {
           let v = h[key];
           if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
@@ -321,8 +442,15 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         return row;
       });
       const ethyleneSeries = regularizeSeries(data.map((d: any) => d.ethylene), { lowThreshold: 20, highThreshold: 50 });
-      const normalized = data.map((row: any, i: number) => ({ ...row, ethylene: ethyleneSeries[i] }));
+      const ethyleneCorrected = correctEthyleneSensorErrors(ethyleneSeries);
+      const humiditySeries = regularizeHumiditySeries(data.map((d: any) => d.relative_humidity ?? null));
+      const normalized = data.map((row: any, i: number) => ({
+        ...row,
+        ethylene: ethyleneCorrected[i],
+        relative_humidity: humiditySeries[i],
+      }));
       setChartData(normalized);
+      setZoomRange({ startIndex: 0, endIndex: normalized.length - 1 });
     } catch (e) {
       console.error(e);
       setChartData([]);
@@ -331,8 +459,34 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     }
   };
 
-  const powerStateSegments = useMemo(() => chartData.length ? computeOnSegments(chartData, (i) => chartData[i].power_state) : [], [chartData]);
-  const iCtrlRipSegments = useMemo(() => chartData.length ? computeOnSegments(chartData, (i) => chartData[i].iCtrlRip) : [], [chartData]);
+  const combinedShadingSegments = useMemo(
+    () => (chartData.length ? computeCombinedShadingSegments(chartData) : []),
+    [chartData]
+  );
+
+  /** Recorta segmentos al rango visible y usa timeStr del slice para que ReferenceArea dibuje (x1/x2 deben existir en data del chart). */
+  const clipSegmentsToVisible = useCallback(
+    (
+      segments: { startIndex: number; endIndex: number; type: ShadingSegmentType }[],
+      brushStart: number,
+      brushEnd: number
+    ): { x1: string; x2: string; type: ShadingSegmentType }[] => {
+      if (!chartData.length) return [];
+      return segments
+        .map((seg) => {
+          const vStart = Math.max(seg.startIndex, brushStart);
+          const vEnd = Math.min(seg.endIndex, brushEnd);
+          if (vStart > vEnd) return null;
+          return {
+            x1: chartData[vStart].timeStr,
+            x2: chartData[vEnd].timeStr,
+            type: seg.type,
+          };
+        })
+        .filter((s): s is { x1: string; x2: string; type: ShadingSegmentType } => s != null);
+    },
+    [chartData]
+  );
 
   /** Dominio eje temperatura (Y1) a partir de las métricas de temp seleccionadas */
   const leftDomain = useMemo(() => {
@@ -378,8 +532,19 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         end: format(new Date(), "yyyy-MM-dd'T'HH:mm")
       });
       setChartData([]);
+      setZoomRange(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (chartData.length > 0 && zoomRange === null)
+      setZoomRange({ startIndex: 0, endIndex: chartData.length - 1 });
+  }, [chartData.length, zoomRange]);
+
+  const resetZoom = useCallback(() => {
+    if (chartData.length > 0)
+      setZoomRange({ startIndex: 0, endIndex: chartData.length - 1 });
+  }, [chartData.length]);
 
   const toggleMetric = (metric: string) => {
     setSelectedMetrics(prev => prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]);
@@ -387,9 +552,36 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
 
   const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
+    const row = payload?.[0]?.payload as { power_state?: number; iCtrlRip?: number } | undefined;
+    const powerOn = row && row.power_state === 1;
+    const injOn = row && row.iCtrlRip === 1;
+    const shadingReason =
+      powerOn && injOn
+        ? 'Encendido + Inyección gas'
+        : powerOn
+          ? 'Encendido'
+          : injOn
+            ? 'Inyección gas'
+            : null;
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[180px]">
         <p className="text-xs font-semibold text-gray-700 border-b pb-2 mb-2">{label}</p>
+        {shadingReason && (
+          <p className="text-xs text-gray-600 mb-2 flex items-center gap-1.5">
+            <span
+              className="inline-block w-2.5 h-2.5 rounded shrink-0"
+              style={{
+                backgroundColor:
+                  shadingReason === 'Encendido + Inyección gas'
+                    ? '#7c3aed'
+                    : shadingReason === 'Encendido'
+                      ? '#86efac'
+                      : '#93c5fd',
+              }}
+            />
+            {shadingReason}
+          </p>
+        )}
         <ul className="space-y-1">
           {payload.map((entry) => (
             <li key={entry.dataKey} className="flex justify-between gap-4 text-sm">
@@ -403,6 +595,120 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   };
 
   const dataLen = chartData.length;
+  const brushStart = zoomRange?.startIndex ?? 0;
+  const brushEnd = zoomRange?.endIndex ?? Math.max(0, chartData.length - 1);
+  const isZoomed = chartData.length > 1 && (brushStart > 0 || brushEnd < chartData.length - 1);
+  const brushRef = useRef({ start: brushStart, end: brushEnd, len: chartData.length });
+  brushRef.current = { start: brushStart, end: brushEnd, len: chartData.length };
+
+  const applyZoom = useCallback((factor: number) => {
+    const { start, end, len } = brushRef.current;
+    if (len <= 1) return;
+    const span = end - start + 1;
+    const center = (start + end) / 2;
+    const newSpan = Math.max(5, Math.min(len, Math.round(span * factor)));
+    const half = (newSpan - 1) / 2;
+    let newStart = Math.round(center - half);
+    let newEnd = Math.round(center + half);
+    if (newStart < 0) { newEnd -= newStart; newStart = 0; }
+    if (newEnd >= len) { newStart -= newEnd - (len - 1); newEnd = len - 1; }
+    newStart = Math.max(0, newStart);
+    newEnd = Math.min(len - 1, newEnd);
+    setZoomRange({ startIndex: newStart, endIndex: newEnd });
+  }, []);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (chartData.length <= 1) return;
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.85 : 1 / 0.85;
+    applyZoom(factor);
+  }, [chartData.length, applyZoom]);
+
+  const getTouchDistance = (touches: React.TouchList) => {
+    if (touches.length < 2) return 0;
+    return Math.hypot(touches[1].clientX - touches[0].clientX, touches[1].clientY - touches[0].clientY);
+  };
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && chartData.length > 1) {
+      pinchStartRef.current = {
+        distance: getTouchDistance(e.touches),
+        startIndex: brushRef.current.start,
+        endIndex: brushRef.current.end,
+      };
+      touchPanRef.current = null;
+    } else if (e.touches.length === 1 && chartData.length > 1) {
+      touchPanRef.current = {
+        clientX: e.touches[0].clientX,
+        startIndex: brushRef.current.start,
+        endIndex: brushRef.current.end,
+      };
+      pinchStartRef.current = null;
+    }
+  }, [chartData.length]);
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 1 && touchPanRef.current) {
+      e.preventDefault();
+      handleTouchMovePan(e.touches[0].clientX);
+      return;
+    }
+    const pinch = pinchStartRef.current;
+    if (e.touches.length !== 2 || !pinch) return;
+    e.preventDefault();
+    const dist = getTouchDistance(e.touches);
+    if (dist <= 0) return;
+    const scale = dist / pinch.distance;
+    const span = pinch.endIndex - pinch.startIndex + 1;
+    const center = (pinch.startIndex + pinch.endIndex) / 2;
+    const newSpan = Math.max(5, Math.min(chartData.length, Math.round(span * scale)));
+    const half = (newSpan - 1) / 2;
+    let newStart = Math.round(center - half);
+    let newEnd = Math.round(center + half);
+    newStart = Math.max(0, Math.min(newStart, chartData.length - 1));
+    newEnd = Math.max(0, Math.min(newEnd, chartData.length - 1));
+    if (newStart > newEnd) [newStart, newEnd] = [newEnd, newStart];
+    setZoomRange({ startIndex: newStart, endIndex: newEnd });
+    pinchStartRef.current = { ...pinch, distance: dist };
+  }, [chartData.length]);
+  const handleTouchEnd = useCallback(() => {
+    pinchStartRef.current = null;
+    touchPanRef.current = null;
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (chartData.length <= 1) return;
+    dragStartRef.current = {
+      clientX: e.clientX,
+      startIndex: brushRef.current.start,
+      endIndex: brushRef.current.end,
+    };
+  }, [chartData.length]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const drag = dragStartRef.current;
+    if (!drag || chartData.length <= 1) return;
+    const width = chartContainerRef.current?.offsetWidth ?? 400;
+    const span = drag.endIndex - drag.startIndex + 1;
+    const shift = Math.round(((e.clientX - drag.clientX) / width) * span);
+    const len = chartData.length;
+    const newStart = Math.max(0, Math.min(len - span, drag.startIndex - shift));
+    const newEnd = newStart + span - 1;
+    setZoomRange({ startIndex: newStart, endIndex: newEnd });
+  }, [chartData.length]);
+
+  const handleMouseUp = useCallback(() => { dragStartRef.current = null; }, []);
+  const handleMouseLeave = useCallback(() => { dragStartRef.current = null; }, []);
+
+  const handleTouchMovePan = useCallback((clientX: number) => {
+    const pan = touchPanRef.current;
+    if (!pan || chartData.length <= 1) return;
+    const width = chartContainerRef.current?.offsetWidth ?? 400;
+    const span = pan.endIndex - pan.startIndex + 1;
+    const shift = Math.round(((clientX - pan.clientX) / width) * span);
+    const len = chartData.length;
+    const newStart = Math.max(0, Math.min(len - span, pan.startIndex - shift));
+    const newEnd = newStart + span - 1;
+    setZoomRange({ startIndex: newStart, endIndex: newEnd });
+  }, [chartData.length]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -416,39 +722,74 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
           {/* Sidebar: rango y métricas + color por línea */}
           <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
             <div>
-              <h4 className="font-medium text-sm text-gray-900 flex items-center gap-2 mb-2">
-                <CalendarIcon className="h-4 w-4" /> {t('date_range')}
+              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
+                <CalendarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {t('date_range')}
               </h4>
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
                 <div>
                   <label className="text-xs text-gray-500">Inicio</label>
-                  <input type="datetime-local" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="w-full border rounded px-2 py-1.5 text-sm" />
+                  <input type="datetime-local" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="w-full border rounded px-2 py-1 sm:py-1.5 text-xs sm:text-sm" />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">Fin</label>
-                  <input type="datetime-local" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="w-full border rounded px-2 py-1.5 text-sm" />
+                  <input type="datetime-local" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="w-full border rounded px-2 py-1 sm:py-1.5 text-xs sm:text-sm" />
                 </div>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" onClick={generateData} disabled={isLoading}>
+            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 text-sm py-1.5 sm:py-2" onClick={generateData} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {t('generate_chart')}
             </Button>
-            <div className="rounded bg-gray-50 border border-gray-100 p-2 text-xs text-gray-600">
-              <p className="font-medium text-gray-700 mb-1">Sombreados</p>
-              <p><span className="inline-block w-3 h-3 rounded bg-green-400/40 mr-1" /> Equipo encendido</p>
-              <p><span className="inline-block w-3 h-3 rounded bg-blue-400/40 mr-1" /> Inyección gas ON</p>
+            <div className="rounded bg-gray-50 border border-gray-100 p-1.5 sm:p-2 text-xs text-gray-600">
+              <p className="font-medium text-gray-700 mb-0.5 sm:mb-1">Sombreados</p>
+              <label className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input
+                  type="checkbox"
+                  checked={showPowerShading}
+                  onChange={() => setShowPowerShading((v) => !v)}
+                  className="rounded border-gray-300 text-green-600"
+                />
+                <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-green-300/60 shrink-0" />
+                <span>Encendido (power_state = 1)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer py-0.5">
+                <input
+                  type="checkbox"
+                  checked={showInjectionShading}
+                  onChange={() => setShowInjectionShading((v) => !v)}
+                  className="rounded border-gray-300 text-blue-600"
+                />
+                <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-blue-300/60 shrink-0" />
+                <span>Inyección gas (iCtrlRip = 1)</span>
+              </label>
+              {showPowerShading && showInjectionShading && (
+                <>
+                  <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded bg-violet-400 shrink-0" />
+                    Ambos activos = violeta
+                  </p>
+                </>
+              )}
             </div>
-            <div>
-              <h4 className="font-medium text-sm text-gray-900 flex items-center gap-2 mb-2">
-                <Filter className="h-4 w-4" /> Variables y color
+            <div className="min-h-0 flex flex-col">
+              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
+                <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Variables y color
               </h4>
-              <div className="space-y-1 max-h-[45vh] overflow-y-auto">
+              <div className="space-y-1 max-h-[20vh] sm:max-h-[45vh] overflow-y-auto">
                 {CHART_METRIC_KEYS.map((key) => (
-                  <div key={key} className="flex items-center gap-2 text-xs hover:bg-gray-50 p-1.5 rounded group">
+                  <div key={key} className="flex flex-wrap items-center gap-1.5 text-xs hover:bg-gray-50 p-1.5 rounded group">
                     <input type="checkbox" id={`m-${key}`} checked={selectedMetrics.includes(key)} onChange={() => toggleMetric(key)} className="rounded border-gray-300 text-blue-600 shrink-0" />
                     <label htmlFor={`m-${key}`} className="truncate flex-1 cursor-pointer min-w-0" style={{ color: getLineColor(key) }} title={CHART_METRIC_LABELS[key]}>
                       {CHART_METRIC_LABELS[key]}
+                    </label>
+                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Mostrar/ocultar valores en la línea">
+                      <input
+                        type="checkbox"
+                        checked={showLabelsByMetric[key] !== false}
+                        onChange={() => toggleLabels(key)}
+                        className="rounded border-gray-300 text-blue-600"
+                      />
+                      <span className="text-[10px] text-gray-500">Valores</span>
                     </label>
                     <input
                       type="color"
@@ -463,63 +804,158 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
             </div>
           </div>
 
-          {/* Área gráfica */}
-          <div className="flex-1 min-w-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
+          {/* Área gráfica: flexible y con zoom */}
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
             {chartData.length > 0 ? (
-              <div className="flex-1 w-full min-h-[400px]" style={{ height: 'calc(96vh - 140px)' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 12, right: 80, bottom: 20, left: 44 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="timeStr" stroke="#6b7280" fontSize={10} tickLine={false} tick={{ fontSize: 9 }} />
-                    <YAxis yAxisId="left" stroke="#64748b" fontSize={10} tickLine={false} tickFormatter={(v) => Number(v).toFixed(1)} domain={leftDomain} width={36} />
-                    <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} stroke="#6366f1" fontSize={10} tickLine={false} tickFormatter={(v) => String(Number(v))} width={32} />
-                    <YAxis yAxisId="right" orientation="right" domain={y3Domain} stroke="#10b981" fontSize={10} tickLine={false} tickFormatter={(v) => Number(v).toFixed(0)} width={36} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend wrapperStyle={{ paddingTop: '6px' }} formatter={(value) => CHART_METRIC_LABELS[value] ?? value} />
-                    {powerStateSegments.map((seg, idx) => (
-                      <ReferenceArea key={`p-${idx}`} x1={seg.x1} x2={seg.x2} y1={0} y2={100} yAxisId="percent" fill="#22c55e" fillOpacity={0.2} />
-                    ))}
-                    {iCtrlRipSegments.map((seg, idx) => (
-                      <ReferenceArea key={`c-${idx}`} x1={seg.x1} x2={seg.x2} y1={0} y2={100} yAxisId="percent" fill="#3b82f6" fillOpacity={0.15} />
-                    ))}
-                    {selectedMetrics.map((key, lineIndex) => {
-                      const color = getLineColor(key);
-                      const labelOffset = lineIndex * 14;
-                      return (
-                        <Line
-                          key={key}
-                          yAxisId={getYAxisId(key)}
-                          type="monotone"
-                          dataKey={key}
-                          stroke={color}
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={{ r: 5 }}
-                          name={CHART_METRIC_LABELS[key]}
-                        >
-                          <LabelList
-                            content={(props: { index?: number; value?: number; x?: number; y?: number }) => {
-                              const { index, value, x, y } = props;
-                              if (index !== dataLen - 1 || value == null || x == null || y == null) return null;
-                              const text = typeof value === 'number' ? value.toFixed(1) : String(value);
-                              return (
-                                <text x={x} y={y} dx={6} dy={labelOffset} textAnchor="start" fill={color} fontSize={10} fontWeight={500}>
-                                  {text}
-                                </text>
-                              );
-                            }}
-                          />
-                        </Line>
-                      );
-                    })}
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
+              <>
+                <div className="flex items-center justify-end gap-2 py-1 px-2 border-b border-gray-100 flex-shrink-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={resetZoom}
+                    className="text-xs"
+                    title="Ver la gráfica completa"
+                  >
+                    Restablecer zoom
+                  </Button>
+                </div>
+                <div
+                  ref={chartContainerRef}
+                  className="flex-1 min-h-[280px] sm:min-h-[320px] w-full touch-none select-none cursor-grab active:cursor-grabbing"
+                  onWheel={handleWheel}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseLeave}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  style={{ touchAction: 'none' }}
+                >
+                  <ResponsiveContainer width="100%" height="100%" key={`chart-${chartData.length}`}>
+                    <ComposedChart
+                      data={chartData.slice(brushStart, brushEnd + 1)}
+                      margin={{ top: 12, right: 72, bottom: 24, left: 40 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="timeStr"
+                        stroke="#6b7280"
+                        fontSize={9}
+                        tickLine={false}
+                        tick={{ fontSize: 9 }}
+                        interval="preserveStartEnd"
+                        tickFormatter={(_, index) => chartData.slice(brushStart, brushEnd + 1)[index]?.timeAxisLabel ?? ''}
+                      />
+                      <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickLine={false} tickFormatter={(v) => Number(v).toFixed(1)} domain={leftDomain} width={32} />
+                      <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} stroke="#6366f1" fontSize={9} tickLine={false} tickFormatter={(v) => String(Number(v))} width={28} />
+                      <YAxis yAxisId="right" orientation="right" domain={y3Domain} stroke="#10b981" fontSize={9} tickLine={false} tickFormatter={(v) => Number(v).toFixed(0)} width={32} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={(value) => CHART_METRIC_LABELS[value] ?? value} iconSize={8} fontSize={10} />
+                      {(() => {
+                        const visible = clipSegmentsToVisible(combinedShadingSegments, brushStart, brushEnd);
+                        const getFill = (type: ShadingSegmentType) => {
+                          if (type === 'both') return { fill: '#7c3aed', opacity: 0.2 };
+                          if (type === 'power') return { fill: '#86efac', opacity: 0.35 };
+                          return { fill: '#93c5fd', opacity: 0.3 };
+                        };
+                        return visible
+                          .filter((seg) => {
+                            if (seg.type === 'power') return showPowerShading;
+                            if (seg.type === 'injection') return showInjectionShading;
+                            return showPowerShading || showInjectionShading;
+                          })
+                          .map((seg, idx) => {
+                            const bothToggles = showPowerShading && showInjectionShading;
+                            const fill =
+                              seg.type === 'both'
+                                ? bothToggles
+                                  ? '#7c3aed'
+                                  : showPowerShading
+                                    ? '#86efac'
+                                    : '#93c5fd'
+                                : seg.type === 'power'
+                                  ? '#86efac'
+                                  : '#93c5fd';
+                            const opacity = seg.type === 'both' ? (bothToggles ? 0.2 : 0.35) : seg.type === 'power' ? 0.35 : 0.3;
+                            return (
+                              <ReferenceArea
+                                key={`shade-${idx}-${seg.x1}-${seg.x2}-${seg.type}`}
+                                x1={seg.x1}
+                                x2={seg.x2}
+                                y1={0}
+                                y2={100}
+                                yAxisId="percent"
+                                fill={fill}
+                                fillOpacity={opacity}
+                              />
+                            );
+                          });
+                      })()}
+                      {selectedMetrics.map((key, lineIndex) => {
+                        const color = getLineColor(key);
+                        const showLabels = showLabelsByMetric[key] === true;
+                        const visibleLen = brushEnd - brushStart + 1;
+                        const displayData = chartData.slice(brushStart, brushEnd + 1);
+                        const isHighVariation = key === 'ethylene' || key === 'relative_humidity';
+                        const maxLabels = key === 'ethylene'
+                          ? (visibleLen > 15 ? 15 : 8)
+                          : isHighVariation
+                            ? 4
+                            : 8;
+                        const labelStep = Math.max(1, Math.floor(visibleLen / maxLabels));
+                        const isEthylene = key === 'ethylene';
+                        const labelDy = isEthylene ? 0 : 5 + lineIndex * 12;
+                        const labelFontSize = isEthylene ? 10 : 13;
+                        const variationThreshold = key === 'ethylene' ? 10 : key === 'relative_humidity' ? 2 : 0.3;
+                        return (
+                          <Line
+                            key={key}
+                            yAxisId={getYAxisId(key)}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={color}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4 }}
+                            name={CHART_METRIC_LABELS[key]}
+                          >
+                            {showLabels && (
+                              <LabelList
+                                content={(props: { index?: number; value?: number; x?: number; y?: number }) => {
+                                  const { index = 0, value, x, y } = props;
+                                  if (value == null || x == null || y == null) return null;
+                                  const numVal = typeof value === 'number' ? value : Number(value);
+                                  const prev = index > 0 ? displayData[index - 1]?.[key] : null;
+                                  const next = index < displayData.length - 1 ? displayData[index + 1]?.[key] : null;
+                                  const prevNum = prev != null ? Number(prev) : null;
+                                  const nextNum = next != null ? Number(next) : null;
+                                  const isVariation = (prevNum != null && Math.abs(numVal - prevNum) >= variationThreshold) ||
+                                    (nextNum != null && Math.abs(numVal - nextNum) >= variationThreshold);
+                                  const isRegular = index % labelStep === 0;
+                                  if (!isVariation && !isRegular) return null;
+                                  const text = typeof value === 'number' ? value.toFixed(1) : String(value);
+                                  return (
+                                    <text x={x} y={y} dy={labelDy} textAnchor="middle" fill={color} fontSize={labelFontSize} fontWeight={700}>
+                                      {text}
+                                    </text>
+                                  );
+                                }}
+                              />
+                            )}
+                          </Line>
+                        );
+                      })}
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
             ) : (
-              <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
-                <History className="h-14 w-14 mb-3 opacity-30" />
-                <p className="text-base font-medium">Sin datos en el rango seleccionado</p>
-                <p className="text-sm mt-1">Elija fechas y pulse «Generar gráfico»</p>
+              <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 p-4">
+                <History className="h-12 w-12 sm:h-14 sm:w-14 mb-2 sm:mb-3 opacity-30" />
+                <p className="text-sm sm:text-base font-medium text-center">Sin datos en el rango seleccionado</p>
+                <p className="text-xs sm:text-sm mt-1 text-center">Elija fechas y pulse «Generar gráfico»</p>
               </div>
             )}
           </div>
