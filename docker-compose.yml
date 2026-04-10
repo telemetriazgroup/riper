@@ -43,7 +43,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VITE_RIPENER_API_URL: /ripener-api
+        # Definir en .env junto con el subpath público (ej. Apache ProxyPass /madurador/ → este host:puerto)
+        VITE_BASE_PATH: ${VITE_BASE_PATH:-/}
+        VITE_RIPENER_API_URL: ${VITE_RIPENER_API_URL:-/ripener-api}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:9055}
     # Puerto en el host: por defecto 18080; en .env define WEB_PORT=OtroPuerto si falla el bind
     ports:
       - "${WEB_PORT:-18080}:80"

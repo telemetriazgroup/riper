@@ -78,4 +78,34 @@ Si al abrir la app en el hosting (ej. **ztrack.app**) ves "Esta página ha redir
   ```
   Vuelve a generar el build (`npm run build`) y despliega. En el servidor (Apache/Nginx) el proxy debe apuntar ese subpath al servidor que sirve la app.
 
+### Apache: proxy a otro servidor (ej. `/madurador/` → IP:18080)
+
+Si el front corre en `http://161.132.53.51:18080` (Docker `app`) y el dominio público usa Apache:
+
+```apache
+ProxyPreserveHost On
+ProxyPass        /madurador/ http://161.132.53.51:18080/
+ProxyPassReverse /madurador/ http://161.132.53.51:18080/
+```
+
+El navegador pedirá `https://tu-dominio/madurador/`, `https://tu-dominio/madurador/assets/...` y `https://tu-dominio/madurador/ripener-api/...`; Apache reenvía a `161.132.53.51:18080/...` **sin** el prefijo `/madurador` (comportamiento habitual de `ProxyPass`), y el Nginx del contenedor sigue sirviendo `/` y `/ripener-api/` como siempre.
+
+**Antes de construir la imagen `app`**, en el `.env` del proyecto (mismo subpath que en Apache):
+
+```env
+VITE_BASE_PATH=/madurador/
+VITE_RIPENER_API_URL=/madurador/ripener-api
+```
+
+Opcional: `VITE_API_BASE_URL` con la URL pública de la API TermoKing (o la IP) si debe quedar fijada en el build; si esa API no permite CORS desde tu dominio, configura CORS allí o proxéala también con Apache.
+
+Luego:
+
+```bash
+docker compose build --no-cache app
+docker compose up -d app
+```
+
+Sin esas variables, el build asume raíz `/` y rutas como `/ripener-api`, y **no** funcionará bien detrás de `/madurador/`.
+
   
