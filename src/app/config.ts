@@ -19,6 +19,14 @@ export const API_BASE_URL: string =
   (env?.VITE_TERMOKING_API_URL as string) ||
   'http://localhost:9055';
 
+/**
+ * API propia del sistema (usuarios, etc.). Sin barra final.
+ * En desarrollo con Docker/Vite: suele ser `/ripener-api` (proxy → backend :4000).
+ * En producción detrás de nginx: `/ripener-api` o URL absoluta.
+ */
+export const RIPENER_API_URL: string =
+  (env?.VITE_RIPENER_API_URL as string) || 'http://localhost:4000';
+
 /** Devuelve la URL base de la API (mismo valor que API_BASE_URL, por si se necesita en runtime). */
 export function getApiBaseUrl(): string {
   return API_BASE_URL;

@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Device } from '@/app/data';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Thermometer, Droplets, Wind, Zap, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer } from 'lucide-react';
+import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { updateDeviceName } from '@/app/lib/api';
 import { toast } from 'sonner';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
+import { differenceInMinutes, formatDistanceToNow, format } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 
 interface DeviceCardProps {
@@ -158,10 +158,52 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
       
       <CardContent>
         {connectionStatus === 'offline' ? (
-           <div className="h-32 flex items-center justify-center text-gray-400 flex-col gap-2">
-             <Zap className="h-8 w-8 opacity-20" />
-             <span className="text-sm">{t('device_disconnected')}</span>
-             <span className="text-xs">{t('last_connection')}: {formatLastSeen()}</span>
+           <div className="space-y-3">
+             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+               <div className="font-semibold flex items-center gap-2">
+                 <WifiOff className="h-4 w-4 shrink-0" />
+                 {t('device_disconnected')}
+               </div>
+               <div className="text-xs mt-1">{t('last_connection')}: {isDateValid ? format(lastSeenDate, 'dd/MM/yyyy HH:mm') : '—'}</div>
+               <div className="text-xs text-amber-900/90 mt-0.5">{t('last_values_registered_hint')}</div>
+             </div>
+             <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-3">
+                 <div className="flex items-center gap-2">
+                   <Thermometer className="h-4 w-4 text-red-500" />
+                   <div>
+                     <div className="text-xs text-gray-500">{t('temperature')}</div>
+                     <div className="font-bold text-gray-900">
+                       {convertTemp(device.telemetry.temp_supply_1).toFixed(1)}°{tempUnit}
+                       <span className="text-gray-400 font-normal ml-1">/ {convertTemp(device.telemetry.set_point)}°{tempUnit}</span>
+                     </div>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <Droplets className="h-4 w-4 text-blue-500" />
+                   <div>
+                     <div className="text-xs text-gray-500">{t('humidity')}</div>
+                     <div className="font-bold text-gray-900">{device.telemetry.relative_humidity}%</div>
+                   </div>
+                 </div>
+               </div>
+               <div className="space-y-3">
+                 <div className="flex items-center gap-2">
+                   <Activity className="h-4 w-4 text-green-500" />
+                   <div>
+                     <div className="text-xs text-gray-500">{t('ethylene')}</div>
+                     <div className="font-bold text-gray-900">{device.telemetry.ethylene ?? '-'} PPM</div>
+                   </div>
+                 </div>
+                 <div className="flex items-center gap-2">
+                   <Wind className="h-4 w-4 text-gray-500" />
+                   <div>
+                     <div className="text-xs text-gray-500">{t('co2')}</div>
+                     <div className="font-bold text-gray-900">{device.telemetry.co2_reading ?? '-'} %</div>
+                   </div>
+                 </div>
+               </div>
+             </div>
            </div>
         ) : (
           <div className={cn("grid grid-cols-2 gap-4", isPoweredOff && "opacity-60 grayscale")}>

@@ -1,14 +1,14 @@
 import useSWR from 'swr';
 import { fetchDevices, fetchDevice, fetchDeviceHistory, type FetchHistoryOptions } from '@/app/lib/api';
 import { Device } from '@/app/data';
-
-const DEVICES_KEY = '/api/devices';
+import { isGourmetSession } from '@/app/lib/gourmet';
 
 export function useDevices() {
+  const gourmet = isGourmetSession();
   const { data, error, isLoading, mutate } = useSWR<Device[]>(
-    DEVICES_KEY,
+    gourmet ? 'gourmet:/api/devices' : '/api/devices',
     fetchDevices,
-    { refreshInterval: 5000 }
+    { refreshInterval: gourmet ? 0 : 5000 }
   );
 
   return {
@@ -20,10 +20,11 @@ export function useDevices() {
 }
 
 export function useDevice(id: string | null) {
+  const gourmet = isGourmetSession();
   const { data, error, isLoading, mutate } = useSWR<Device>(
-    id ? `/api/devices/${id}` : null,
+    id ? (gourmet ? `gourmet:/api/devices/${id}` : `/api/devices/${id}`) : null,
     () => fetchDevice(id!),
-    { refreshInterval: 5000 }
+    { refreshInterval: gourmet ? 0 : 5000 }
   );
 
   return {
@@ -36,17 +37,22 @@ export function useDevice(id: string | null) {
 
 /** Historial: por defecto últimas 12h. Opcionalmente pasa fecha_inicio/fecha_fin para rango personalizado (máx 7 días). */
 export function useDeviceHistory(id: string | null, options: FetchHistoryOptions | null = null) {
+  const gourmet = isGourmetSession();
   const key =
     id && options
-      ? `/api/devices/${id}/history?fecha_inicio=${options.fecha_inicio ?? ''}&fecha_fin=${options.fecha_fin ?? ''}`
+      ? gourmet
+        ? `gourmet:/api/devices/${id}/history?${encodeURIComponent(JSON.stringify(options))}`
+        : `/api/devices/${id}/history?fecha_inicio=${options.fecha_inicio ?? ''}&fecha_fin=${options.fecha_fin ?? ''}`
       : id
-        ? `/api/devices/${id}/history`
+        ? gourmet
+          ? `gourmet:/api/devices/${id}/history`
+          : `/api/devices/${id}/history`
         : null;
 
   const { data, error, isLoading, mutate } = useSWR(
     key,
     () => fetchDeviceHistory(id!, options ?? {}),
-    { refreshInterval: 60000 }
+    { refreshInterval: gourmet ? 0 : 60000 }
   );
 
   return {

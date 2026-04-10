@@ -3,6 +3,7 @@ import { LayoutDashboard, Settings, Thermometer, Wind, BookOpen, Users, HelpCirc
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { isGourmetSession } from '@/app/lib/gourmet';
 
 interface SidebarProps {
   activeView: string;
@@ -13,6 +14,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose }) => {
   const { t } = useSettings();
+  const gourmet = isGourmetSession();
 
   const menuItems = [
     { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
@@ -20,8 +22,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
     { id: 'monitoring', label: t('monitoring'), icon: Wind },
     { id: 'processes', label: t('processes'), icon: Activity },
     { id: 'recipes', label: t('recipes'), icon: BookOpen },
-    { id: 'users', label: t('users'), icon: Users },
-    { id: 'settings', label: t('settings'), icon: Settings },
+    ...(!gourmet ? [{ id: 'users', label: t('users'), icon: Users }] : []),
+    ...(!gourmet ? [{ id: 'settings', label: t('settings'), icon: Settings }] : []),
     { id: 'manual', label: t('help'), icon: HelpCircle },
   ];
 

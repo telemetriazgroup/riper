@@ -7,11 +7,21 @@ interface HeaderProps {
   onMenuClick: () => void;
   title?: string;
   userEmail?: string;
+  userName?: string;
+  roleLabel?: string;
   onLogout?: () => void;
   onProfileClick?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onMenuClick, title, userEmail, onLogout, onProfileClick }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onMenuClick,
+  title,
+  userEmail,
+  userName,
+  roleLabel,
+  onLogout,
+  onProfileClick,
+}) => {
   const { theme, setTheme, language, setLanguage, tempUnit, toggleTempUnit, t } = useSettings();
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
@@ -84,8 +94,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, title, userEmail, o
             className="hidden md:flex flex-col items-end cursor-pointer hover:opacity-80"
             onClick={onProfileClick}
           >
-            <span className="text-sm font-medium text-foreground">{userEmail || 'Usuario'}</span>
-            <span className="text-xs text-muted-foreground">{t('operator')}</span>
+            <span className="text-sm font-medium text-foreground">{userName || userEmail || 'Usuario'}</span>
+            <span className="text-xs text-muted-foreground">{roleLabel || t('operator')}</span>
           </div>
           <Button 
             variant="ghost" 

@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const proxyTarget = env.VITE_API_PROXY_TARGET || 'http://localhost:9055'
+  const ripenerApiTarget = env.VITE_RIPENER_API_PROXY_TARGET || 'http://localhost:4000'
   // Base path: "/" para dominio raíz (ztrack.app). "/beta_ripener/" para subpath (somos.com/beta_ripener). Definir VITE_BASE_PATH en .env si usas subpath.
   const basePath = env.VITE_BASE_PATH ?? '/'
   const base = basePath === '/' || basePath === '' ? '/' : basePath.endsWith('/') ? basePath : basePath + '/'
@@ -31,6 +32,11 @@ export default defineConfig(({ mode }) => {
           target: proxyTarget,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
+        },
+        '/ripener-api': {
+          target: ripenerApiTarget,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/ripener-api/, ''),
         },
       },
     },

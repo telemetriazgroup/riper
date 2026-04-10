@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from '@/app/components/Sidebar';
 import { Header } from '@/app/components/Header';
 import { Dashboard } from '@/app/components/Dashboard';
@@ -10,11 +10,11 @@ import { UserProfile } from '@/app/components/UserProfile';
 import { DetailedUserManual } from '@/app/components/DetailedUserManual';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase } from '@/app/lib/supabase';
 import { LoginPage } from '@/app/components/LoginPage';
-import { Session } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
-import { SettingsProvider } from '@/app/contexts/SettingsContext';
+import { SettingsProvider, useSettings } from '@/app/contexts/SettingsContext';
+import { getToken, fetchMe, clearAuth, type AuthUser } from '@/app/lib/auth';
+import { GOURMET_USER_EMAIL } from '@/app/lib/gourmet';
 
 export default function App() {
   return (
@@ -25,37 +25,53 @@ export default function App() {
 }
 
 function AppContent() {
-  const [session, setSession] = useState<Session | null>(null);
+  const { t } = useSettings();
+  const [session, setSession] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState('dashboard');
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [deviceDetailTab, setDeviceDetailTab] = useState<'operation' | 'analysis'>('operation');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+  const refreshSession = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setSession(null);
+      return;
+    }
+    try {
+      const user = await fetchMe();
+      setSession(user);
+    } catch {
+      clearAuth();
+      setSession(null);
+    }
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      toast.success('Sesión cerrada');
-    } catch (error: any) {
-      toast.error('Error al cerrar sesión: ' + error.message);
+  useEffect(() => {
+    (async () => {
+      await refreshSession();
+      setLoading(false);
+    })();
+  }, [refreshSession]);
+
+  const isGourmetUser = session?.email?.toLowerCase() === GOURMET_USER_EMAIL.toLowerCase();
+
+  useEffect(() => {
+    if (!isGourmetUser) return;
+    if (activeView === 'users' || activeView === 'settings') {
+      setActiveView('dashboard');
     }
+  }, [isGourmetUser, activeView]);
+
+  const handleLogout = () => {
+    clearAuth();
+    setSession(null);
+    toast.success(t('logout') + ' — OK');
+  };
+
+  const handleLoginSuccess = () => {
+    void refreshSession();
   };
 
   const handleDeviceSelect = (deviceId: string) => {
@@ -69,26 +85,43 @@ function AppContent() {
     if (view !== 'device-detail') setSelectedDeviceId(null);
   };
 
+  const roleLabel = (role: string) => {
+    if (role === 'superadmin') return t('role_superadmin');
+    if (role === 'admin') return t('role_admin');
+    if (role === 'operator') return t('role_operator');
+    if (role === 'viewer') return t('role_viewer');
+    return role;
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
         return <Dashboard onSelectDevice={handleDeviceSelect} />;
       case 'device-detail':
-        return selectedDeviceId 
-          ? <DeviceDetail 
-              deviceId={selectedDeviceId} 
-              onBack={() => { setActiveView('dashboard'); setSelectedDeviceId(null); }} 
-              initialView={deviceDetailTab}
-            />
-          : <Dashboard onSelectDevice={handleDeviceSelect} />;
+        return selectedDeviceId ? (
+          <DeviceDetail
+            deviceId={selectedDeviceId}
+            onBack={() => {
+              setActiveView('dashboard');
+              setSelectedDeviceId(null);
+            }}
+            initialView={deviceDetailTab}
+          />
+        ) : (
+          <Dashboard onSelectDevice={handleDeviceSelect} />
+        );
       case 'control':
-        return <Dashboard onSelectDevice={handleDeviceSelect} />; 
+        return <Dashboard onSelectDevice={handleDeviceSelect} />;
       case 'monitoring':
-        return <Dashboard onSelectDevice={(id) => {
-          setSelectedDeviceId(id);
-          setDeviceDetailTab('analysis');
-          setActiveView('device-detail');
-        }} />;
+        return (
+          <Dashboard
+            onSelectDevice={(id) => {
+              setSelectedDeviceId(id);
+              setDeviceDetailTab('analysis');
+              setActiveView('device-detail');
+            }}
+          />
+        );
       case 'recipes':
         return <Recipes />;
       case 'processes':
@@ -96,7 +129,7 @@ function AppContent() {
       case 'users':
         return <UsersList />;
       case 'profile':
-        return <UserProfile />;
+        return <UserProfile onProfileUpdated={refreshSession} />;
       case 'manual':
         return <DetailedUserManual />;
       default:
@@ -120,7 +153,7 @@ function AppContent() {
   if (!session) {
     return (
       <>
-        <LoginPage onLoginSuccess={() => {}} />
+        <LoginPage onLoginSuccess={handleLoginSuccess} />
         <Toaster position="top-center" richColors />
       </>
     );
@@ -128,22 +161,30 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background flex font-sans text-foreground transition-colors duration-200">
-      <Sidebar 
-        activeView={activeView === 'device-detail' ? 'dashboard' : activeView} 
-        onChangeView={handleChangeView} 
+      <Sidebar
+        activeView={activeView === 'device-detail' ? 'dashboard' : activeView}
+        onChangeView={handleChangeView}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
 
       <div className="flex-1 flex flex-col min-w-0 transition-all duration-200 relative">
-        <Header 
-          onMenuClick={() => setIsSidebarOpen(true)} 
-          title={activeView === 'device-detail' ? 'Detalle de Dispositivo' : activeView === 'profile' ? 'Perfil de Usuario' : undefined}
-          userEmail={session.user.email}
+        <Header
+          onMenuClick={() => setIsSidebarOpen(true)}
+          title={
+            activeView === 'device-detail'
+              ? 'Detalle de Dispositivo'
+              : activeView === 'profile'
+                ? 'Perfil de Usuario'
+                : undefined
+          }
+          userEmail={session.email}
+          userName={session.name}
+          roleLabel={roleLabel(session.role)}
           onLogout={handleLogout}
           onProfileClick={() => setActiveView('profile')}
         />
-        
+
         <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           <div className="max-w-7xl mx-auto w-full">
             <AnimatePresence mode="wait">

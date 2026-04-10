@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, 
   Filter, 
@@ -17,6 +17,10 @@ import { ProcessDetail } from './ProcessDetail';
 import { RecipeBuilder, Recipe } from './recipes/RecipeBuilder';
 import { PERUVIAN_RECIPES } from '../data/recipes';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { fetchProducts } from '@/app/lib/productsApi';
+import type { AppProduct } from '@/app/lib/productsApi';
+
+const FALLBACK_PRODUCT_NAMES = ['Mango', 'Palta (Aguacate)', 'Banano', 'Cítricos'];
 
 interface ProcessListProps {
   onSelectProcess?: (id: string) => void;
@@ -250,7 +254,27 @@ const CreateProcessForm = ({ onCancel, onSave }: any) => {
   const [step, setStep] = useState<'form' | 'custom-recipe'>('form');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
   const [customRecipe, setCustomRecipe] = useState<Recipe | null>(null);
+  const [productRows, setProductRows] = useState<AppProduct[]>([]);
   const { t } = useSettings();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProducts()
+      .then((p) => {
+        if (!cancelled) setProductRows(p);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const productOptions = useMemo(() => {
+    if (productRows.length > 0) {
+      return productRows.map((p) => ({ id: p.id, name: p.name }));
+    }
+    return FALLBACK_PRODUCT_NAMES.map((name, i) => ({ id: `local-${i}`, name }));
+  }, [productRows]);
 
   const activeRecipe = customRecipe || PERUVIAN_RECIPES.find(r => r.id === selectedRecipeId);
 
@@ -264,6 +288,7 @@ const CreateProcessForm = ({ onCancel, onSave }: any) => {
     return (
       <div className="pt-4">
         <RecipeBuilder 
+          products={productOptions}
           onCancel={() => setStep('form')} 
           onSave={handleCustomRecipeSave} 
           initialData={customRecipe || undefined}

@@ -1,5 +1,6 @@
 # Dependencias
 node_modules
+server/node_modules
 .pnpm-store
 
 # Build output (se genera dentro del contenedor)

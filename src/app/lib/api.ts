@@ -1,5 +1,6 @@
 import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistorialResponse, mapTermoKingDispositivoToDevice } from '@/app/data';
 import { API_BASE_URL } from '@/app/config';
+import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession } from '@/app/lib/gourmet';
 
 /** GET TermoKing estado_general → lista de dispositivos */
 async function fetchEstadoGeneral(): Promise<Device[]> {
@@ -14,6 +15,9 @@ async function fetchEstadoGeneral(): Promise<Device[]> {
 }
 
 export async function fetchDevices(): Promise<Device[]> {
+  if (isGourmetSession()) {
+    return [buildGourmetDevice()];
+  }
   try {
     return await fetchEstadoGeneral();
   } catch (e) {
@@ -23,6 +27,9 @@ export async function fetchDevices(): Promise<Device[]> {
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
+  if (isGourmetSession()) {
+    return buildGourmetDevice();
+  }
   try {
     const list = await fetchEstadoGeneral();
     const device = list.find((d) => d.id === id);
@@ -79,6 +86,22 @@ export async function fetchDeviceHistory(
   id: string,
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
+  if (isGourmetSession()) {
+    const pts = buildGourmetHistoryPoints();
+    const fi = options.fecha_inicio;
+    const ff = options.fecha_fin;
+    if (fi && ff) {
+      const a = new Date(fi).getTime();
+      const b = new Date(ff).getTime();
+      if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+        return pts.filter((p) => {
+          const t = new Date(p.timestamp).getTime();
+          return t >= a && t <= b;
+        });
+      }
+    }
+    return pts;
+  }
   const now = new Date();
   const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
   const fecha_inicio = options.fecha_inicio ?? toISOLocal(twelveHoursAgo);

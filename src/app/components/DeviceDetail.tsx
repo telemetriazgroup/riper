@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import { format, differenceInMinutes } from 'date-fns';
+import { es as esLocale } from 'date-fns/locale';
 import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
@@ -21,7 +23,16 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   const { history } = useDeviceHistory(deviceId);
   const [controlMode, setControlMode] = useState('manual');
   const [activeView, setActiveView] = useState(initialView);
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, language } = useSettings();
+
+  const lastSeenDate = device?.last_seen ? new Date(device.last_seen) : null;
+  const minsSinceLastSeen =
+    lastSeenDate && !isNaN(lastSeenDate.getTime())
+      ? differenceInMinutes(new Date(), lastSeenDate)
+      : 999999;
+  const showOfflineBanner =
+    device &&
+    (device.estado_conexion === 'offline' || minsSinceLastSeen > 720 || device.status === 'offline');
 
   const consumptionKwhPeriod = useMemo(() => {
     if (!history || history.length < 2) return null;
@@ -42,6 +53,11 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   }
 
   if (!device) return <div>{t('device_not_found')}</div>;
+
+  const lastCommFormatted =
+    lastSeenDate && !isNaN(lastSeenDate.getTime())
+      ? format(lastSeenDate, "dd/MM/yyyy HH:mm", { locale: language === 'es' ? esLocale : undefined })
+      : '—';
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -67,6 +83,13 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                 {device.telemetry.power_state === 1 ? 'Equipo ON' : 'Equipo OFF'}
               </span>
             </div>
+            {showOfflineBanner && (
+              <p className="mt-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-2xl">
+                <span className="font-medium">{t('last_connection')}: </span>
+                {lastCommFormatted}
+                <span className="block mt-1 text-amber-800/95">{t('last_values_registered_hint')}</span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -125,7 +148,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full animate-in fade-in duration-300">
           {/* Left Column: Control Panel */}
           <div className="lg:col-span-1">
-            <ControlPanel mode={controlMode} onChangeMode={setControlMode} />
+            <ControlPanel mode={controlMode} onChangeMode={setControlMode} deviceId={deviceId} device={device} />
           </div>
 
           {/* Right Column: Charts & Info */}

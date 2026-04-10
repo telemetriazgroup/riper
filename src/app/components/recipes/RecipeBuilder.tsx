@@ -9,7 +9,8 @@ import {
   ChefHat,
   ToggleLeft,
   ToggleRight,
-  ArrowDown
+  ArrowDown,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
@@ -41,8 +42,15 @@ export interface Recipe {
   phases: PhaseConfig[]; // Ordered list of configured phases
 }
 
+export interface ProductOption {
+  id: string;
+  name: string;
+}
+
 interface RecipeBuilderProps {
   initialData?: Recipe;
+  /** Catálogo de productos (API); el valor guardado en la receta es el nombre. */
+  products: ProductOption[];
   onSave: (recipe: Recipe) => void;
   onCancel: () => void;
 }
@@ -131,11 +139,19 @@ const getPhaseConfig = (phases: PhaseConfig[], type: PhaseType): PhaseConfig => 
   return defaults as PhaseConfig;
 };
 
-export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSave, onCancel }) => {
+export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, products, onSave, onCancel }) => {
   const { t } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
-  const [fruit, setFruit] = useState(initialData?.fruit || 'Mango');
+  const [fruit, setFruit] = useState(initialData?.fruit || '');
   const [description, setDescription] = useState(initialData?.description || '');
+
+  React.useEffect(() => {
+    if (initialData) return;
+    setFruit((prev) => {
+      if (prev && products.some((p) => p.name === prev)) return prev;
+      return products[0]?.name ?? '';
+    });
+  }, [products, initialData]);
   
   // State for the 4 fixed phases
   const [phases, setPhases] = useState<{ [key in PhaseType]: PhaseConfig }>({
@@ -160,7 +176,6 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSav
   };
 
   const handleSave = () => {
-    // Construct ordered array based on enabled phases
     const orderedPhases = PHASES_DEF
       .map(def => phases[def.type])
       .filter(p => p.enabled);
@@ -168,11 +183,30 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSav
     onSave({
       id: initialData?.id || 'new',
       name,
-      fruit,
+      fruit: fruit.trim() || (products[0]?.name ?? ''),
       description,
       phases: orderedPhases
     });
   };
+
+  const fruitOptions = React.useMemo(() => {
+    const names = products.map((p) => p.name);
+    const set = new Set(names);
+    if (initialData?.fruit && !set.has(initialData.fruit)) {
+      return [...names, initialData.fruit];
+    }
+    if (fruit && !set.has(fruit)) {
+      return [...names, fruit];
+    }
+    return names;
+  }, [products, initialData?.fruit, fruit]);
+
+  React.useEffect(() => {
+    if (!fruitOptions.length) return;
+    if (!fruitOptions.includes(fruit)) {
+      setFruit(fruitOptions[0]);
+    }
+  }, [fruitOptions, fruit]);
 
   const getTotalDuration = () => {
     let totalHours = 0;
@@ -188,11 +222,20 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSav
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm sticky top-4 z-20 gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2.5 text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            aria-label={t('back_to_recipe_list')}
+            title={t('back_to_recipe_list')}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="p-3 bg-blue-100 text-blue-600 rounded-lg shrink-0">
             <ChefHat className="w-6 h-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900">{initialData ? t('edit_recipe') : t('new_recipe')}</h1>
             <p className="text-xs text-gray-500">
               {t('total_duration')}: <span className="font-semibold text-blue-600">{getTotalDuration().toFixed(1)} {t('hours')}</span>
@@ -222,16 +265,21 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, onSav
           </div>
           <div className="col-span-full md:col-span-1">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('product_label')}</label>
-             <select 
-               value={fruit}
-               onChange={e => setFruit(e.target.value)}
-               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-             >
-               <option>Mango</option>
-               <option>Palta (Aguacate)</option>
-               <option>Banano</option>
-               <option>Cítricos</option>
-             </select>
+             {products.length === 0 && !fruit ? (
+               <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                 {t('products_empty')}
+               </p>
+             ) : (
+               <select 
+                 value={fruit}
+                 onChange={e => setFruit(e.target.value)}
+                 className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+               >
+                 {fruitOptions.map((n) => (
+                   <option key={n} value={n}>{n}</option>
+                 ))}
+               </select>
+             )}
           </div>
           <div className="col-span-full">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('description_notes')}</label>

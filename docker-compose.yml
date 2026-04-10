@@ -1,5 +1,58 @@
 services:
+  # PostgreSQL — datos del módulo usuarios (y futuros módulos)
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: riper
+      POSTGRES_PASSWORD: riper
+      POSTGRES_DB: riper
+    volumes:
+      - riper_pgdata:/var/lib/postgresql/data
+    # Puerto en el host (15432) para no chocar con Postgres en :5432, :5433, etc.
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U riper -d riper"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+
+  # API REST (Express) — /api/v1/users
+  api:
+    build: ./server
+    environment:
+      DATABASE_URL: postgresql://riper:riper@db:5432/riper
+      PORT: 4000
+      NODE_ENV: production
+      CORS_ORIGIN: "*"
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production-use-long-random-string}
+      SUPERUSER_EMAIL: ${SUPERUSER_EMAIL:-superadmin@riper.local}
+      SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-changeme123}
+      UPLOAD_DIR: uploads
+    volumes:
+      - ripener_uploads:/app/uploads
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Frontend build + Nginx (proxy /ripener-api → api)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_RIPENER_API_URL: /ripener-api
+    # Puerto en el host: por defecto 18080; en .env define WEB_PORT=OtroPuerto si falla el bind
+    ports:
+      - "${WEB_PORT:-18080}:80"
+    depends_on:
+      - api
+
   # Desarrollo: Vite dev server con hot reload (puerto 6600)
+  # Solo Vite en contenedor: docker compose --profile dev up app-dev
+  # (desarrollo habitual: `docker compose up -d db api` + `pnpm dev` en el host)
   app-dev:
     image: node:20-alpine
     working_dir: /app
@@ -8,18 +61,14 @@ services:
       - "6600:6600"
     volumes:
       - .:/app
-      # Evitar que node_modules del host sobrescriba los del contenedor
       - /app/node_modules
     environment:
-      - NODE_ENV=development
+      NODE_ENV: development
     stdin_open: true
     tty: true
+    profiles:
+      - dev
 
-  # Producción: build + Nginx (puerto 80)
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8080:80"
-    restart: unless-stopped
+volumes:
+  riper_pgdata:
+  ripener_uploads:

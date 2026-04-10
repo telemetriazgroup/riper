@@ -4,13 +4,52 @@ This is a code bundle for Mobile Ripening Management System. The original projec
 
 ## Running the code
 
-Run `npm i` to install the dependencies.
+Run `pnpm install` or `npm install` to install the dependencies.
 
-Run `npm run dev` to start the development server.
+### Login (módulo usuarios)
+
+El acceso usa la **API Ripener** (`/api/v1/auth/login`) contra PostgreSQL. Tras el primer arranque se crea un **superusuario** si no existe:
+
+- Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
+- Definir `JWT_SECRET` largo y aleatorio en producción.
+
+Cambiar contraseña y datos desde **Usuarios** (admin) o **Mi perfil** (cada usuario).
+
+Run `pnpm dev` or `npm run dev` to start the development server.
+
+## Stack completo (PostgreSQL + API + frontend en Docker)
+
+El módulo **Usuarios** persiste en PostgreSQL mediante la API en `server/` (Express).
 
 ```bash
-docker compose up app-dev
-docker compose up --build app
+# Base de datos + API + Nginx con el build del front (http://localhost:18080)
+docker compose up --build -d db api app
+```
+
+- **Frontend:** http://localhost:18080 (por defecto). Si el puerto está ocupado, en `.env` define `WEB_PORT=otro` y vuelve a `docker compose up`. La sección *Usuarios* llama a `/ripener-api` (Nginx hace proxy al contenedor `api`).
+- **API REST:** http://localhost:4000 — rutas bajo `/api/v1/users` (CRUD con baja lógica).
+- **PostgreSQL:** desde el host usa el puerto **`15432`** (`localhost:15432`; dentro del contenedor sigue siendo 5432). Usuario/clave/db: `riper` / `riper` / `riper`.
+
+Desarrollo en el host con Vite (puerto 6600) y API en Docker:
+
+```bash
+docker compose up -d db api
+# Copiar .env.example → .env y usar VITE_RIPENER_API_URL=/ripener-api
+pnpm dev
+```
+
+Vite reenvía `/ripener-api` a `VITE_RIPENER_API_PROXY_TARGET` (por defecto `http://localhost:4000`).
+
+Contenedor solo con Vite (perfil opcional):
+
+```bash
+docker compose --profile dev up app-dev
+```
+
+Build clásico del front (sin DB):
+
+```bash
+docker compose build app
 ```
 
 ## API y CORS
