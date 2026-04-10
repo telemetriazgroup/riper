@@ -64,9 +64,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             />
             <h2 className="text-2xl font-bold text-gray-900">{t('welcome_back')}</h2>
             <p className="mt-2 text-sm text-gray-600 text-center">{t('enter_credentials')}</p>
-            <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-              {t('login_superuser_hint')}
-            </p>
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleLogin}>

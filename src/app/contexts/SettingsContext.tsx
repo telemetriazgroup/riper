@@ -197,8 +197,6 @@ const translations: Record<Language, Record<string, string>> = {
     'password_required_new': 'Indique una contraseña para el nuevo usuario',
     'password_change_hint': 'Nueva contraseña',
     'password_optional_placeholder': 'Dejar vacío para no cambiar',
-    'login_superuser_hint':
-      'Acceso con usuarios del módulo Usuarios. Por defecto: superadmin@riper.local / changeme123 (cambie en producción).',
     
     // Status
     'status_active': 'Activo',
@@ -601,8 +599,6 @@ const translations: Record<Language, Record<string, string>> = {
     'password_required_new': 'Set a password for the new user',
     'password_change_hint': 'New password',
     'password_optional_placeholder': 'Leave blank to keep current',
-    'login_superuser_hint':
-      'Sign in with users from the Users module. Default: superadmin@riper.local / changeme123 (change in production).',
 
     // Status
     'status_active': 'Active',
