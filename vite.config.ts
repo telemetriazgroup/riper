@@ -38,6 +38,12 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/ripener-api/, ''),
         },
+        // Mismo origen que producción bajo /madurador/ (VITE_BASE_PATH=/madurador/)
+        '/madurador/ripener-api': {
+          target: ripenerApiTarget,
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/madurador\/ripener-api/, ''),
+        },
       },
     },
   }
