@@ -11,6 +11,7 @@ import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { formatMaduradorScalar } from '@/app/lib/madurador';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -214,6 +215,131 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                      </div>
                   </div>
                </div>
+
+               {device.madurador && (
+                 <div className="bg-white p-6 rounded-lg border shadow-sm md:col-span-2">
+                   <h3 className="font-semibold mb-4 text-gray-800">{t('madurador_reference_title')}</h3>
+                   <p className="text-xs text-gray-500 mb-4">
+                     {device.madurador.identificador_empresa
+                       ? `${t('identificador_field_short')}: ${device.madurador.identificador_empresa}`
+                       : null}
+                   </p>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_estado')}</span>
+                       <span className="font-medium text-right">{device.madurador.power_state_label}</span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_supply')}</span>
+                       <span className="font-mono">{convertTemp(device.telemetry.temp_supply_1)}°{tempUnit}</span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_return')}</span>
+                       <span className="font-mono">{convertTemp(device.telemetry.return_air)}°{tempUnit}</span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_evap')}</span>
+                       <span className="font-mono">{convertTemp(device.operational.evaporation_coil)}°{tempUnit}</span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_cond')}</span>
+                       <span className="font-mono">{convertTemp(device.operational.condensation_coil)}°{tempUnit}</span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_compressor')}</span>
+                       <span className="font-mono text-right">
+                         {formatMaduradorScalar(device.madurador.compress_coil_1_display)}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_avl')}</span>
+                       <span className="font-mono text-right">
+                         {formatMaduradorScalar(device.madurador.avl_display)}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_voltage')}</span>
+                       <span className="font-mono text-right">
+                         {formatMaduradorScalar(device.madurador.line_voltage_display)}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_set_co2')}</span>
+                       <span className="font-mono text-right">
+                         {formatMaduradorScalar(device.madurador.set_point_co2_display)}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_set_hum')}</span>
+                       <span className="font-mono">
+                         {device.madurador.humidity_set_point != null
+                           ? `${device.madurador.humidity_set_point}%`
+                           : '—'}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
+                       <span className="text-gray-500">{t('madurador_detail_capacity')}</span>
+                       <span className="font-mono">
+                         {device.madurador.capacity_load != null ? `${device.madurador.capacity_load}%` : '—'}
+                       </span>
+                     </div>
+                     {device.madurador.fecha_inicio &&
+                       !isNaN(new Date(device.madurador.fecha_inicio).getTime()) && (
+                       <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
+                         <span className="text-gray-500">{t('madurador_process_start')}</span>
+                         <span className="font-mono text-right text-xs">
+                           {format(new Date(device.madurador.fecha_inicio), 'dd/MM/yyyy HH:mm', {
+                             locale: language === 'es' ? esLocale : undefined,
+                           })}
+                         </span>
+                       </div>
+                     )}
+                     {device.madurador.fecha_procesada &&
+                       !isNaN(new Date(device.madurador.fecha_procesada).getTime()) && (
+                       <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
+                         <span className="text-gray-500">{t('madurador_fecha_procesada')}</span>
+                         <span className="font-mono text-right text-xs">
+                           {format(new Date(device.madurador.fecha_procesada), 'dd/MM/yyyy HH:mm', {
+                             locale: language === 'es' ? esLocale : undefined,
+                           })}
+                         </span>
+                       </div>
+                     )}
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
+                       <span className="text-gray-500">{t('madurador_last_on')}</span>
+                       <span className="font-mono text-right text-xs">
+                         {device.madurador.ultima_fecha_encendido
+                           ? format(
+                               new Date(device.madurador.ultima_fecha_encendido),
+                               'dd/MM/yyyy HH:mm',
+                               { locale: language === 'es' ? esLocale : undefined }
+                             )
+                           : '—'}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
+                       <span className="text-gray-500">{t('madurador_until')}</span>
+                       <span className="font-mono text-right text-xs">
+                         {device.madurador.hasta
+                           ? format(new Date(device.madurador.hasta), 'dd/MM/yyyy HH:mm', {
+                               locale: language === 'es' ? esLocale : undefined,
+                             })
+                           : '—'}
+                       </span>
+                     </div>
+                     <div className="flex justify-between gap-2 pb-2 sm:col-span-2 lg:col-span-3">
+                       <span className="text-gray-500">{t('madurador_last_sample')}</span>
+                       <span className="font-mono text-right text-xs">
+                         {device.madurador.last_sample_fecha
+                           ? format(new Date(device.madurador.last_sample_fecha), 'dd/MM/yyyy HH:mm', {
+                               locale: language === 'es' ? esLocale : undefined,
+                             })
+                           : '—'}
+                       </span>
+                     </div>
+                   </div>
+                 </div>
+               )}
             </div>
           </div>
         </div>

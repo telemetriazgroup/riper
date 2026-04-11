@@ -39,6 +39,7 @@ function normalizeCompany(c) {
 }
 
 function rowToPublic(row) {
+  const iden = row.identificador != null ? String(row.identificador).trim() : '';
   return {
     id: row.id,
     name: row.name,
@@ -48,6 +49,7 @@ function rowToPublic(row) {
     active: row.active,
     is_superuser: row.is_superuser,
     has_photo: Boolean(row.photo_path),
+    identificador: iden.length ? iden : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -58,7 +60,7 @@ export const usersRouter = express.Router();
 usersRouter.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, email, role, company, active, is_superuser, photo_path, created_at, updated_at
+      `SELECT id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at
        FROM app_users
        WHERE deleted_at IS NULL
        ORDER BY created_at DESC`
@@ -71,7 +73,7 @@ usersRouter.get('/', async (req, res) => {
 });
 
 usersRouter.post('/', requireAdmin, async (req, res) => {
-  const { name, email, role, active = true, password, company } = req.body || {};
+  const { name, email, role, active = true, password, company, identificador } = req.body || {};
   const n = String(name || '').trim();
   const em = normalizeEmail(email);
   const pw = String(password || '');
@@ -85,13 +87,15 @@ usersRouter.post('/', requireAdmin, async (req, res) => {
     return res.status(403).json({ error: 'forbidden', message: 'only superadmin can create superadmin' });
   }
   const comp = normalizeCompany(company);
+  const iden =
+    identificador != null && String(identificador).trim() !== '' ? String(identificador).trim() : null;
   try {
     const hash = await bcrypt.hash(pw, 10);
     const { rows } = await pool.query(
-      `INSERT INTO app_users (name, email, role, password_hash, company, active, is_superuser)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, name, email, role, company, active, is_superuser, photo_path, created_at, updated_at`,
-      [n, em, role, hash, comp, Boolean(active), role === 'superadmin']
+      `INSERT INTO app_users (name, email, role, password_hash, company, active, is_superuser, identificador)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at`,
+      [n, em, role, hash, comp, Boolean(active), role === 'superadmin', iden]
     );
     res.status(201).json({ data: rowToPublic(rows[0]) });
   } catch (e) {
@@ -110,7 +114,7 @@ usersRouter.patch('/:id', async (req, res) => {
     return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
   }
 
-  let { name, email, role, active, password, company } = req.body || {};
+  let { name, email, role, active, password, company, identificador } = req.body || {};
   if (self && !isAdmin(req)) {
     email = undefined;
     role = undefined;
@@ -170,6 +174,15 @@ usersRouter.patch('/:id', async (req, res) => {
     fields.push(`company = $${i++}`);
     vals.push(normalizeCompany(company));
   }
+  if (identificador !== undefined) {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: 'forbidden', message: 'only admin can set identificador' });
+    }
+    const iden =
+      identificador === null || String(identificador).trim() === '' ? null : String(identificador).trim();
+    fields.push(`identificador = $${i++}`);
+    vals.push(iden);
+  }
   if (password !== undefined && String(password).length > 0) {
     const hash = await bcrypt.hash(String(password), 10);
     fields.push(`password_hash = $${i++}`);
@@ -186,7 +199,7 @@ usersRouter.patch('/:id', async (req, res) => {
   const sql = `
     UPDATE app_users SET ${fields.join(', ')}
     WHERE id = $${i}::uuid AND deleted_at IS NULL
-    RETURNING id, name, email, role, company, active, is_superuser, photo_path, created_at, updated_at
+    RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at
   `;
 
   try {

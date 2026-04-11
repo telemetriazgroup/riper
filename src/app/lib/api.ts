@@ -1,6 +1,7 @@
 import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistorialResponse, mapTermoKingDispositivoToDevice } from '@/app/data';
 import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession } from '@/app/lib/gourmet';
+import { buildMaduradorHistoryFromDevice, getMaduradorDevicesCached, hasMaduradorIdentificador } from '@/app/lib/madurador';
 
 /** GET TermoKing estado_general → lista de dispositivos */
 async function fetchEstadoGeneral(): Promise<Device[]> {
@@ -15,6 +16,14 @@ async function fetchEstadoGeneral(): Promise<Device[]> {
 }
 
 export async function fetchDevices(): Promise<Device[]> {
+  if (hasMaduradorIdentificador()) {
+    try {
+      return await getMaduradorDevicesCached();
+    } catch (e) {
+      console.warn('Madurador dispositivos failed:', e);
+      return [];
+    }
+  }
   if (isGourmetSession()) {
     return [buildGourmetDevice()];
   }
@@ -27,6 +36,13 @@ export async function fetchDevices(): Promise<Device[]> {
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
+  if (hasMaduradorIdentificador()) {
+    const list = await getMaduradorDevicesCached();
+    const device = list.find((d) => d.id === id);
+    if (device) return device;
+    if (list.length) return list[0];
+    return new Promise((resolve) => setTimeout(() => resolve(MOCK_DEVICES[0]), 200));
+  }
   if (isGourmetSession()) {
     return buildGourmetDevice();
   }
@@ -86,6 +102,10 @@ export async function fetchDeviceHistory(
   id: string,
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
+  if (hasMaduradorIdentificador()) {
+    const dev = await fetchDevice(id);
+    return buildMaduradorHistoryFromDevice(dev, options);
+  }
   if (isGourmetSession()) {
     const pts = buildGourmetHistoryPoints();
     const fi = options.fecha_inicio;

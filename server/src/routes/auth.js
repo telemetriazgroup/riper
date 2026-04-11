@@ -11,6 +11,7 @@ function normalizeEmail(email) {
 }
 
 function userPayload(row) {
+  const iden = row.identificador != null ? String(row.identificador).trim() : '';
   return {
     id: row.id,
     email: row.email,
@@ -20,6 +21,7 @@ function userPayload(row) {
     is_superuser: row.is_superuser,
     has_photo: Boolean(row.photo_path),
     active: row.active,
+    identificador: iden.length ? iden : null,
   };
 }
 
@@ -31,7 +33,7 @@ router.post('/login', async (req, res) => {
   }
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, company, is_superuser, password_hash, active, deleted_at, photo_path
+      `SELECT id, email, name, role, company, is_superuser, password_hash, active, deleted_at, photo_path, identificador
        FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
       [email]
     );
@@ -72,7 +74,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, company, is_superuser, active, photo_path, deleted_at
+      `SELECT id, email, name, role, company, is_superuser, active, photo_path, deleted_at, identificador
        FROM app_users WHERE id = $1::uuid`,
       [req.user.id]
     );

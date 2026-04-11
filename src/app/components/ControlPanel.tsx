@@ -126,10 +126,13 @@ const RangeControl = ({ label, value, unit, min, max, onChange, step = 1, origin
 
 const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Device }) => {
   const { t, convertTemp, tempUnit } = useSettings();
+  const md = device?.madurador;
   const [temp, setTemp] = useState(device?.telemetry.set_point ?? 19);
-  const [humidity, setHumidity] = useState(device?.telemetry.relative_humidity ?? 90);
+  const [humidity, setHumidity] = useState(
+    md?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90
+  );
   const [ethylene, setEthylene] = useState(device?.telemetry.ethylene ?? 0);
-  const [fan, setFan] = useState(100);
+  const [fan, setFan] = useState(md?.ventilation_fan_reference_pct ?? 100);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [powerLoading, setPowerLoading] = useState(false);
@@ -139,14 +142,17 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
   useEffect(() => {
     if (device) {
       setTemp(device.telemetry.set_point);
-      // setHumidity(device.telemetry.humidity_set_point ?? 90);
+      setHumidity(device.madurador?.humidity_set_point ?? device.telemetry.relative_humidity ?? 90);
+      setEthylene(device.telemetry.ethylene ?? 0);
+      setFan(device.madurador?.ventilation_fan_reference_pct ?? 100);
     }
   }, [device]);
 
   const originalTemp = device?.telemetry.set_point ?? 19;
-  const originalHumidity = device?.telemetry.relative_humidity ?? 90;
+  const originalHumidity =
+    device?.madurador?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90;
   const originalEthylene = device?.telemetry.ethylene ?? 0;
-  const originalFan = 100;
+  const originalFan = device?.madurador?.ventilation_fan_reference_pct ?? 100;
   const isPoweredOn = device?.telemetry.power_state === 1;
 
   // Connection Status Logic

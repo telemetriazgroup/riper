@@ -12,6 +12,7 @@ export interface AppUser {
   active: boolean;
   is_superuser?: boolean;
   has_photo?: boolean;
+  identificador?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +60,7 @@ export async function createUser(payload: {
   role: UserRole;
   company?: string;
   active?: boolean;
+  identificador?: string | null;
 }): Promise<AppUser> {
   const res = await fetch(usersBase(), {
     method: 'POST',
@@ -71,7 +73,7 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  payload: Partial<Pick<AppUser, 'name' | 'email' | 'role' | 'active' | 'company'>> & {
+  payload: Partial<Pick<AppUser, 'name' | 'email' | 'role' | 'active' | 'company' | 'identificador'>> & {
     password?: string;
   }
 ): Promise<AppUser> {

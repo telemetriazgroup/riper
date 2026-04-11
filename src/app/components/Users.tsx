@@ -50,6 +50,7 @@ export const UsersList: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [company, setCompany] = useState('');
+  const [identificador, setIdentificador] = useState('');
   const [role, setRole] = useState<UserRole>('operator');
   const [active, setActive] = useState(true);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -104,6 +105,7 @@ export const UsersList: React.FC = () => {
     setEmail('');
     setPassword('');
     setCompany('');
+    setIdentificador('');
     setRole('operator');
     setActive(true);
     setPhotoFile(null);
@@ -116,6 +118,7 @@ export const UsersList: React.FC = () => {
     setEmail(u.email);
     setPassword('');
     setCompany(u.company === 'sin empresa' ? '' : u.company);
+    setIdentificador(u.identificador ?? '');
     setRole(u.role);
     setActive(u.active);
     setPhotoFile(null);
@@ -142,6 +145,7 @@ export const UsersList: React.FC = () => {
           role,
           active,
           company: comp,
+          identificador: identificador.trim() ? identificador.trim() : null,
         };
         if (password.trim()) {
           payload.password = password;
@@ -164,6 +168,7 @@ export const UsersList: React.FC = () => {
           role,
           company: comp,
           active,
+          identificador: identificador.trim() ? identificador.trim() : null,
         });
         if (photoFile) {
           await uploadUserAvatar(created.id, photoFile);
@@ -226,6 +231,7 @@ export const UsersList: React.FC = () => {
                     <th className="px-4 py-3">{t('user')}</th>
                     <th className="px-4 py-3">{t('email')}</th>
                     <th className="px-4 py-3">{t('company_field')}</th>
+                    <th className="px-4 py-3">{t('identificador_field_short')}</th>
                     <th className="px-4 py-3">{t('role')}</th>
                     <th className="px-4 py-3">{t('status')}</th>
                     <th className="px-4 py-3 text-right">{t('actions')}</th>
@@ -255,6 +261,9 @@ export const UsersList: React.FC = () => {
                           <Building2 className="h-3 w-3 shrink-0" />
                           {user.company || 'sin empresa'}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 font-mono text-xs">
+                        {user.identificador ?? '—'}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 text-gray-700">
@@ -418,6 +427,18 @@ export const UsersList: React.FC = () => {
                   onChange={(e) => setCompany(e.target.value)}
                   placeholder={t('company_placeholder')}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="u-identificador">{t('identificador_field')}</Label>
+                <input
+                  id="u-identificador"
+                  className={inputClass}
+                  value={identificador}
+                  onChange={(e) => setIdentificador(e.target.value)}
+                  placeholder={t('identificador_placeholder')}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-gray-500">{t('identificador_hint')}</p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="u-pass">{editing ? t('password_change_hint') : t('password_new_user')}</Label>

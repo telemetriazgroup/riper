@@ -29,6 +29,7 @@ services:
       SUPERUSER_EMAIL: ${SUPERUSER_EMAIL:-superadmin@riper.local}
       SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-changeme123}
       UPLOAD_DIR: uploads
+      MADURADOR_API_BASE: ${MADURADOR_API_BASE:-http://161.132.53.51:9051}
     volumes:
       - ripener_uploads:/app/uploads
     ports:

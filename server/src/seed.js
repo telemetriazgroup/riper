@@ -35,14 +35,20 @@ export async function seedGourmetDemoUser() {
     `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
     [email]
   );
-  if (rows.length > 0) return;
+  if (rows.length === 0) {
+    const password = process.env.GOURMET_DEMO_PASSWORD || 'GourmetDemo2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'viewer', $3, 'Gourmet Trading', false, true, '1001')`,
+      ['Gourmet Trading', email, hash]
+    );
+    console.log(`[seed] gourmet demo user: ${email} (set GOURMET_DEMO_PASSWORD in production)`);
+  }
 
-  const password = process.env.GOURMET_DEMO_PASSWORD || 'GourmetDemo2026!';
-  const hash = await bcrypt.hash(password, 10);
   await pool.query(
-    `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active)
-     VALUES ($1, $2, 'viewer', $3, 'Gourmet Trading', false, true)`,
-    ['Gourmet Trading', email, hash]
+    `UPDATE app_users SET identificador = '1001', updated_at = now()
+     WHERE lower(email) = 'gourmettrading@ztrack.app' AND deleted_at IS NULL
+       AND (identificador IS NULL OR btrim(identificador) = '')`
   );
-  console.log(`[seed] gourmet demo user: ${email} (set GOURMET_DEMO_PASSWORD in production)`);
 }

@@ -1,4 +1,5 @@
 import { RIPENER_API_URL } from '@/app/config';
+import { clearMaduradorListCache } from '@/app/lib/maduradorCache';
 
 const TOKEN_KEY = 'riper_auth_token';
 const USER_KEY = 'riper_auth_user';
@@ -12,6 +13,8 @@ export interface AuthUser {
   is_superuser: boolean;
   has_photo?: boolean;
   active?: boolean;
+  /** Identificador empresa (API Madurador); opcional */
+  identificador?: string | null;
 }
 
 function apiRoot() {
@@ -57,6 +60,7 @@ export function setStoredUser(user: AuthUser | null) {
 export function clearAuth() {
   setToken(null);
   setStoredUser(null);
+  clearMaduradorListCache();
 }
 
 export async function loginRequest(email: string, password: string): Promise<{ token: string; user: AuthUser }> {
@@ -80,6 +84,7 @@ export async function loginRequest(email: string, password: string): Promise<{ t
   if (!body.token || !body.user) {
     throw new Error('invalid response');
   }
+  clearMaduradorListCache();
   setToken(body.token);
   setStoredUser(body.user);
   return { token: body.token, user: body.user };

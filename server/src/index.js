@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.js';
 import { authMiddleware } from './authMiddleware.js';
 import { productsRouter } from './routes/products.js';
 import { recipesRouter } from './routes/recipes.js';
+import { maduradorRouter } from './routes/madurador.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -43,6 +44,7 @@ async function main() {
   app.use('/api/v1/users', authMiddleware, usersRouter);
   app.use('/api/v1/products', authMiddleware, productsRouter);
   app.use('/api/v1/recipes', authMiddleware, recipesRouter);
+  app.use('/api/v1/madurador', authMiddleware, maduradorRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

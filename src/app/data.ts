@@ -109,6 +109,25 @@ export interface OperationalData {
   fresh_air_ex_mode: number;
 }
 
+/** Referencia API Madurador (listar_dispositivos…) para detalle y control manual. */
+export interface MaduradorReference {
+  identificador_empresa: string | null;
+  fecha_inicio: string | null;
+  fecha_procesada: string | null;
+  hasta: string | null;
+  ultima_fecha_encendido: string | null;
+  last_sample_fecha: string | null;
+  power_state_label: string;
+  set_point_co2_display: string | number | null;
+  line_voltage_display: string | number | null;
+  avl_display: string | number | null;
+  compress_coil_1_display: string | number | null;
+  /** Referencia para slider de ventilación (0–100 %) */
+  ventilation_fan_reference_pct: number;
+  humidity_set_point: number | null;
+  capacity_load: number | null;
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -126,6 +145,7 @@ export interface Device {
     currentPhase?: string;
     timeLeft?: string;
   };
+  madurador?: MaduradorReference;
 }
 
 // --- TermoKing API (estado_general) ---
