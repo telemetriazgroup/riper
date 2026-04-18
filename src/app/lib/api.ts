@@ -2,6 +2,11 @@ import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistoria
 import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession } from '@/app/lib/gourmet';
 import { buildMaduradorHistoryFromDevice, getMaduradorDevicesCached, hasMaduradorIdentificador } from '@/app/lib/madurador';
+import {
+  GOURMET_TUNEL_DEVICE_ID,
+  getCachedGourmetTunnelDevice,
+  refreshGourmetTunnelDevice,
+} from '@/app/lib/tunelUnido';
 
 /** GET TermoKing estado_general → lista de dispositivos */
 async function fetchEstadoGeneral(): Promise<Device[]> {
@@ -15,17 +20,32 @@ async function fetchEstadoGeneral(): Promise<Device[]> {
   return list.map(mapTermoKingDispositivoToDevice);
 }
 
+function appendGourmetTunnelIfNeeded(list: Device[]): Promise<Device[]> {
+  if (!isGourmetSession()) return Promise.resolve(list);
+  return refreshGourmetTunnelDevice().then((tun) => {
+    if (list.some((d) => d.id === tun.id)) return list;
+    return [...list, tun];
+  });
+}
+
 export async function fetchDevices(): Promise<Device[]> {
   if (hasMaduradorIdentificador()) {
     try {
-      return await getMaduradorDevicesCached();
+      const list = await getMaduradorDevicesCached();
+      return appendGourmetTunnelIfNeeded(list);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
+      if (isGourmetSession()) {
+        const tun = await refreshGourmetTunnelDevice();
+        return [tun];
+      }
       return [];
     }
   }
   if (isGourmetSession()) {
-    return [buildGourmetDevice()];
+    const mad = buildGourmetDevice();
+    const tun = await refreshGourmetTunnelDevice();
+    return [mad, tun];
   }
   try {
     return await fetchEstadoGeneral();
@@ -36,6 +56,9 @@ export async function fetchDevices(): Promise<Device[]> {
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
+  if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
+    return getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
+  }
   if (hasMaduradorIdentificador()) {
     const list = await getMaduradorDevicesCached();
     const device = list.find((d) => d.id === id);
@@ -102,6 +125,43 @@ export async function fetchDeviceHistory(
   id: string,
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
+  if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
+    const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
+    const ts = dev.last_seen;
+    const tel = dev.telemetry;
+    const op = dev.operational;
+    return [
+      {
+        timestamp: new Date(ts).toISOString(),
+        temp_supply_1: tel.temp_supply_1,
+        return_air: tel.return_air,
+        evaporation_coil: op.evaporation_coil,
+        condensation_coil: op.condensation_coil,
+        compress_coil_1: 0,
+        ambient_air: op.ambient_air,
+        cargo_1_temp: null,
+        cargo_2_temp: null,
+        cargo_3_temp: null,
+        cargo_4_temp: null,
+        relative_humidity: tel.relative_humidity,
+        avl_pct: 0,
+        line_voltage: 0,
+        line_frequency: 0,
+        co2_reading: tel.co2_reading,
+        o2_reading: null,
+        set_point: tel.set_point,
+        capacity_load: 0,
+        power_state: tel.power_state,
+        humidity_set_point: 0,
+        set_point_o2: null,
+        set_point_co2: null,
+        sp_ethyleno: 0,
+        ethylene: tel.ethylene,
+        iCtrlRip: 0,
+        power_kwh: op.power_kwh,
+      },
+    ];
+  }
   if (hasMaduradorIdentificador()) {
     const dev = await fetchDevice(id);
     return buildMaduradorHistoryFromDevice(dev, options);

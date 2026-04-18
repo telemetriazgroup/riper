@@ -109,6 +109,28 @@ export interface OperationalData {
   fresh_air_ex_mode: number;
 }
 
+/** Telemetría por unidad dentro del túnel (conjunto). */
+export interface TunnelUnitTelemetry {
+  unidad: string;
+  pregunta: string | null;
+  powerOn: boolean;
+  supplyTemp: number | null;
+  datos: Record<string, string | number | null>;
+}
+
+/** Resumen grupo túnel (5 máquinas + promedios). */
+export interface TunnelTelemetryGroup {
+  grupo: string;
+  /** Fecha de la muestra del bloque IMEI elegido (mayor `fecha` entre redundancias). */
+  muestraFecha: string | null;
+  imeiRedundancy: string[];
+  selectedImei: string | null;
+  averageSupplyTemp: number | null;
+  /** Si hay al menos una unidad encendida, el promedio es solo de encendidas; si todas apagadas, de las 5. */
+  averageMode: 'powered_on' | 'all_off';
+  units: TunnelUnitTelemetry[];
+}
+
 /** Referencia API Madurador (listar_dispositivos…) para detalle y control manual. */
 export interface MaduradorReference {
   identificador_empresa: string | null;
@@ -146,6 +168,8 @@ export interface Device {
     timeLeft?: string;
   };
   madurador?: MaduradorReference;
+  /** Presente cuando el dispositivo es un túnel / madurador multi-unidad (API Unidos). */
+  tunnel?: TunnelTelemetryGroup;
 }
 
 // --- TermoKing API (estado_general) ---

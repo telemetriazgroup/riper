@@ -27,6 +27,12 @@ export const API_BASE_URL: string =
 export const RIPENER_API_URL: string =
   (env?.VITE_RIPENER_API_URL as string) || 'http://localhost:4000';
 
+/**
+ * Si se define (URL absoluta o ruta tipo `/tunel-api/...`), el cliente llama ahí directamente.
+ * Si no se define, se usa el proxy autenticado en Ripener: `GET /api/v1/tunel/grupo` (recomendado; evita CORS).
+ */
+export const VITE_TUNEL_GRUPO_URL_RAW: string | undefined = env?.VITE_TUNEL_GRUPO_URL as string | undefined;
+
 /** Devuelve la URL base de la API (mismo valor que API_BASE_URL, por si se necesita en runtime). */
 export function getApiBaseUrl(): string {
   return API_BASE_URL;

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Device } from '@/app/data';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer } from 'lucide-react';
+import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer, Layers } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { updateDeviceName } from '@/app/lib/api';
@@ -133,19 +133,27 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
               </button>
             </div>
           ) : (
-            <div className="group flex items-center gap-2">
+            <div className="group flex items-center gap-2 flex-wrap">
               <CardTitle className="text-lg font-bold text-gray-800 truncate">{device.name}</CardTitle>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setNewName(device.name);
-                  setIsEditing(true);
-                }}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600"
-                title={t('rename_device')}
-              >
-                <Edit2 className="w-3 h-3" />
-              </button>
+              {device.tunnel && (
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 shrink-0">
+                  <Layers className="h-3 w-3" />
+                  TÚNEL
+                </span>
+              )}
+              {!device.tunnel && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setNewName(device.name);
+                    setIsEditing(true);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600"
+                  title={t('rename_device')}
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              )}
             </div>
           )}
           <div className="text-xs text-gray-500 font-mono mt-1 flex items-center gap-2">

@@ -12,6 +12,7 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { formatMaduradorScalar } from '@/app/lib/madurador';
+import { TunnelDeviceDetail } from '@/app/components/TunnelDeviceDetail';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -54,6 +55,10 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   }
 
   if (!device) return <div>{t('device_not_found')}</div>;
+
+  if (device.tunnel) {
+    return <TunnelDeviceDetail device={device} onBack={onBack} />;
+  }
 
   const lastCommFormatted =
     lastSeenDate && !isNaN(lastSeenDate.getTime())

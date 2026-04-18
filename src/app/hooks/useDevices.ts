@@ -8,7 +8,7 @@ export function useDevices() {
   const { data, error, isLoading, mutate } = useSWR<Device[]>(
     gourmet ? 'gourmet:/api/devices' : '/api/devices',
     fetchDevices,
-    { refreshInterval: gourmet ? 0 : 5000 }
+    { refreshInterval: gourmet ? 30000 : 5000 }
   );
 
   return {
@@ -24,7 +24,7 @@ export function useDevice(id: string | null) {
   const { data, error, isLoading, mutate } = useSWR<Device>(
     id ? (gourmet ? `gourmet:/api/devices/${id}` : `/api/devices/${id}`) : null,
     () => fetchDevice(id!),
-    { refreshInterval: gourmet ? 0 : 5000 }
+    { refreshInterval: gourmet ? 30000 : 5000 }
   );
 
   return {
