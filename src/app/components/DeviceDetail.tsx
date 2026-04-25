@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { format, differenceInMinutes } from 'date-fns';
 import { es as esLocale } from 'date-fns/locale';
 import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
@@ -11,8 +11,11 @@ import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { formatMaduradorScalar } from '@/app/lib/madurador';
+import { controlPanelTabFromStateProcess, formatMaduradorScalar } from '@/app/lib/madurador';
+import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 import { TunnelDeviceDetail } from '@/app/components/TunnelDeviceDetail';
+import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperativoSummaryPanel';
+import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -25,7 +28,12 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   const { history } = useDeviceHistory(deviceId);
   const [controlMode, setControlMode] = useState('manual');
   const [activeView, setActiveView] = useState(initialView);
-  const { t, convertTemp, tempUnit, language } = useSettings();
+  const { t, convertTemp, tempUnit, formatTemp, toggleTempUnit, language } = useSettings();
+
+  useEffect(() => {
+    if (!device) return;
+    setControlMode(controlPanelTabFromStateProcess(device.telemetry.stateProcess));
+  }, [device?.id, device?.telemetry.stateProcess]);
 
   const lastSeenDate = device?.last_seen ? new Date(device.last_seen) : null;
   const minsSinceLastSeen =
@@ -74,7 +82,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{device.name}</h2>
+            <h2 className="text-2xl font-bold text-gray-900">{resolveDeviceDisplayName(device)}</h2>
             <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
               <span>ID: {device.id}</span>
               <span>•</span>
@@ -151,7 +159,15 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
 
       {/* Main Content Area */}
       {activeView === 'operation' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full animate-in fade-in duration-300">
+        <div className="space-y-6 h-full animate-in fade-in duration-300">
+          <DeviceCurrentStatusPanel
+            device={device}
+            t={t}
+            formatTemp={formatTemp}
+            tempUnit={tempUnit}
+            toggleTempUnit={toggleTempUnit}
+          />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* Left Column: Control Panel */}
           <div className="lg:col-span-1">
             <ControlPanel mode={controlMode} onChangeMode={setControlMode} deviceId={deviceId} device={device} />
@@ -345,8 +361,17 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                    </div>
                  </div>
                )}
+
+               {device.maduradorSummary ? (
+                 <MaduradorOperativoSummaryPanel
+                   summary={device.maduradorSummary}
+                   ultimaFechaEncendido={device.madurador?.ultima_fecha_encendido}
+                   language={language}
+                 />
+               ) : null}
             </div>
           </div>
+        </div>
         </div>
       ) : activeView === 'log' ? (
         <div className="min-h-[400px]">

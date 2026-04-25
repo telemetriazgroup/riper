@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Plus,
   Search,
@@ -7,6 +7,8 @@ import {
   MoreVertical,
   Edit,
   Trash,
+  Copy,
+  Eye,
   Thermometer,
   FlaskConical,
   Wind,
@@ -16,6 +18,7 @@ import {
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import { RecipeBuilder, Recipe, PhaseType } from './RecipeBuilder';
+import { DuplicateRecipeDialog } from './DuplicateRecipeDialog';
 import { ProductManager } from './ProductManager';
 import { clsx } from 'clsx';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -29,9 +32,13 @@ export const RecipeList = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [products, setProducts] = useState<AppProduct[]>([]);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | undefined>(undefined);
+  const [builderReadOnly, setBuilderReadOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<Recipe | null>(null);
+  const [kebabForId, setKebabForId] = useState<string | null>(null);
+  const kebabRef = useRef<HTMLDivElement | null>(null);
 
   const role = getStoredUser()?.role;
   const canManageProducts = role === 'superadmin' || role === 'admin';
@@ -55,29 +62,78 @@ export const RecipeList = () => {
     loadAll();
   }, [loadAll]);
 
+  useEffect(() => {
+    if (!kebabForId) return;
+    const onDown = (e: MouseEvent) => {
+      const el = kebabRef.current;
+      if (el && e.target instanceof Node && !el.contains(e.target)) {
+        setKebabForId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [kebabForId]);
+
+  const sortedRecipes = useMemo(() => {
+    return [...recipes].sort((a, b) => {
+      const sa = a.is_system ? 0 : 1;
+      const sb = b.is_system ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return a.name.localeCompare(b.name, 'es');
+    });
+  }, [recipes]);
+
   const filteredRecipes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return recipes;
-    return recipes.filter(
+    if (!q) return sortedRecipes;
+    return sortedRecipes.filter(
       (r) =>
         r.name.toLowerCase().includes(q) ||
         r.fruit.toLowerCase().includes(q) ||
         (r.description || '').toLowerCase().includes(q)
     );
-  }, [recipes, searchQuery]);
+  }, [sortedRecipes, searchQuery]);
 
   const productOptions = useMemo(
     () => products.map((p) => ({ id: p.id, name: p.name })),
     [products]
   );
 
+  const goToList = () => {
+    setView('list');
+    setBuilderReadOnly(false);
+    setEditingRecipe(undefined);
+  };
+
   const handleCreate = () => {
     setEditingRecipe(undefined);
+    setBuilderReadOnly(false);
     setView('builder');
   };
 
+  /** Clic en tarjeta: ver protocolo (solo lectura). */
+  const openViewDetails = (recipe: Recipe) => {
+    setEditingRecipe(recipe);
+    setBuilderReadOnly(true);
+    setView('builder');
+  };
+
+  /** Editar: solo recetas no estándar (las del sistema se editan vía duplicar). */
   const handleEdit = (recipe: Recipe) => {
     setEditingRecipe(recipe);
+    setBuilderReadOnly(false);
+    setView('builder');
+  };
+
+  const openDuplicateModal = (recipe: Recipe) => {
+    setKebabForId(null);
+    setDuplicateSource(recipe);
+  };
+
+  const applyDuplicateDraft = (draft: Recipe) => {
+    setDuplicateSource(null);
+    setEditingRecipe(draft);
+    setBuilderReadOnly(false);
     setView('builder');
   };
 
@@ -85,21 +141,29 @@ export const RecipeList = () => {
     try {
       const isNew = recipe.id === 'new' || !recipes.some((r) => r.id === recipe.id);
       if (isNew) {
-        const { id: _id, ...rest } = recipe;
+        const { id: _id, is_system: _s, ...rest } = recipe;
         const created = await createRecipe(rest);
         setRecipes((prev) => [created, ...prev]);
       } else {
-        const { id, ...rest } = recipe;
+        if (recipe.is_system) {
+          alert(t('recipes_cannot_save_system'));
+          return;
+        }
+        const { id, is_system: _s, ...rest } = recipe;
         const updated = await updateRecipe(id, rest);
         setRecipes((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       }
-      setView('list');
+      goToList();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error');
     }
   };
 
   const handleDelete = async (recipe: Recipe) => {
+    if (recipe.is_system) {
+      alert(t('recipes_cannot_delete_system'));
+      return;
+    }
     if (!window.confirm(t('recipes_confirm_delete'))) return;
     try {
       await deleteRecipe(recipe.id);
@@ -162,17 +226,6 @@ export const RecipeList = () => {
     }, 0);
   };
 
-  if (view === 'builder') {
-    return (
-      <RecipeBuilder
-        initialData={editingRecipe}
-        products={productOptions}
-        onSave={handleSave}
-        onCancel={() => setView('list')}
-      />
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-24 text-gray-500 gap-3">
@@ -183,6 +236,45 @@ export const RecipeList = () => {
   }
 
   return (
+    <>
+      {duplicateSource && (
+        <DuplicateRecipeDialog
+          key={duplicateSource.id}
+          source={duplicateSource}
+          products={productOptions}
+          onClose={() => setDuplicateSource(null)}
+          onConfirm={applyDuplicateDraft}
+          canCreateProduct={canManageProducts}
+          onProductCreated={() => {
+            void loadAll();
+          }}
+          createSortOrder={products.length}
+        />
+      )}
+      {view === 'builder' ? (
+        <RecipeBuilder
+          key={editingRecipe ? `${editingRecipe.id}\u200b${editingRecipe.name}` : 'new-recipe'}
+          initialData={editingRecipe}
+          products={productOptions}
+          onSave={handleSave}
+          onCancel={goToList}
+          readOnly={builderReadOnly}
+          onStartEdit={
+            canEditRecipes && editingRecipe && !editingRecipe.is_system
+              ? () => setBuilderReadOnly(false)
+              : undefined
+          }
+          onDuplicateFromView={
+            canEditRecipes && editingRecipe
+              ? () => openDuplicateModal(editingRecipe)
+              : undefined
+          }
+          canCreateProduct={canManageProducts}
+          onProductCreated={() => {
+            void loadAll();
+          }}
+        />
+      ) : (
     <div className="space-y-6 animate-in fade-in duration-300">
       {loadError && (
         <div className="rounded-lg border border-red-200 bg-red-50 text-red-800 px-4 py-3 text-sm">
@@ -227,21 +319,80 @@ export const RecipeList = () => {
         {filteredRecipes.map((recipe) => (
           <Card
             key={recipe.id}
-            className="hover:shadow-md transition-shadow group border-gray-200 flex flex-col"
+            role="button"
+            tabIndex={0}
+            onClick={() => openViewDetails(recipe)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openViewDetails(recipe);
+              }
+            }}
+            className="hover:shadow-md transition-shadow group border-gray-200 flex flex-col cursor-pointer text-left"
           >
             <CardContent className="p-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start mb-4">
                 <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
                   <ChefHat className="w-6 h-6" />
                 </div>
-                <div className="relative">
-                  <button type="button" className="text-gray-400 hover:text-gray-600 p-1">
+                <div
+                  ref={kebabForId === recipe.id ? kebabRef : undefined}
+                  className="relative z-20"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="text-gray-400 hover:text-gray-600 p-1 rounded-md hover:bg-gray-100"
+                    aria-expanded={kebabForId === recipe.id}
+                    aria-haspopup="menu"
+                    onClick={() =>
+                      setKebabForId((id) => (id === recipe.id ? null : recipe.id))
+                    }
+                  >
                     <MoreVertical className="w-5 h-5" />
                   </button>
+                  {kebabForId === recipe.id && (
+                    <div
+                      className="absolute right-0 top-full mt-1 min-w-[200px] rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+                      role="menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => {
+                          setKebabForId(null);
+                          openViewDetails(recipe);
+                        }}
+                      >
+                        <Eye className="w-4 h-4 shrink-0 text-gray-500" />
+                        {t('recipe_view_action')}
+                      </button>
+                      {canEditRecipes && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                          onClick={() => openDuplicateModal(recipe)}
+                        >
+                          <Copy className="w-4 h-4 shrink-0 text-gray-500" />
+                          {t('duplicate_recipe')}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <h3 className="font-bold text-gray-900 text-lg mb-1 leading-tight">{recipe.name}</h3>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h3 className="font-bold text-gray-900 text-lg leading-tight">{recipe.name}</h3>
+                {recipe.is_system && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                    {t('recipe_standard_badge')}
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-blue-600 font-medium mb-2">{recipe.fruit}</p>
 
               <p className="text-sm text-gray-500 line-clamp-2 mb-4 h-10">
@@ -257,23 +408,53 @@ export const RecipeList = () => {
                 </div>
 
                 {canEditRecipes && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleEdit(recipe)}
-                    >
-                      <Edit className="w-4 h-4 text-gray-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:text-red-600"
-                      onClick={() => handleDelete(recipe)}
-                    >
-                      <Trash className="w-4 h-4" />
-                    </Button>
+                  <div
+                    className="flex flex-wrap items-center justify-end gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    {recipe.is_system ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1"
+                        onClick={() => openDuplicateModal(recipe)}
+                        title={t('duplicate_recipe')}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        {t('duplicate_recipe')}
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleEdit(recipe)}
+                          title={t('edit_recipe')}
+                        >
+                          <Edit className="w-4 h-4 text-gray-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => openDuplicateModal(recipe)}
+                          title={t('duplicate_recipe')}
+                        >
+                          <Copy className="w-4 h-4 text-gray-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:text-red-600"
+                          onClick={() => handleDelete(recipe)}
+                          title={t('delete')}
+                        >
+                          <Trash className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -282,5 +463,7 @@ export const RecipeList = () => {
         ))}
       </div>
     </div>
+      )}
+    </>
   );
 };

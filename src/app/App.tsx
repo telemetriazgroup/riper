@@ -15,6 +15,7 @@ import { Loader2 } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/app/contexts/SettingsContext';
 import { getToken, fetchMe, clearAuth, type AuthUser } from '@/app/lib/auth';
 import { GOURMET_USER_EMAIL } from '@/app/lib/gourmet';
+import { FLEET_DEMO_EMAIL } from '@/app/lib/fleetDemo';
 
 export default function App() {
   return (
@@ -55,14 +56,16 @@ function AppContent() {
     })();
   }, [refreshSession]);
 
-  const isGourmetUser = session?.email?.toLowerCase() === GOURMET_USER_EMAIL.toLowerCase();
+  const isRestrictedDemoUser =
+    session?.email?.toLowerCase() === GOURMET_USER_EMAIL.toLowerCase() ||
+    session?.email?.toLowerCase() === FLEET_DEMO_EMAIL.toLowerCase();
 
   useEffect(() => {
-    if (!isGourmetUser) return;
+    if (!isRestrictedDemoUser) return;
     if (activeView === 'users' || activeView === 'settings') {
       setActiveView('dashboard');
     }
-  }, [isGourmetUser, activeView]);
+  }, [isRestrictedDemoUser, activeView]);
 
   const handleLogout = () => {
     clearAuth();

@@ -1,5 +1,25 @@
 import { pool } from './db.js';
-import { DEFAULT_PRODUCT_NAMES, DEFAULT_RECIPES } from './data/defaultCatalog.js';
+import { DEFAULT_PRODUCT_NAMES, STANDARD_RECIPES } from './data/defaultCatalog.js';
+
+/** Inserta/actualiza las 3 recetas estándar (siempre; no se borran desde UI). */
+export async function ensureStandardRecipes() {
+  for (const r of STANDARD_RECIPES) {
+    await pool.query(
+      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system)
+       VALUES ($1, $2, $3, $4, $5::jsonb, true)
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name,
+         fruit = EXCLUDED.fruit,
+         description = EXCLUDED.description,
+         phases = EXCLUDED.phases,
+         is_system = true,
+         updated_at = now(),
+         deleted_at = NULL`,
+      [r.id, r.name, r.fruit, r.description, JSON.stringify(r.phases)]
+    );
+  }
+  console.log(`[seed] recetas estándar: ${STANDARD_RECIPES.length} (upsert ok)`);
+}
 
 export async function seedCatalog() {
   const { rows: pc } = await pool.query(
@@ -19,13 +39,15 @@ export async function seedCatalog() {
     `SELECT COUNT(*)::int AS c FROM app_recipes WHERE deleted_at IS NULL`
   );
   if (rc[0].c === 0) {
-    for (const r of DEFAULT_RECIPES) {
+    for (const r of STANDARD_RECIPES) {
       await pool.query(
-        `INSERT INTO app_recipes (id, name, fruit, description, phases)
-         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system)
+         VALUES ($1, $2, $3, $4, $5::jsonb, true)`,
         [r.id, r.name, r.fruit, r.description, JSON.stringify(r.phases)]
       );
     }
-    console.log('[seed] app_recipes: default recipes inserted');
+    console.log('[seed] app_recipes: initial pack (solo estándar) insertado');
   }
+
+  await ensureStandardRecipes();
 }

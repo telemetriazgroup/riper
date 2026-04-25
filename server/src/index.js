@@ -4,22 +4,28 @@ import express from 'express';
 import { pool } from './db.js';
 import { usersRouter, ensureUploadDirs } from './routes/users.js';
 import { runMigrate } from './migrate.js';
-import { seedSuperuser, seedGourmetDemoUser } from './seed.js';
+import { seedSuperuser, seedGourmetDemoUser, seedFleetDemoUser } from './seed.js';
 import { seedCatalog } from './seedCatalog.js';
 import { authRouter } from './routes/auth.js';
 import { authMiddleware } from './authMiddleware.js';
 import { productsRouter } from './routes/products.js';
 import { recipesRouter } from './routes/recipes.js';
 import { maduradorRouter } from './routes/madurador.js';
+import { maduradorDemoProxyRouter } from './routes/maduradorDemoProxy.js';
 import { tunelRouter } from './routes/tunel.js';
+import { deviceNamesRouter } from './routes/deviceNames.js';
+import { deviceProcessFollowRouter } from './routes/deviceProcessFollow.js';
+import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripeningProcesses.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 
 async function main() {
   await runMigrate();
   ensureUploadDirs();
+  ensureRipeningUploadDirs();
   await seedSuperuser();
   await seedGourmetDemoUser();
+  await seedFleetDemoUser();
   await seedCatalog();
 
   const app = express();
@@ -46,7 +52,11 @@ async function main() {
   app.use('/api/v1/products', authMiddleware, productsRouter);
   app.use('/api/v1/recipes', authMiddleware, recipesRouter);
   app.use('/api/v1/madurador', authMiddleware, maduradorRouter);
+  app.use('/api/v1/madurador-demo', authMiddleware, maduradorDemoProxyRouter);
   app.use('/api/v1/tunel', authMiddleware, tunelRouter);
+  app.use('/api/v1/device-names', authMiddleware, deviceNamesRouter);
+  app.use('/api/v1/device-process-follow', authMiddleware, deviceProcessFollowRouter);
+  app.use('/api/v1/ripening-processes', authMiddleware, ripeningProcessesRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

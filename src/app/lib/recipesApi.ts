@@ -31,6 +31,7 @@ function toRecipe(row: {
   fruit: string;
   description: string;
   phases: Recipe['phases'];
+  is_system?: boolean;
 }): Recipe {
   return {
     id: row.id,
@@ -38,6 +39,7 @@ function toRecipe(row: {
     fruit: row.fruit,
     description: row.description ?? '',
     phases: row.phases ?? [],
+    is_system: row.is_system === true,
   };
 }
 
@@ -47,11 +49,16 @@ export async function fetchRecipes(): Promise<Recipe[]> {
   return (json.data ?? []).map(toRecipe);
 }
 
-export async function createRecipe(payload: Omit<Recipe, 'id'>): Promise<Recipe> {
+export async function createRecipe(payload: Omit<Recipe, 'id' | 'is_system'>): Promise<Recipe> {
   const res = await fetch(base(), {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      name: payload.name,
+      fruit: payload.fruit,
+      description: payload.description ?? '',
+      phases: payload.phases,
+    }),
   });
   const json = await handle<{ data: Parameters<typeof toRecipe>[0] }>(res);
   return toRecipe(json.data);

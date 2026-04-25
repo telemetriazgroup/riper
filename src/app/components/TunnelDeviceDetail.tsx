@@ -7,6 +7,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { format } from 'date-fns';
 import { es as esLocale } from 'date-fns/locale';
 import { clsx } from 'clsx';
+import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 
 interface TunnelDeviceDetailProps {
   device: Device;
@@ -45,7 +46,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-2xl font-bold text-gray-900">{device.name}</h2>
+              <h2 className="text-2xl font-bold text-gray-900">{resolveDeviceDisplayName(device)}</h2>
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 text-xs font-semibold px-2 py-0.5">
                 <Layers className="h-3 w-3" />
                 {language === 'es' ? 'Túnel / Madurador' : 'Tunnel / Ripener'}

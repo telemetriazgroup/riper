@@ -56,6 +56,53 @@ CREATE TABLE IF NOT EXISTS app_recipes (
 CREATE INDEX IF NOT EXISTS idx_app_recipes_deleted ON app_recipes (deleted_at);
 `;
 
+const SQL_RECIPE_SYSTEM = `
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT false;
+`;
+
+const SQL_DEVICE_NAMES = `
+CREATE TABLE IF NOT EXISTS app_user_device_names (
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(128) NOT NULL,
+  display_name VARCHAR(255) NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_user_device_names_user ON app_user_device_names (user_id);
+`;
+
+const SQL_PROCESS_FOLLOW = `
+CREATE TABLE IF NOT EXISTS app_user_device_process_follow (
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(128) NOT NULL,
+  proceso VARCHAR(128) NOT NULL DEFAULT '',
+  id_proceso BIGINT NULL,
+  fecha_inicio TIMESTAMPTZ NULL,
+  hasta TIMESTAMPTZ NULL,
+  progress INT NULL,
+  numero_alarma INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_user_device_process_follow_user ON app_user_device_process_follow (user_id);
+`;
+
+const SQL_RIPENING_PROCESSES = `
+CREATE TABLE IF NOT EXISTS app_ripening_processes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  status VARCHAR(32) NOT NULL DEFAULT 'active',
+  display_name VARCHAR(500) NOT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  timeline JSONB NOT NULL DEFAULT '[]'::jsonb,
+  deleted_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_app_ripening_user ON app_ripening_processes (user_id) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_app_ripening_created ON app_ripening_processes (created_at DESC) WHERE deleted_at IS NULL;
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -74,6 +121,10 @@ export async function runMigrate() {
     await client.query(SQL_INITIAL);
     await client.query(SQL_ALTER);
     await client.query(SQL_CATALOG);
+    await client.query(SQL_RECIPE_SYSTEM);
+    await client.query(SQL_DEVICE_NAMES);
+    await client.query(SQL_PROCESS_FOLLOW);
+    await client.query(SQL_RIPENING_PROCESSES);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

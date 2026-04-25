@@ -1,4 +1,11 @@
-import type { Device, MaduradorReference, OperationalData, TelemetryData } from '@/app/data';
+import type {
+  Device,
+  MaduradorHistorialTramo,
+  MaduradorOperativoSummary,
+  MaduradorReference,
+  OperationalData,
+  TelemetryData,
+} from '@/app/data';
 import type { HistoryPoint } from '@/app/lib/api';
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
@@ -37,6 +44,110 @@ function nestedValor(obj: unknown): number | null {
     return toNum((obj as { valor: unknown }).valor);
   }
   return null;
+}
+
+/** Fecha en API: ISO string o `{ $date: "..." }`. */
+export function parseMaduradorMongoDate(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string' && v.trim()) return v.trim();
+  if (typeof v === 'object' && v !== null && '$date' in v) {
+    const d = (v as { $date?: unknown }).$date;
+    if (typeof d === 'string' && d.trim()) return d.trim();
+  }
+  return null;
+}
+
+/** Pestaña del Panel de control según `telemetry.stateProcess`. */
+export function controlPanelTabFromStateProcess(sp: TelemetryData['stateProcess']): string {
+  switch (sp) {
+    case 'Homogenization':
+      return 'homogenization';
+    case 'Ripening':
+      return 'ripening';
+    case 'Ventilation':
+      return 'ventilation';
+    case 'Cooling':
+      return 'cooling';
+    case 'Integral':
+      return 'manual';
+    default:
+      return 'manual';
+  }
+}
+
+export function isManualProcesoLabel(raw: string | null | undefined): boolean {
+  return String(raw ?? '').trim().toLowerCase() === 'manual';
+}
+
+function computeMaduradorProcessProgress(row: Record<string, unknown>, isManual: boolean): number {
+  if (isManual) return 0;
+  const fi = row.fecha_inicio ? new Date(String(row.fecha_inicio)).getTime() : NaN;
+  const h = row.hasta ? new Date(String(row.hasta)).getTime() : NaN;
+  const now = Date.now();
+  if (Number.isFinite(fi) && Number.isFinite(h) && h > fi) {
+    const p = ((now - fi) / (h - fi)) * 100;
+    return Math.max(0, Math.min(100, Math.round(p)));
+  }
+  return 50;
+}
+
+function formatProcessTimeLeft(row: Record<string, unknown>): string | undefined {
+  const h = row.hasta ? new Date(String(row.hasta)).getTime() : NaN;
+  if (!Number.isFinite(h)) return undefined;
+  const ms = h - Date.now();
+  if (ms <= 0) return '0 min';
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (hours > 72) return `${Math.floor(hours / 24)} d`;
+  if (hours > 0) return `${hours} h ${mins} min`;
+  return `${mins} min`;
+}
+
+function procesoToStateProcess(procesoRaw: unknown): TelemetryData['stateProcess'] {
+  const p = String(procesoRaw ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (p.includes('homogen')) return 'Homogenization';
+  if (p.includes('madur')) return 'Ripening';
+  if (p.includes('ventil')) return 'Ventilation';
+  if (p.includes('cool')) return 'Cooling';
+  if (p.includes('automatic')) return 'Integral';
+  return 'None';
+}
+
+export function extractMaduradorOperativoSummary(row: Record<string, unknown>): MaduradorOperativoSummary {
+  const fam = row.fresh_air_ex_mode;
+  let modo = 0;
+  if (fam != null && typeof fam === 'object' && !Array.isArray(fam) && 'modo_actual' in fam) {
+    modo = Number((fam as { modo_actual?: unknown }).modo_actual) || 0;
+  } else {
+    modo = Number(fam) || 0;
+  }
+  const modoVentilacionLabel =
+    modo === 0 ? 'Desactivado' : modo === 1 ? 'Manual' : modo === 2 ? 'Automático' : `Código ${modo}`;
+
+  const cc = row.compress_coil_1;
+  const compressCoilHealth =
+    cc != null && typeof cc === 'object' && !Array.isArray(cc) && ('estado' in cc || 'valor_actual' in cc)
+      ? (cc as Record<string, unknown>)
+      : null;
+
+  const asTramos = (x: unknown): MaduradorHistorialTramo[] | undefined =>
+    Array.isArray(x) ? (x as MaduradorHistorialTramo[]) : undefined;
+
+  return {
+    historial_sp_etileno: asTramos(row.historial_sp_etileno),
+    ultima_fecha_apagado: row.ultima_fecha_apagado != null ? String(row.ultima_fecha_apagado) : null,
+    modoVentilacion: modo,
+    modoVentilacionLabel,
+    alarmas: row.alarmas,
+    compressCoilHealth,
+    historico_set_point: asTramos(row.historico_set_point),
+    historial_humidity_set_point: asTramos(row.historial_humidity_set_point),
+    historial_set_point_co2: asTramos(row.historial_set_point_co2),
+    historial_power_state: asTramos(row.historial_power_state),
+  };
 }
 
 function flatMaduradorRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -78,15 +189,18 @@ function fanPctFromAvl(avlRaw: number | null): number {
 export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const flat = flatMaduradorRow(row);
 
-  const imei = String(flat.imei ?? row.imei ?? 'unknown');
+  const imei = String(flat.imei ?? row.imei ?? 'unknown').trim() || 'unknown';
   const name = String(flat.device ?? row.device ?? imei);
 
   const lastSample =
-    (flat.fecha != null ? String(flat.fecha) : null) ??
+    parseMaduradorMongoDate(flat.fecha) ??
+    (flat.fecha != null && typeof flat.fecha === 'string' ? String(flat.fecha) : null) ??
     (row.hasta != null ? String(row.hasta) : null) ??
     (row.fecha_procesada != null ? String(row.fecha_procesada) : null) ??
     new Date().toISOString();
   const lastSeen = lastSample;
+
+  const stateProcess = procesoToStateProcess(row.proceso);
 
   const lastMs = new Date(lastSeen).getTime();
   const mins = Number.isFinite(lastMs) ? (Date.now() - lastMs) / 60000 : 9999;
@@ -137,7 +251,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     ethylene,
     co2_reading: co2,
     set_point,
-    stateProcess: 'Ripening',
+    stateProcess,
     power_state,
     alarm_present: toNum(flat.alarm_present) === 1 ? 1 : 0,
   };
@@ -160,13 +274,25 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
         ? String(flat.identificador)
         : null;
 
+  const lastSampleDisplay =
+    parseMaduradorMongoDate(flat.fecha) ??
+    (flat.fecha != null && typeof flat.fecha !== 'object' ? String(flat.fecha) : null);
+
+  const c1 = inRange(toNum(flat.cargo_1_temp), -40, 100);
+  const c2 = inRange(toNum(flat.cargo_2_temp), -40, 100);
+  const c3 = inRange(toNum(flat.cargo_3_temp), -40, 100);
+  const c4 = inRange(toNum(flat.cargo_4_temp), -40, 100);
+  const compTemp = inRange(toNum(flat.compress_coil_1), -60, 200);
+  const spCo2Num = inRange(toNum(flat.set_point_co2), 0, 100);
+  const spEti = inRange(toNum(flat.sp_ethyleno), 0, 1e4);
+
   const madurador: MaduradorReference = {
     identificador_empresa: iden,
     fecha_inicio: row.fecha_inicio != null ? String(row.fecha_inicio) : null,
     fecha_procesada: row.fecha_procesada != null ? String(row.fecha_procesada) : null,
     hasta: row.hasta != null ? String(row.hasta) : null,
     ultima_fecha_encendido: row.ultima_fecha_encendido != null ? String(row.ultima_fecha_encendido) : null,
-    last_sample_fecha: flat.fecha != null ? String(flat.fecha) : null,
+    last_sample_fecha: lastSampleDisplay,
     power_state_label: power_state === 1 ? 'Encendido' : 'Apagado',
     set_point_co2_display: displayScalar(flat.set_point_co2),
     line_voltage_display: voltSane != null ? voltSane : displayScalar(flat.line_voltage),
@@ -175,27 +301,56 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     ventilation_fan_reference_pct: fanRefPct,
     humidity_set_point,
     capacity_load: capLoad,
+    cargo_1_temp: c1,
+    cargo_2_temp: c2,
+    cargo_3_temp: c3,
+    cargo_4_temp: c4,
+    line_frequency: inRange(toNum(flat.line_frequency), 0, 100),
+    consumption_ph_1: toNum(flat.consumption_ph_1),
+    consumption_ph_2: toNum(flat.consumption_ph_2),
+    consumption_ph_3: toNum(flat.consumption_ph_3),
+    set_point_co2_value: spCo2Num,
+    sp_ethyleno: spEti,
+    avl_raw: avlRaw,
+    compress_coil_1_temp: compTemp,
   };
+
+  const procesoRaw = row.proceso != null ? String(row.proceso) : '';
+  const procesoLabel = procesoRaw || 'Proceso';
+  const isManual = isManualProcesoLabel(procesoRaw);
+  const idProcesoVal = toNum(row.id_proceso);
+  const numAlRounded = Math.max(0, Math.round(numAl ?? 0));
+
+  const maduradorSummary = extractMaduradorOperativoSummary(row);
+
+  const endProcess = row.hasta != null ? String(row.hasta) : lastSeen;
 
   return {
     id: imei,
+    nombreApi: name,
     name,
     status,
     estado_conexion: status === 'offline' ? 'offline' : mins > 30 ? 'wait' : 'online',
     last_seen: lastSeen,
     telemetry,
     operational,
+    procesoApi: procesoRaw || null,
+    idProcesoApi: idProcesoVal,
+    numeroAlarmaTotal: numAlRounded,
     process:
       row.fecha_inicio != null
         ? {
-            name: 'Proceso madurador',
-            progress: 50,
+            name: procesoLabel,
+            progress: computeMaduradorProcessProgress(row, isManual),
             startTime: String(row.fecha_inicio),
-            endTime: lastSeen,
-            currentPhase: 'Maduración',
+            endTime: endProcess,
+            currentPhase: procesoLabel,
+            timeLeft: formatProcessTimeLeft(row),
+            showProgressBar: !isManual,
           }
         : undefined,
     madurador,
+    maduradorSummary,
   };
 }
 

@@ -131,6 +131,29 @@ export interface TunnelTelemetryGroup {
   units: TunnelUnitTelemetry[];
 }
 
+/** Tramos históricos devueltos por la API Madurador (setpoints, etileno, power…). */
+export interface MaduradorHistorialTramo {
+  valor?: number;
+  desde?: string;
+  hasta?: string;
+  estado?: string;
+}
+
+/** Resumen operativo extendido (buscar_datos_madurador_rango / listado enriquecido). */
+export interface MaduradorOperativoSummary {
+  historial_sp_etileno?: MaduradorHistorialTramo[];
+  ultima_fecha_apagado?: string | null;
+  /** 0 desactivado, 1 manual, 2 automático */
+  modoVentilacion?: number;
+  modoVentilacionLabel?: string;
+  alarmas?: unknown;
+  compressCoilHealth?: Record<string, unknown> | null;
+  historico_set_point?: MaduradorHistorialTramo[];
+  historial_humidity_set_point?: MaduradorHistorialTramo[];
+  historial_set_point_co2?: MaduradorHistorialTramo[];
+  historial_power_state?: MaduradorHistorialTramo[];
+}
+
 /** Referencia API Madurador (listar_dispositivos…) para detalle y control manual. */
 export interface MaduradorReference {
   identificador_empresa: string | null;
@@ -148,11 +171,32 @@ export interface MaduradorReference {
   ventilation_fan_reference_pct: number;
   humidity_set_point: number | null;
   capacity_load: number | null;
+  /** Scalares extra de la última muestra (API / buscar_datos) para el panel Estatus. */
+  cargo_1_temp?: number | null;
+  cargo_2_temp?: number | null;
+  cargo_3_temp?: number | null;
+  cargo_4_temp?: number | null;
+  line_frequency?: number | null;
+  consumption_ph_1?: number | null;
+  consumption_ph_2?: number | null;
+  consumption_ph_3?: number | null;
+  /** set_point_co2 numérico (p. ej. %); el display con objetos queda en set_point_co2_display */
+  set_point_co2_value?: number | null;
+  sp_ethyleno?: number | null;
+  /** `avl` en crudo: 0 → N/D en ventilación, ≠0 suele ser CFM */
+  avl_raw?: number | null;
+  /** T° compresor si el API manda un escalar; si no, confiar en compress_coil_1_display */
+  compress_coil_1_temp?: number | null;
 }
 
 export interface Device {
   id: string;
+  /** Nombre/etiqueta mostrada: sobrenombre si existe, si no el de la API. */
   name: string;
+  /** Nombre tal como viene de la API externa (Madurador, TermoKing, etc.). Se actualiza en cada refresh; no es el dato local editable. */
+  nombreApi?: string;
+  /** Sobrenombre editado en esta aplicación (persistido en Ripener). La API de telemetría no lo envía. */
+  sobrenombre?: string | null;
   status: 'active' | 'warning' | 'alarm' | 'offline';
   /** Estado de conexión de la API: online | wait | offline */
   estado_conexion?: string;
@@ -166,8 +210,18 @@ export interface Device {
     endTime: string;
     currentPhase?: string;
     timeLeft?: string;
+    /** false = proceso Manual u otro sin barra de avance */
+    showProgressBar?: boolean;
   };
+  /** Campo `proceso` de la API Madurador (maduracion, Manual, …). */
+  procesoApi?: string | null;
+  /** `id_proceso` API Madurador */
+  idProcesoApi?: number | null;
+  /** `numero_alarma` (alarmas o telemetría) para sumar en KPIs de flota. */
+  numeroAlarmaTotal?: number;
   madurador?: MaduradorReference;
+  /** Historiales y alarmas para resumen operativo (API Madurador detalle). */
+  maduradorSummary?: MaduradorOperativoSummary;
   /** Presente cuando el dispositivo es un túnel / madurador multi-unidad (API Unidos). */
   tunnel?: TunnelTelemetryGroup;
 }
@@ -268,9 +322,12 @@ export function mapTermoKingDispositivoToDevice(d: TermoKingDispositivo): Device
   const v = (x: TermoKingUltimoValor | null | undefined, def: number) =>
     x?.valor != null ? Number(x.valor) : def;
 
+  const display = d.descripcion || d.imei || 'Dispositivo';
+  const ident = String(d.imei ?? '').trim() || 'unknown';
   return {
-    id: d.imei,
-    name: d.descripcion || d.imei || 'Dispositivo',
+    id: ident,
+    nombreApi: display,
+    name: display,
     status,
     estado_conexion: d.estado_conexion ?? (status === 'offline' ? 'offline' : status === 'warning' ? 'wait' : 'online'),
     last_seen: lastSeen,
@@ -295,6 +352,9 @@ export function mapTermoKingDispositivoToDevice(d: TermoKingDispositivo): Device
       defrost_interval: 6,
       fresh_air_ex_mode: 0,
     },
+    procesoApi: null,
+    idProcesoApi: null,
+    numeroAlarmaTotal: 0,
     process: d.proceso_activo
       ? {
           name: 'Proceso activo',
@@ -303,6 +363,7 @@ export function mapTermoKingDispositivoToDevice(d: TermoKingDispositivo): Device
           endTime: lastSeen,
           currentPhase: 'Maduración',
           timeLeft: '--',
+          showProgressBar: true,
         }
       : undefined,
   };
@@ -449,7 +510,13 @@ const generateRawHistory = (hours: number): RawApiData[] => {
 export const API_RESPONSE_MOCK = generateRawHistory(26);
 
 // Mapper function
-const mapRawToDevice = (raw: RawApiData, name: string, statusOverride?: string, processOverride?: any): Device => {
+const mapRawToDevice = (
+  raw: RawApiData,
+  name: string,
+  statusOverride?: string,
+  processOverride?: any,
+  procesoApi?: string | null
+): Device => {
   const stateMap: Record<number, TelemetryData['stateProcess']> = {
     0: 'None', 1: 'Homogenization', 2: 'Ripening', 3: 'Ventilation', 4: 'Cooling'
   };
@@ -467,7 +534,8 @@ const mapRawToDevice = (raw: RawApiData, name: string, statusOverride?: string, 
   const estado_conexion = status === 'offline' ? 'offline' : status === 'warning' ? 'wait' : 'online';
 
   return {
-    id: raw.device,
+    id: String(raw.device).trim() || String(raw.device),
+    nombreApi: name,
     name: name,
     status: status,
     estado_conexion,
@@ -493,7 +561,15 @@ const mapRawToDevice = (raw: RawApiData, name: string, statusOverride?: string, 
       defrost_interval: raw.defrost_interval,
       fresh_air_ex_mode: raw.fresh_air_ex_mode
     },
+    procesoApi: procesoApi ?? null,
+    idProcesoApi: null,
+    numeroAlarmaTotal: raw.alarm_present ? 1 : 0,
     process: processOverride
+      ? {
+          ...processOverride,
+          showProgressBar: processOverride.showProgressBar !== false,
+        }
+      : undefined,
   };
 };
 
@@ -503,23 +579,51 @@ const now = new Date();
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 3600000).toISOString();
 
 export const MOCK_DEVICES: Device[] = [
-  mapRawToDevice(getLatest('ZGRU5140001'), 'Madurador 01 (Homog)', 'active', {
-    name: 'Mango Kent - Inicio',
-    progress: 15,
-    startTime: hoursAgo(4),
-    endTime: hoursAgo(-20),
-    currentPhase: 'Homogenización',
-    timeLeft: '20h 00min'
-  }),
-  mapRawToDevice(getLatest('ZGRU5140002'), 'Madurador 02 (Maduración)', 'active', {
-    name: 'Banana - Fase Gas',
-    progress: 60,
-    startTime: hoursAgo(48),
-    endTime: hoursAgo(-24),
-    currentPhase: 'Maduración',
-    timeLeft: '24h 00min'
-  }),
-  mapRawToDevice(getLatest('ZGRU5140003'), 'Madurador 03 (Manual)', 'active'),
+  mapRawToDevice(
+    getLatest('ZGRU5140001'),
+    'Madurador 01 (Homog)',
+    'active',
+    {
+      name: 'Mango Kent - Inicio',
+      progress: 15,
+      startTime: hoursAgo(4),
+      endTime: hoursAgo(-20),
+      currentPhase: 'Homogenización',
+      timeLeft: '20h 00min',
+      showProgressBar: true,
+    },
+    'homogenizacion'
+  ),
+  mapRawToDevice(
+    getLatest('ZGRU5140002'),
+    'Madurador 02 (Maduración)',
+    'active',
+    {
+      name: 'Banana - Fase Gas',
+      progress: 60,
+      startTime: hoursAgo(48),
+      endTime: hoursAgo(-24),
+      currentPhase: 'Maduración',
+      timeLeft: '24h 00min',
+      showProgressBar: true,
+    },
+    'maduracion'
+  ),
+  mapRawToDevice(
+    getLatest('ZGRU5140003'),
+    'Madurador 03 (Manual)',
+    'active',
+    {
+      name: 'Operación manual',
+      progress: 0,
+      startTime: hoursAgo(1),
+      endTime: hoursAgo(-1),
+      currentPhase: 'Manual',
+      timeLeft: '—',
+      showProgressBar: false,
+    },
+    'Manual'
+  ),
   mapRawToDevice({ ...getLatest('ZGRU5140004'), created_at: { $date: hoursAgo(2) } }, 'Madurador 04 (Standby)', 'warning'),
   mapRawToDevice({ ...getLatest('ZGRU5140005'), created_at: { $date: hoursAgo(25) }, power_state: 0 }, 'Madurador 05 (Offline)', 'offline')
 ];

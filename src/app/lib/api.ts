@@ -1,12 +1,44 @@
 import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistorialResponse, mapTermoKingDispositivoToDevice } from '@/app/data';
 import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession } from '@/app/lib/gourmet';
+import { isFleetDemoSession } from '@/app/lib/fleetDemo';
+import { fetchFleetDemoMaduradorDetail, fetchFleetDemoMaduradorList } from '@/app/lib/maduradorFleetDirect';
 import { buildMaduradorHistoryFromDevice, getMaduradorDevicesCached, hasMaduradorIdentificador } from '@/app/lib/madurador';
 import {
   GOURMET_TUNEL_DEVICE_ID,
   getCachedGourmetTunnelDevice,
   refreshGourmetTunnelDevice,
 } from '@/app/lib/tunelUnido';
+import {
+  applySobrenombresToDevice,
+  fetchDeviceNameMap,
+  mergeDevicesWithSobrenombres,
+  putDeviceDisplayName,
+} from '@/app/lib/deviceNamesApi';
+import { deviceNameStorageKey } from '@/app/lib/deviceLocalNames';
+
+async function mergeSavedDisplayNames(list: Device[]): Promise<Device[]> {
+  if (list.length === 0) return list;
+  try {
+    const sobrenombres = await fetchDeviceNameMap();
+    return mergeDevicesWithSobrenombres(list, sobrenombres);
+  } catch {
+    return list.map((d) => {
+      const api = d.nombreApi?.trim() || d.name?.trim() || d.id;
+      return { ...d, nombreApi: d.nombreApi ?? api, sobrenombre: null, name: api };
+    });
+  }
+}
+
+async function mergeSavedDisplayNameOne(device: Device): Promise<Device> {
+  try {
+    const sobrenombres = await fetchDeviceNameMap();
+    return applySobrenombresToDevice(device, sobrenombres);
+  } catch {
+    const api = device.nombreApi?.trim() || device.name?.trim() || device.id;
+    return { ...device, nombreApi: device.nombreApi ?? api, sobrenombre: null, name: api };
+  }
+}
 
 /** GET TermoKing estado_general → lista de dispositivos */
 async function fetchEstadoGeneral(): Promise<Device[]> {
@@ -29,15 +61,25 @@ function appendGourmetTunnelIfNeeded(list: Device[]): Promise<Device[]> {
 }
 
 export async function fetchDevices(): Promise<Device[]> {
+  if (isFleetDemoSession()) {
+    try {
+      const list = await fetchFleetDemoMaduradorList();
+      return mergeSavedDisplayNames(list);
+    } catch (e) {
+      console.warn('Fleet demo Madurador list failed:', e);
+      return [];
+    }
+  }
   if (hasMaduradorIdentificador()) {
     try {
       const list = await getMaduradorDevicesCached();
-      return appendGourmetTunnelIfNeeded(list);
+      const withTunnel = await appendGourmetTunnelIfNeeded(list);
+      return mergeSavedDisplayNames(withTunnel);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
       if (isGourmetSession()) {
         const tun = await refreshGourmetTunnelDevice();
-        return [tun];
+        return mergeSavedDisplayNames([tun]);
       }
       return [];
     }
@@ -45,37 +87,60 @@ export async function fetchDevices(): Promise<Device[]> {
   if (isGourmetSession()) {
     const mad = buildGourmetDevice();
     const tun = await refreshGourmetTunnelDevice();
-    return [mad, tun];
+    return mergeSavedDisplayNames([mad, tun]);
   }
   try {
-    return await fetchEstadoGeneral();
+    const list = await fetchEstadoGeneral();
+    return mergeSavedDisplayNames(list);
   } catch (e) {
     console.warn('TermoKing estado_general failed, using mock:', e);
-    return new Promise((resolve) => setTimeout(() => resolve(MOCK_DEVICES), 300));
+    return new Promise((resolve) =>
+      setTimeout(async () => resolve(await mergeSavedDisplayNames([...MOCK_DEVICES])), 300)
+    );
   }
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
   if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
-    return getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
+    const d = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
+    return mergeSavedDisplayNameOne(d);
+  }
+  if (isFleetDemoSession()) {
+    try {
+      const d = await fetchFleetDemoMaduradorDetail(id);
+      return mergeSavedDisplayNameOne(d);
+    } catch (e) {
+      console.warn('Fleet demo Madurador detail failed, using list row:', e);
+      const list = await fetchFleetDemoMaduradorList();
+      const d = list.find((x) => x.id === id);
+      if (d) return mergeSavedDisplayNameOne(d);
+      if (list[0]) return mergeSavedDisplayNameOne(list[0]);
+      throw e;
+    }
   }
   if (hasMaduradorIdentificador()) {
     const list = await getMaduradorDevicesCached();
     const device = list.find((d) => d.id === id);
-    if (device) return device;
-    if (list.length) return list[0];
-    return new Promise((resolve) => setTimeout(() => resolve(MOCK_DEVICES[0]), 200));
+    if (device) return mergeSavedDisplayNameOne(device);
+    if (list.length) return mergeSavedDisplayNameOne(list[0]);
+    return new Promise((resolve) =>
+      setTimeout(async () => resolve(await mergeSavedDisplayNameOne(MOCK_DEVICES[0])), 200)
+    );
   }
   if (isGourmetSession()) {
-    return buildGourmetDevice();
+    return mergeSavedDisplayNameOne(buildGourmetDevice());
   }
   try {
     const list = await fetchEstadoGeneral();
     const device = list.find((d) => d.id === id);
-    if (device) return device;
-  } catch (_) {}
+    if (device) return mergeSavedDisplayNameOne(device);
+  } catch (_) {
+    /* fall through */
+  }
   const mock = MOCK_DEVICES.find((d) => d.id === id) ?? MOCK_DEVICES[0];
-  return new Promise((resolve) => setTimeout(() => resolve(mock), 200));
+  return new Promise((resolve) =>
+    setTimeout(async () => resolve(await mergeSavedDisplayNameOne(mock)), 200)
+  );
 }
 
 export interface FetchHistoryOptions {
@@ -125,6 +190,10 @@ export async function fetchDeviceHistory(
   id: string,
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
+  if (isFleetDemoSession()) {
+    const dev = await fetchDevice(id);
+    return buildMaduradorHistoryFromDevice(dev, options ?? {});
+  }
   if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
     const ts = dev.last_seen;
@@ -275,7 +344,7 @@ function getMockHistory(_id: string, start: string, end: string): Promise<Histor
 }
 
 export async function updateDeviceName(id: string, name: string) {
-  return sendControlCommand(id, 'manual_update', { name });
+  await putDeviceDisplayName(deviceNameStorageKey(id) || id, name);
 }
 
 export async function sendControlCommand(id: string, action: string, params: any) {

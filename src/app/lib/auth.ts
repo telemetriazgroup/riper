@@ -1,5 +1,6 @@
 import { RIPENER_API_URL } from '@/app/config';
 import { clearMaduradorListCache } from '@/app/lib/maduradorCache';
+import { invalidateDeviceNameCache } from '@/app/lib/deviceNamesCache';
 
 const TOKEN_KEY = 'riper_auth_token';
 const USER_KEY = 'riper_auth_user';
@@ -61,6 +62,7 @@ export function clearAuth() {
   setToken(null);
   setStoredUser(null);
   clearMaduradorListCache();
+  invalidateDeviceNameCache();
 }
 
 export async function loginRequest(email: string, password: string): Promise<{ token: string; user: AuthUser }> {

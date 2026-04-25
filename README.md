@@ -1,3 +1,11 @@
+Email
+demo-flota@riper.local
+Contraseña
+DemoFlota2026! (o FLEET_DEMO_PASSWORD en el entorno)
+
+user : gourmettrading@ztrack.app  
+pass : @gourmet2026!
+http://161.132.53.51:18080/
 # Mobile Ripening Management System
 
 This is a code bundle for Mobile Ripening Management System. The original project is available at https://www.figma.com/design/oz3WSqQWEbB1mKplcS4Weq/Mobile-Ripening-Management-System.
@@ -11,6 +19,7 @@ Run `pnpm install` or `npm install` to install the dependencies.
 El acceso usa la **API Ripener** (`/api/v1/auth/login`) contra PostgreSQL. Tras el primer arranque se crea un **superusuario** si no existe:
 
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
+wsl
 - Definir `JWT_SECRET` largo y aleatorio en producción.
 
 Cambiar contraseña y datos desde **Usuarios** (admin) o **Mi perfil** (cada usuario).
@@ -73,7 +82,7 @@ Si al abrir la app en el hosting (ej. **ztrack.app**) ves "Esta página ha redir
 
 - **App en la raíz del dominio** (ej. https://ztrack.app/): no definas `VITE_BASE_PATH` o usa `VITE_BASE_PATH=/`. Es el valor por defecto.
 - **App en un subpath** (ej. https://somos.com/beta_ripener/): antes del build define en `.env`:
-  ```env
+  ```env 
   VITE_BASE_PATH=/beta_ripener/
   ```
   Vuelve a generar el build (`npm run build`) y despliega. En el servidor (Apache/Nginx) el proxy debe apuntar ese subpath al servidor que sirve la app.
@@ -90,5 +99,42 @@ Resumen:
 4. En Apache (HTTPS): `ProxyPass /madurador/ http://161.132.53.51:18080/madurador/` (misma ruta origen y destino).
 
 El Nginx del contenedor usa `docker/nginx/default-madurador.conf` cuando `VITE_BASE_PATH` es `/madurador/`; si es `/`, usa `default-root.conf`.
+
+#8 datos que se muestran en la parte superior
+temp_supply_1 , como "T°Suministro"
+return_air , como  "T°Retorno"
+campo_1 , como "Nivel Etileno" EN PPM
+numero_alarma , como  "Mensajes"
+avl , como "Ventilacion" 0 NA , diferente a 0 en CFM
+relative_humidity, coo "Nivel Humedad" EN %
+co2_reading , como  "Nivel C02" EN %
+capacity_load , como  "Potencia " EN %
+
+#datos que se muetsran al poner ver mas
+
+
+evaporation_coil , como  "T°Evaporador"
+condensation_coil , como  "T°Condensador"
+compress_coil_1 , como  "T°Conpresor"
+ambient_air , como  "T°Externa"
+cargo_1_temp , como  "T°Sensor 1"
+cargo_2_temp , como  "T°Sensor 2"
+cargo_3_temp , como  "T°Sensor 3""
+cargo_4_temp , como  "T°Sensor 4"
+line_voltage , como  "Voltaje Maquina" en V
+line_frequency , como  "Frecuencia Maquina" en Hz
+consumption_ph_1 , como  "Fase 1" en A
+consumption_ph_2 , como  "Fase 2" en A
+consumption_ph_3 , como  "Fase 3" en A
+set_point_co2 , como "SP CO2" en %
+power_kwh , como  "Consumo Electrico" en kwh
+fresh_air_ex_mode , como  "Intercambio Gases" 0 desactivado , 1 Manual , 2 Automatico 
+sp_etileno , como "SP Etileno en PPM
+
+
+
+
+
+
 
   

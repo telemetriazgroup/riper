@@ -1,0 +1,2137 @@
+[
+  {
+    "imei": "ZGRUMAD00000001",
+    "estado": 1,
+    "sp_etileno": 120,
+    "historial_sp_etileno": [
+      {
+        "valor": 120,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "maduracion",
+    "id_proceso": 1000009,
+    "ultimo_dato": {
+      "temp_supply_1": 17.8,
+      "temp_supply_2": null,
+      "return_air": 20.4,
+      "evaporation_coil": 15.3,
+      "condensation_coil": 39.6,
+      "compress_coil_1": 64.7,
+      "compress_coil_2": null,
+      "ambient_air": 28.4,
+      "cargo_1_temp": 17.9,
+      "cargo_2_temp": 18.2,
+      "cargo_3_temp": 16.4,
+      "cargo_4_temp": 19,
+      "relative_humidity": 94,
+      "avl": 0,
+      "suction_pressure": -4.52,
+      "discharge_pressure": -4.06,
+      "line_voltage": 460,
+      "line_frequency": 60,
+      "consumption_ph_1": 11.9,
+      "consumption_ph_2": 14.3,
+      "consumption_ph_3": 11.3,
+      "co2_reading": 1.22,
+      "o2_reading": 20.47,
+      "evaporator_speed": 60,
+      "condenser_speed": 69,
+      "battery_voltage": null,
+      "power_kwh": 3490.3,
+      "power_trip_reading": 3353,
+      "power_trip_duration": 133031433,
+      "suction_temp": null,
+      "discharge_temp": -38.9,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.08,
+      "dl_battery_charge": 0.96,
+      "power_consumption": 10.91,
+      "power_consumption_avg": 272.94,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.4,
+      "alarm_present": 1,
+      "set_point": 18,
+      "capacity_load": 45,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 1,
+      "humidity_set_point": 95,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100"
+      },
+      "ethylene": null,
+      "imei": "ZGRUMAD00000001",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 126.3,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-24T14:05:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": {
+        "desde": "2026-04-24T13:35:21Z",
+        "hasta": "2026-04-24T14:05:21Z"
+      },
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 64.7,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 18,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 95,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "ZGRUMAD00000002",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "homogenizacion",
+    "id_proceso": 1000010,
+    "ultimo_dato": {
+      "temp_supply_1": 18.2,
+      "temp_supply_2": null,
+      "return_air": 18,
+      "evaporation_coil": 15,
+      "condensation_coil": 40.1,
+      "compress_coil_1": 65.7,
+      "compress_coil_2": null,
+      "ambient_air": 27.7,
+      "cargo_1_temp": 14.8,
+      "cargo_2_temp": 14.9,
+      "cargo_3_temp": 14.7,
+      "cargo_4_temp": 14.6,
+      "relative_humidity": 94,
+      "avl": 0,
+      "suction_pressure": -5.47,
+      "discharge_pressure": -3.99,
+      "line_voltage": 458,
+      "line_frequency": 60,
+      "consumption_ph_1": 11.3,
+      "consumption_ph_2": 15.5,
+      "consumption_ph_3": 15,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 60,
+      "condenser_speed": 73,
+      "battery_voltage": null,
+      "power_kwh": 3493.9,
+      "power_trip_reading": 3351.9,
+      "power_trip_duration": 133014211,
+      "suction_temp": null,
+      "discharge_temp": -38.2,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.05,
+      "dl_battery_charge": 0.93,
+      "power_consumption": 22.68,
+      "power_consumption_avg": 279.01,
+      "suction_pressure_2": null,
+      "suction_temp_2": -13.3,
+      "alarm_present": 1,
+      "set_point": 18.1,
+      "capacity_load": 60,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 1,
+      "humidity_set_point": 95,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "ZGRUMAD00000002",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 65.7,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 21.4,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-22T17:45:21Z"
+      },
+      {
+        "valor": 21.1,
+        "desde": "2026-04-22T17:45:21Z",
+        "hasta": "2026-04-22T19:45:21Z"
+      },
+      {
+        "valor": 20.8,
+        "desde": "2026-04-22T19:45:21Z",
+        "hasta": "2026-04-22T22:45:21Z"
+      },
+      {
+        "valor": 20.5,
+        "desde": "2026-04-22T22:45:21Z",
+        "hasta": "2026-04-23T01:45:21Z"
+      },
+      {
+        "valor": 20.2,
+        "desde": "2026-04-23T01:45:21Z",
+        "hasta": "2026-04-23T05:45:21Z"
+      },
+      {
+        "valor": 19.9,
+        "desde": "2026-04-23T05:45:21Z",
+        "hasta": "2026-04-23T10:45:21Z"
+      },
+      {
+        "valor": 19.6,
+        "desde": "2026-04-23T10:45:21Z",
+        "hasta": "2026-04-23T14:45:21Z"
+      },
+      {
+        "valor": 19.4,
+        "desde": "2026-04-23T14:45:21Z",
+        "hasta": "2026-04-23T19:45:21Z"
+      },
+      {
+        "valor": 19.1,
+        "desde": "2026-04-23T19:45:21Z",
+        "hasta": "2026-04-23T22:45:21Z"
+      },
+      {
+        "valor": 18.9,
+        "desde": "2026-04-23T22:45:21Z",
+        "hasta": "2026-04-24T03:45:21Z"
+      },
+      {
+        "valor": 18.6,
+        "desde": "2026-04-24T03:45:21Z",
+        "hasta": "2026-04-24T06:45:21Z"
+      },
+      {
+        "valor": 18.4,
+        "desde": "2026-04-24T06:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z"
+      },
+      {
+        "valor": 18.1,
+        "desde": "2026-04-24T11:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 95,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_manual",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "Manual",
+    "id_proceso": 1000001,
+    "ultimo_dato": {
+      "temp_supply_1": 13.9,
+      "temp_supply_2": null,
+      "return_air": 15.9,
+      "evaporation_coil": 11.3,
+      "condensation_coil": 36.6,
+      "compress_coil_1": 62.2,
+      "compress_coil_2": null,
+      "ambient_air": 28.9,
+      "cargo_1_temp": 12.6,
+      "cargo_2_temp": 17,
+      "cargo_3_temp": 13.4,
+      "cargo_4_temp": 12.1,
+      "relative_humidity": 63,
+      "avl": 0,
+      "suction_pressure": -5.05,
+      "discharge_pressure": -4.07,
+      "line_voltage": 457,
+      "line_frequency": 60,
+      "consumption_ph_1": 11.6,
+      "consumption_ph_2": 14.7,
+      "consumption_ph_3": 15.4,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 60,
+      "condenser_speed": 77,
+      "battery_voltage": null,
+      "power_kwh": 3486.6,
+      "power_trip_reading": 3352.4,
+      "power_trip_duration": 133054344,
+      "suction_temp": null,
+      "discharge_temp": -38.1,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.01,
+      "dl_battery_charge": 1.01,
+      "power_consumption": 28.44,
+      "power_consumption_avg": 280.66,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.4,
+      "alarm_present": 0,
+      "set_point": 14,
+      "capacity_load": 16,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_manual",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 62.2,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 14,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 90,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_homogenizacion",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "homogenizacion",
+    "id_proceso": 1000002,
+    "ultimo_dato": {
+      "temp_supply_1": 18.7,
+      "temp_supply_2": null,
+      "return_air": 17,
+      "evaporation_coil": 15.6,
+      "condensation_coil": 39.1,
+      "compress_coil_1": 65.9,
+      "compress_coil_2": null,
+      "ambient_air": 28.9,
+      "cargo_1_temp": 14.1,
+      "cargo_2_temp": 14.4,
+      "cargo_3_temp": 14.6,
+      "cargo_4_temp": 13.6,
+      "relative_humidity": 96,
+      "avl": 0,
+      "suction_pressure": -4.99,
+      "discharge_pressure": -3.97,
+      "line_voltage": 459,
+      "line_frequency": 60,
+      "consumption_ph_1": 11.7,
+      "consumption_ph_2": 13.4,
+      "consumption_ph_3": 11.4,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 60,
+      "condenser_speed": 84,
+      "battery_voltage": null,
+      "power_kwh": 3492.3,
+      "power_trip_reading": 3355.1,
+      "power_trip_duration": 133027907,
+      "suction_temp": null,
+      "discharge_temp": -38,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.06,
+      "dl_battery_charge": 1.3,
+      "power_consumption": 11.6,
+      "power_consumption_avg": 278.22,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.8,
+      "alarm_present": 1,
+      "set_point": 18.4,
+      "capacity_load": 63,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 1,
+      "humidity_set_point": 95,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_homogenizacion",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 65.9,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 22.4,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-22T16:45:21Z"
+      },
+      {
+        "valor": 22.1,
+        "desde": "2026-04-22T16:45:21Z",
+        "hasta": "2026-04-22T18:45:21Z"
+      },
+      {
+        "valor": 21.9,
+        "desde": "2026-04-22T18:45:21Z",
+        "hasta": "2026-04-22T20:45:21Z"
+      },
+      {
+        "valor": 21.6,
+        "desde": "2026-04-22T20:45:21Z",
+        "hasta": "2026-04-22T22:45:21Z"
+      },
+      {
+        "valor": 21.4,
+        "desde": "2026-04-22T22:45:21Z",
+        "hasta": "2026-04-23T01:45:21Z"
+      },
+      {
+        "valor": 21,
+        "desde": "2026-04-23T01:45:21Z",
+        "hasta": "2026-04-23T04:45:21Z"
+      },
+      {
+        "valor": 20.7,
+        "desde": "2026-04-23T04:45:21Z",
+        "hasta": "2026-04-23T07:45:21Z"
+      },
+      {
+        "valor": 20.4,
+        "desde": "2026-04-23T07:45:21Z",
+        "hasta": "2026-04-23T10:45:21Z"
+      },
+      {
+        "valor": 20.1,
+        "desde": "2026-04-23T10:45:21Z",
+        "hasta": "2026-04-23T13:45:21Z"
+      },
+      {
+        "valor": 19.9,
+        "desde": "2026-04-23T13:45:21Z",
+        "hasta": "2026-04-23T18:45:21Z"
+      },
+      {
+        "valor": 19.6,
+        "desde": "2026-04-23T18:45:21Z",
+        "hasta": "2026-04-23T21:45:21Z"
+      },
+      {
+        "valor": 19.4,
+        "desde": "2026-04-23T21:45:21Z",
+        "hasta": "2026-04-24T02:45:21Z"
+      },
+      {
+        "valor": 19.1,
+        "desde": "2026-04-24T02:45:21Z",
+        "hasta": "2026-04-24T06:45:21Z"
+      },
+      {
+        "valor": 18.9,
+        "desde": "2026-04-24T06:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z"
+      },
+      {
+        "valor": 18.6,
+        "desde": "2026-04-24T11:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      {
+        "valor": 18.4,
+        "desde": "2026-04-24T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 95,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_maduracion",
+    "estado": 1,
+    "sp_etileno": 120,
+    "historial_sp_etileno": [
+      {
+        "valor": 120,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "maduracion",
+    "id_proceso": 1000003,
+    "ultimo_dato": {
+      "temp_supply_1": 17.7,
+      "temp_supply_2": null,
+      "return_air": 20.2,
+      "evaporation_coil": 14.6,
+      "condensation_coil": 39.2,
+      "compress_coil_1": 64.8,
+      "compress_coil_2": null,
+      "ambient_air": 29,
+      "cargo_1_temp": 19.4,
+      "cargo_2_temp": 18,
+      "cargo_3_temp": 18,
+      "cargo_4_temp": 18.4,
+      "relative_humidity": 94,
+      "avl": 0,
+      "suction_pressure": -5.04,
+      "discharge_pressure": -4,
+      "line_voltage": 460,
+      "line_frequency": 60,
+      "consumption_ph_1": 12.2,
+      "consumption_ph_2": 12.2,
+      "consumption_ph_3": 11.4,
+      "co2_reading": 1.49,
+      "o2_reading": 20.56,
+      "evaporator_speed": 60,
+      "condenser_speed": 78,
+      "battery_voltage": null,
+      "power_kwh": 3492.8,
+      "power_trip_reading": 3353.4,
+      "power_trip_duration": 133038892,
+      "suction_temp": null,
+      "discharge_temp": -38,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.07,
+      "dl_battery_charge": 0.23,
+      "power_consumption": 5.65,
+      "power_consumption_avg": 272.29,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.4,
+      "alarm_present": 1,
+      "set_point": 18,
+      "capacity_load": 38,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 1,
+      "humidity_set_point": 95,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_maduracion",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 118.2,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-24T13:25:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": {
+        "desde": "2026-04-24T12:55:21Z",
+        "hasta": "2026-04-24T13:25:21Z"
+      },
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 64.8,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 18,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 95,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_ventilacion",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "ventilacion",
+    "id_proceso": 1000004,
+    "ultimo_dato": {
+      "temp_supply_1": 13.9,
+      "temp_supply_2": null,
+      "return_air": 16.8,
+      "evaporation_coil": 10.9,
+      "condensation_coil": 34.3,
+      "compress_coil_1": 59.8,
+      "compress_coil_2": null,
+      "ambient_air": 28.3,
+      "cargo_1_temp": 14.3,
+      "cargo_2_temp": 14.3,
+      "cargo_3_temp": 13.7,
+      "cargo_4_temp": 13.8,
+      "relative_humidity": 67,
+      "avl": 0,
+      "suction_pressure": -4.77,
+      "discharge_pressure": -3.73,
+      "line_voltage": 457,
+      "line_frequency": 60,
+      "consumption_ph_1": 12.5,
+      "consumption_ph_2": 11.1,
+      "consumption_ph_3": 15,
+      "co2_reading": 0.93,
+      "o2_reading": 20.06,
+      "evaporator_speed": 60,
+      "condenser_speed": 67,
+      "battery_voltage": null,
+      "power_kwh": 3490.5,
+      "power_trip_reading": 3351.1,
+      "power_trip_duration": 133007462,
+      "suction_temp": null,
+      "discharge_temp": -38.1,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.09,
+      "dl_battery_charge": 0.39,
+      "power_consumption": 17.26,
+      "power_consumption_avg": 279.14,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.8,
+      "alarm_present": 1,
+      "set_point": 14,
+      "capacity_load": 27,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_ventilacion",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 5.7,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-24T13:55:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": {
+        "desde": "2026-04-24T13:05:21Z",
+        "hasta": "2026-04-24T13:55:21Z"
+      }
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 59.8,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 14,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 90,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_cooling",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "cooling",
+    "id_proceso": 1000005,
+    "ultimo_dato": {
+      "temp_supply_1": 8.8,
+      "temp_supply_2": null,
+      "return_air": 12.9,
+      "evaporation_coil": 5.2,
+      "condensation_coil": 52.7,
+      "compress_coil_1": 77.9,
+      "compress_coil_2": null,
+      "ambient_air": 28.5,
+      "cargo_1_temp": 11,
+      "cargo_2_temp": 11.1,
+      "cargo_3_temp": 11.3,
+      "cargo_4_temp": 11.3,
+      "relative_humidity": 71,
+      "avl": 0,
+      "suction_pressure": -4.71,
+      "discharge_pressure": -4.04,
+      "line_voltage": 457,
+      "line_frequency": 60,
+      "consumption_ph_1": 10.2,
+      "consumption_ph_2": 11.1,
+      "consumption_ph_3": 13.7,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 60,
+      "condenser_speed": 70,
+      "battery_voltage": null,
+      "power_kwh": 3489.5,
+      "power_trip_reading": 3353.2,
+      "power_trip_duration": 133038649,
+      "suction_temp": null,
+      "discharge_temp": -38.2,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.16,
+      "dl_battery_charge": 1.45,
+      "power_consumption": 16.85,
+      "power_consumption_avg": 278.2,
+      "suction_pressure_2": null,
+      "suction_temp_2": -13.3,
+      "alarm_present": 0,
+      "set_point": 8.5,
+      "capacity_load": 72,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_cooling",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 77.9,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": -3.4,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-22T15:15:21Z"
+      },
+      {
+        "valor": -3,
+        "desde": "2026-04-22T15:15:21Z",
+        "hasta": "2026-04-22T15:55:21Z"
+      },
+      {
+        "valor": -2.6,
+        "desde": "2026-04-22T15:55:21Z",
+        "hasta": "2026-04-22T16:35:21Z"
+      },
+      {
+        "valor": -2.3,
+        "desde": "2026-04-22T16:35:21Z",
+        "hasta": "2026-04-22T17:15:21Z"
+      },
+      {
+        "valor": -1.9,
+        "desde": "2026-04-22T17:15:21Z",
+        "hasta": "2026-04-22T18:00:21Z"
+      },
+      {
+        "valor": -1.5,
+        "desde": "2026-04-22T18:00:21Z",
+        "hasta": "2026-04-22T18:35:21Z"
+      },
+      {
+        "valor": -1.2,
+        "desde": "2026-04-22T18:35:21Z",
+        "hasta": "2026-04-22T19:30:21Z"
+      },
+      {
+        "valor": -0.8,
+        "desde": "2026-04-22T19:30:21Z",
+        "hasta": "2026-04-22T20:05:21Z"
+      },
+      {
+        "valor": -0.5,
+        "desde": "2026-04-22T20:05:21Z",
+        "hasta": "2026-04-22T20:40:21Z"
+      },
+      {
+        "valor": -0.2,
+        "desde": "2026-04-22T20:40:21Z",
+        "hasta": "2026-04-22T21:25:21Z"
+      },
+      {
+        "valor": 0.1,
+        "desde": "2026-04-22T21:25:21Z",
+        "hasta": "2026-04-22T22:00:21Z"
+      },
+      {
+        "valor": 0.4,
+        "desde": "2026-04-22T22:00:21Z",
+        "hasta": "2026-04-22T23:15:21Z"
+      },
+      {
+        "valor": 0.8,
+        "desde": "2026-04-22T23:15:21Z",
+        "hasta": "2026-04-22T23:45:21Z"
+      },
+      {
+        "valor": 1.1,
+        "desde": "2026-04-22T23:45:21Z",
+        "hasta": "2026-04-23T01:00:21Z"
+      },
+      {
+        "valor": 1.5,
+        "desde": "2026-04-23T01:00:21Z",
+        "hasta": "2026-04-23T01:55:21Z"
+      },
+      {
+        "valor": 1.8,
+        "desde": "2026-04-23T01:55:21Z",
+        "hasta": "2026-04-23T02:40:21Z"
+      },
+      {
+        "valor": 2.1,
+        "desde": "2026-04-23T02:40:21Z",
+        "hasta": "2026-04-23T03:45:21Z"
+      },
+      {
+        "valor": 2.5,
+        "desde": "2026-04-23T03:45:21Z",
+        "hasta": "2026-04-23T04:45:21Z"
+      },
+      {
+        "valor": 2.9,
+        "desde": "2026-04-23T04:45:21Z",
+        "hasta": "2026-04-23T05:50:21Z"
+      },
+      {
+        "valor": 3.2,
+        "desde": "2026-04-23T05:50:21Z",
+        "hasta": "2026-04-23T07:30:21Z"
+      },
+      {
+        "valor": 3.6,
+        "desde": "2026-04-23T07:30:21Z",
+        "hasta": "2026-04-23T09:10:21Z"
+      },
+      {
+        "valor": 4,
+        "desde": "2026-04-23T09:10:21Z",
+        "hasta": "2026-04-23T11:10:21Z"
+      },
+      {
+        "valor": 4.4,
+        "desde": "2026-04-23T11:10:21Z",
+        "hasta": "2026-04-23T12:40:21Z"
+      },
+      {
+        "valor": 4.8,
+        "desde": "2026-04-23T12:40:21Z",
+        "hasta": "2026-04-23T14:10:21Z"
+      },
+      {
+        "valor": 5.2,
+        "desde": "2026-04-23T14:10:21Z",
+        "hasta": "2026-04-23T16:00:21Z"
+      },
+      {
+        "valor": 5.6,
+        "desde": "2026-04-23T16:00:21Z",
+        "hasta": "2026-04-23T17:20:21Z"
+      },
+      {
+        "valor": 5.9,
+        "desde": "2026-04-23T17:20:21Z",
+        "hasta": "2026-04-23T20:30:21Z"
+      },
+      {
+        "valor": 6.3,
+        "desde": "2026-04-23T20:30:21Z",
+        "hasta": "2026-04-23T23:45:21Z"
+      },
+      {
+        "valor": 6.7,
+        "desde": "2026-04-23T23:45:21Z",
+        "hasta": "2026-04-24T03:05:21Z"
+      },
+      {
+        "valor": 7.1,
+        "desde": "2026-04-24T03:05:21Z",
+        "hasta": "2026-04-24T05:45:21Z"
+      },
+      {
+        "valor": 7.4,
+        "desde": "2026-04-24T05:45:21Z",
+        "hasta": "2026-04-24T08:55:21Z"
+      },
+      {
+        "valor": 7.8,
+        "desde": "2026-04-24T08:55:21Z",
+        "hasta": "2026-04-24T12:30:21Z"
+      },
+      {
+        "valor": 8.2,
+        "desde": "2026-04-24T12:30:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      {
+        "valor": 8.5,
+        "desde": "2026-04-24T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 90,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "Z_demo_automatico",
+    "estado": 1,
+    "sp_etileno": 120,
+    "historial_sp_etileno": [
+      {
+        "valor": 120,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "automatico",
+    "id_proceso": 1000006,
+    "ultimo_dato": {
+      "temp_supply_1": 14.1,
+      "temp_supply_2": null,
+      "return_air": 16.6,
+      "evaporation_coil": 11.3,
+      "condensation_coil": 33.9,
+      "compress_coil_1": 60,
+      "compress_coil_2": null,
+      "ambient_air": 27.4,
+      "cargo_1_temp": 14.4,
+      "cargo_2_temp": 13.9,
+      "cargo_3_temp": 14.4,
+      "cargo_4_temp": 13.9,
+      "relative_humidity": 63,
+      "avl": 9.3,
+      "suction_pressure": -5.19,
+      "discharge_pressure": -4.15,
+      "line_voltage": 462,
+      "line_frequency": 60,
+      "consumption_ph_1": 10.8,
+      "consumption_ph_2": 13.9,
+      "consumption_ph_3": 15.9,
+      "co2_reading": 0.75,
+      "o2_reading": 20.1,
+      "evaporator_speed": 60,
+      "condenser_speed": 77,
+      "battery_voltage": null,
+      "power_kwh": 3491.7,
+      "power_trip_reading": 3351.3,
+      "power_trip_duration": 133044169,
+      "suction_temp": null,
+      "discharge_temp": -38.2,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.1,
+      "dl_battery_charge": 1.23,
+      "power_consumption": 9.45,
+      "power_consumption_avg": 279.49,
+      "suction_pressure_2": null,
+      "suction_temp_2": -13,
+      "alarm_present": 1,
+      "set_point": 14,
+      "capacity_load": 34,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 2,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100"
+      },
+      "ethylene": null,
+      "imei": "Z_demo_automatico",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 5.1,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T14:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 2,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-24T13:05:21Z",
+        "hasta": "2026-04-24T14:15:21Z"
+      },
+      "ultimo_modo_1": {
+        "desde": "2026-04-24T08:05:21Z",
+        "hasta": "2026-04-24T08:35:21Z"
+      },
+      "ultimo_modo_2": {
+        "desde": "2026-04-24T14:15:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 60,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 22.4,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-22T16:45:21Z"
+      },
+      {
+        "valor": 22.1,
+        "desde": "2026-04-22T16:45:21Z",
+        "hasta": "2026-04-22T18:45:21Z"
+      },
+      {
+        "valor": 21.9,
+        "desde": "2026-04-22T18:45:21Z",
+        "hasta": "2026-04-22T20:45:21Z"
+      },
+      {
+        "valor": 21.6,
+        "desde": "2026-04-22T20:45:21Z",
+        "hasta": "2026-04-22T22:45:21Z"
+      },
+      {
+        "valor": 21.4,
+        "desde": "2026-04-22T22:45:21Z",
+        "hasta": "2026-04-23T01:45:21Z"
+      },
+      {
+        "valor": 21,
+        "desde": "2026-04-23T01:45:21Z",
+        "hasta": "2026-04-23T02:45:21Z"
+      },
+      {
+        "valor": 17,
+        "desde": "2026-04-23T02:45:21Z",
+        "hasta": "2026-04-24T08:45:21Z"
+      },
+      {
+        "valor": 14,
+        "desde": "2026-04-24T08:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 95,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T08:45:21Z"
+      },
+      {
+        "valor": 90,
+        "desde": "2026-04-24T08:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "z_demo_apagado",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "Manual",
+    "id_proceso": 1000007,
+    "ultimo_dato": {
+      "temp_supply_1": null,
+      "temp_supply_2": null,
+      "return_air": null,
+      "evaporation_coil": null,
+      "condensation_coil": null,
+      "compress_coil_1": null,
+      "compress_coil_2": null,
+      "ambient_air": 27.4,
+      "cargo_1_temp": 14.1,
+      "cargo_2_temp": 13.7,
+      "cargo_3_temp": 14.1,
+      "cargo_4_temp": 13.8,
+      "relative_humidity": 67,
+      "avl": 0,
+      "suction_pressure": null,
+      "discharge_pressure": null,
+      "line_voltage": 458,
+      "line_frequency": 60,
+      "consumption_ph_1": null,
+      "consumption_ph_2": null,
+      "consumption_ph_3": null,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 0,
+      "condenser_speed": 0,
+      "battery_voltage": null,
+      "power_kwh": 3489.8,
+      "power_trip_reading": 3354.1,
+      "power_trip_duration": 133005629,
+      "suction_temp": null,
+      "discharge_temp": null,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.07,
+      "dl_battery_charge": 0.61,
+      "power_consumption": 0,
+      "power_consumption_avg": 275.33,
+      "suction_pressure_2": null,
+      "suction_temp_2": -13.1,
+      "alarm_present": 0,
+      "set_point": 14,
+      "capacity_load": 0,
+      "power_state": 0,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "z_demo_apagado",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T14:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T14:45:21Z",
+    "ultima_fecha_encendido": null,
+    "ultima_fecha_apagado": "2026-04-24T14:45:21Z",
+    "ultimo_power_state": 0,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T14:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "sin_dato",
+      "valor_actual": null,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": null
+    },
+    "historico_set_point": [
+      {
+        "valor": 14,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 90,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 0,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T14:45:21Z",
+        "estado": "apagado"
+      }
+    ],
+    "identificador": "1010"
+  },
+  {
+    "imei": "z_demo_desconocetado",
+    "estado": 1,
+    "sp_etileno": 0,
+    "historial_sp_etileno": [],
+    "fecha_procesada": "2026-04-24T14:45:21Z",
+    "fecha_inicio": "2026-04-22T14:45:21Z",
+    "proceso": "Manual",
+    "id_proceso": 1000008,
+    "ultimo_dato": {
+      "temp_supply_1": 14.3,
+      "temp_supply_2": null,
+      "return_air": 18.7,
+      "evaporation_coil": 11.3,
+      "condensation_coil": 36,
+      "compress_coil_1": 61.7,
+      "compress_coil_2": null,
+      "ambient_air": 28.1,
+      "cargo_1_temp": 15.5,
+      "cargo_2_temp": 15.2,
+      "cargo_3_temp": 13.4,
+      "cargo_4_temp": 16,
+      "relative_humidity": 70,
+      "avl": 0,
+      "suction_pressure": -4.89,
+      "discharge_pressure": -3.78,
+      "line_voltage": 459,
+      "line_frequency": 60,
+      "consumption_ph_1": 12,
+      "consumption_ph_2": 14.9,
+      "consumption_ph_3": 15.8,
+      "co2_reading": null,
+      "o2_reading": null,
+      "evaporator_speed": 60,
+      "condenser_speed": 69,
+      "battery_voltage": null,
+      "power_kwh": 3493,
+      "power_trip_reading": 3355.1,
+      "power_trip_duration": 133023266,
+      "suction_temp": null,
+      "discharge_temp": -38.9,
+      "supply_air_temp": null,
+      "return_air_temp": null,
+      "dl_battery_temp": -5.02,
+      "dl_battery_charge": 1.11,
+      "power_consumption": 17.11,
+      "power_consumption_avg": 278.94,
+      "suction_pressure_2": null,
+      "suction_temp_2": -12.7,
+      "alarm_present": 0,
+      "set_point": 14,
+      "capacity_load": 23,
+      "power_state": 1,
+      "controlling_mode": 0,
+      "humidity_control": 0,
+      "humidity_set_point": 90,
+      "fresh_air_ex_mode": 0,
+      "fresh_air_ex_rate": null,
+      "fresh_air_ex_delay": null,
+      "set_point_o2": null,
+      "set_point_co2": null,
+      "defrost_term_temp": 18,
+      "defrost_interval": 6,
+      "water_cooled_conde": 0,
+      "usda_trip": 0,
+      "evaporator_exp_valve": null,
+      "suction_mod_valve": null,
+      "hot_gas_valve": null,
+      "economizer_valve": null,
+      "numero_alarma": 0,
+      "alarma_01": null,
+      "alarma_02": null,
+      "alarma_03": null,
+      "alarma_04": null,
+      "alarma_05": null,
+      "alarma_06": null,
+      "alarma_07": null,
+      "alarma_08": null,
+      "alarma_09": null,
+      "alarma_10": null,
+      "lecturas_erradas": {
+        "temp_supply_2": "E01",
+        "compress_coil_2": "E00",
+        "fresh_air_ex_rate": "E01",
+        "fresh_air_ex_delay": "E01",
+        "set_point_o2": "E01",
+        "set_point_co2": "E01",
+        "evaporator_exp_valve": "E98",
+        "suction_mod_valve": "E98",
+        "hot_gas_valve": "E98",
+        "economizer_valve": "E98",
+        "lecturas_erradas": "E100",
+        "ethylene": "E100",
+        "co2_reading": "E01",
+        "o2_reading": "E02"
+      },
+      "ethylene": null,
+      "imei": "z_demo_desconocetado",
+      "ip": "10.239.31.146,13,0",
+      "campo_1": 0,
+      "campo_2": 1,
+      "campo_3": 1,
+      "campo_4": null,
+      "campo_5": null,
+      "campo_6": 0,
+      "campo_7": 0,
+      "campo_8": 0,
+      "fecha": {
+        "$date": "2026-04-24T11:45:21Z"
+      }
+    },
+    "hasta": "2026-04-24T11:45:21Z",
+    "ultima_fecha_encendido": "2026-04-24T11:45:21Z",
+    "ultima_fecha_apagado": null,
+    "ultimo_power_state": 1,
+    "fresh_air_ex_mode": {
+      "modo_actual": 0,
+      "fecha_modo_actual": "2026-04-24T11:45:21Z",
+      "ultimo_modo_0": {
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z"
+      },
+      "ultimo_modo_1": null,
+      "ultimo_modo_2": null
+    },
+    "alarmas": {
+      "numero_alarma": 0,
+      "activas": [],
+      "ultima_alarmas": [
+        {
+          "alarma_01": {
+            "numero": 203,
+            "desde": "2026-04-19T14:45:21Z",
+            "hasta": "2026-04-22T14:45:21Z"
+          }
+        },
+        {
+          "alarma_02": {
+            "numero": 114,
+            "desde": "2026-04-20T06:45:21Z",
+            "hasta": "2026-04-23T02:45:21Z"
+          }
+        }
+      ]
+    },
+    "compress_coil_1": {
+      "estado": "normal",
+      "valor_actual": 61.7,
+      "fecha_inicio_estado": "2026-04-22T14:45:21Z",
+      "fecha_ultimo_critico": null,
+      "fecha_ultimo_normal": "2026-04-22T14:45:21Z"
+    },
+    "historico_set_point": [
+      {
+        "valor": 14,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z"
+      }
+    ],
+    "historial_humidity_set_point": [
+      {
+        "valor": 90,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z"
+      }
+    ],
+    "historial_set_point_co2": [],
+    "historial_power_state": [
+      {
+        "valor": 1,
+        "desde": "2026-04-22T14:45:21Z",
+        "hasta": "2026-04-24T11:45:21Z",
+        "estado": "encendido"
+      }
+    ],
+    "identificador": "1010"
+  }
+]

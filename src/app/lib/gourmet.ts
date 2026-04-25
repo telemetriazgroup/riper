@@ -215,6 +215,7 @@ export function buildGourmetDevice(): Device {
   if (!last) {
     return {
       id: GOURMET_DEVICE_ID,
+      nombreApi: GOURMET_DEVICE_NAME,
       name: GOURMET_DEVICE_NAME,
       status: 'offline',
       estado_conexion: 'offline',
@@ -246,6 +247,7 @@ export function buildGourmetDevice(): Device {
 
   return {
     id: GOURMET_DEVICE_ID,
+    nombreApi: GOURMET_DEVICE_NAME,
     name: GOURMET_DEVICE_NAME,
     status: 'offline',
     estado_conexion: 'offline',

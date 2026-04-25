@@ -52,3 +52,29 @@ export async function seedGourmetDemoUser() {
        AND (identificador IS NULL OR btrim(identificador) = '')`
   );
 }
+
+/** Demo flota: dispositivos sintéticos en el front (todos los estados del panel / tarjetas). Sin identificador Madurador. */
+export async function seedFleetDemoUser() {
+  const email = 'demo-flota@riper.local';
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const password = process.env.FLEET_DEMO_PASSWORD || 'DemoFlota2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'viewer', $3, 'Demo flota visual', false, true, '1010')`,
+      ['Demo Flota (visual)', email, hash]
+    );
+    console.log(`[seed] fleet demo user: ${email} (set FLEET_DEMO_PASSWORD in production)`);
+  }
+
+  await pool.query(
+    `UPDATE app_users SET identificador = '1010', updated_at = now()
+     WHERE lower(email) = $1 AND deleted_at IS NULL
+       AND (identificador IS NULL OR btrim(identificador) = '')`,
+    [email]
+  );
+}

@@ -1,0 +1,160 @@
+import { RIPENER_API_URL } from '@/app/config';
+import { authHeaders, clearAuth, getToken } from '@/app/lib/auth';
+
+function base() {
+  return `${RIPENER_API_URL.replace(/\/$/, '')}/api/v1/ripening-processes`;
+}
+
+async function handle<T>(res: Response): Promise<T> {
+  if (res.status === 401) clearAuth();
+  const text = await res.text();
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = { raw: text };
+    }
+  }
+  if (!res.ok) {
+    const o = body as { message?: string; error?: string; raw?: string } | null;
+    const msg = o?.message || o?.error || (o && 'raw' in o ? String(o.raw) : null) || res.statusText;
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
+  return body as T;
+}
+
+export type RipeningProcessRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  display_name: string;
+  payload: Record<string, unknown> & {
+    client?: { name: string; type?: string };
+    batch?: Record<string, unknown>;
+    scheduleSummary?: {
+      totalDurationHours?: number;
+      startedAt?: string;
+      estimatedEndAt?: string | null;
+    };
+    initialSample?: unknown;
+    recipe?: { name?: string; phases?: unknown; targets?: { brix?: string; firmness?: string; color?: string } };
+    objectives?: { name: string; value: string; unit: string }[];
+  };
+  timeline: unknown;
+  created_at: string;
+  updated_at: string;
+};
+
+export function apiFileUrl(path: string | undefined | null): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  return `${RIPENER_API_URL.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+export async function fetchRipeningProcesses(): Promise<RipeningProcessRow[]> {
+  const res = await fetch(base(), { headers: authHeaders() });
+  const json = await handle<{ data: RipeningProcessRow[] }>(res);
+  return json.data ?? [];
+}
+
+export async function fetchRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}`, { headers: authHeaders() });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export type ActiveDeviceSummary = {
+  id: string;
+  display_name: string;
+  client: string;
+  product: string;
+  deviceId: string;
+  progress: number;
+  startedAt: string | null;
+  estimatedEndAt: string | null;
+};
+
+/**
+ * Proceso activo del usuario vinculado a este dispositivo (mismo `deviceId` en el payload), si existe.
+ */
+export async function fetchActiveProcessForDevice(
+  deviceId: string,
+  signal?: AbortSignal
+): Promise<{ process: RipeningProcessRow; summary: ActiveDeviceSummary } | null> {
+  if (!deviceId) return null;
+  const u = `${base()}/active-for-device?deviceId=${encodeURIComponent(deviceId)}`;
+  const res = await fetch(u, { headers: authHeaders(), signal });
+  const json = await handle<{
+    data: { process: RipeningProcessRow; summary: ActiveDeviceSummary } | null;
+  }>(res);
+  return json.data ?? null;
+}
+
+export type CreateProcessPayload = Record<string, unknown>;
+
+export async function createRipeningProcess(
+  data: CreateProcessPayload,
+  evidenceFiles: File[]
+): Promise<RipeningProcessRow> {
+  const form = new FormData();
+  form.append('data', JSON.stringify(data));
+  for (const f of evidenceFiles) {
+    form.append('evidence', f, f.name);
+  }
+  const t = getToken();
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const res = await fetch(base(), { method: 'POST', body: form, headers });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export type SamplingPostBody = {
+  samplingType: 'initial' | 'monitoring' | 'final';
+  /** Quien ejecuta el muestreo (pantalla). Quien guarda en BD es el usuario de la sesión. */
+  personaEscrita: string;
+  parameters: { name: string; value: string; unit: string }[];
+  notes?: string;
+};
+
+export async function postRipeningSampling(
+  processId: string,
+  body: SamplingPostBody,
+  evidenceFiles: File[] = []
+): Promise<RipeningProcessRow> {
+  const form = new FormData();
+  form.append('data', JSON.stringify(body));
+  for (const f of evidenceFiles) {
+    form.append('evidence', f, f.name);
+  }
+  const t = getToken();
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const res = await fetch(`${base()}/${encodeURIComponent(processId)}/sampling`, {
+    method: 'POST',
+    body: form,
+    headers,
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function deleteRipeningProcess(id: string): Promise<void> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
+  await handle<{ ok: boolean }>(res);
+}
+
+export async function fetchRipeningFileBlob(absoluteOrRelativePath: string): Promise<Blob> {
+  const url = apiFileUrl(absoluteOrRelativePath);
+  const res = await fetch(url, { headers: authHeaders() });
+  if (res.status === 401) clearAuth();
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || `HTTP ${res.status}`);
+  }
+  return res.blob();
+}

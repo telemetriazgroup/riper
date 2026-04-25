@@ -1,155 +1,104 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Plus, 
-  Calendar, 
-  ChevronRight, 
-  Package, 
-  CheckCircle2, 
-  AlertTriangle 
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Search,
+  Filter,
+  Plus,
+  Calendar,
+  ChevronRight,
+  Package,
+  Loader2,
+  Database,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card, CardContent } from './ui/Card';
 import { clsx } from 'clsx';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { AuthedImage } from './AuthedImage';
 import { ProcessDetail } from './ProcessDetail';
-import { RecipeBuilder, Recipe } from './recipes/RecipeBuilder';
-import { PERUVIAN_RECIPES } from '../data/recipes';
+import { CreateProcessForm } from './CreateProcessForm';
+import { ProcessDataAdmin } from './ProcessDataAdmin';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { fetchProducts } from '@/app/lib/productsApi';
-import type { AppProduct } from '@/app/lib/productsApi';
-
-const FALLBACK_PRODUCT_NAMES = ['Mango', 'Palta (Aguacate)', 'Banano', 'Cítricos'];
+import { getStoredUser } from '@/app/lib/auth';
+import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 
 interface ProcessListProps {
   onSelectProcess?: (id: string) => void;
 }
 
 export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => {
-  const [view, setView] = useState<'list' | 'create'>('list');
-  const [selectedProcess, setSelectedProcess] = useState<any | null>(null);
+  const [view, setView] = useState<'list' | 'create' | 'admin'>('list');
+  const [selectedProcess, setSelectedProcess] = useState<ReturnType<typeof mapRowToProcessView> | null>(null);
+  const [rawRows, setRawRows] = useState<RipeningProcessRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [searchQ, setSearchQ] = useState('');
   const { t } = useSettings();
 
-  // --- RICH MOCK DATA (incl. registro de referencia tipo prueba) ---
-  const activeProcesses = [
-    {
-      id: "PROC-PRUEBA-01",
-      client: { name: "Prueba Sistema / Demo", type: "internal" },
-      batch: {
-        product: "Banano Prueba",
-        origin: "Lote referencia - Prueba de seguimiento",
-        quantity_kg: 500,
-        quantity_m3: 2.0,
-        box_count: 40,
-        entry_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
-      },
-      status: "active",
-      phase: "Homogenización",
-      start_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
-      progress: 22,
-      recipe: {
-        name: "Receta prueba seguimiento",
-        duration_hours: 48,
-        targets: { brix: "18-20", firmness: "8-10", color: "5-6" }
-      },
-      image: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=400",
-      timeline: [
-        {
-          id: 'ev-prueba-3',
-          type: 'sampling',
-          title: 'Muestreo de Cierre / Liberación',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-          user: 'Operador Demo',
-          data: [
-            { id: '1', name: 'Grados Brix', value: '18.2', unit: '°Brix', target: '18-20' },
-            { id: '2', name: 'Firmeza', value: '8.5', unit: 'N', target: '8-10' },
-            { id: '3', name: 'Color', value: '5.5', unit: 'Escala', target: '5-6' }
-          ],
-          images: []
-        },
-        {
-          id: 'ev-prueba-2',
-          type: 'sampling',
-          title: 'Muestreo de Seguimiento',
-          timestamp: new Date(Date.now() - 28 * 60 * 60 * 1000).toISOString(),
-          user: 'Operador Demo',
-          data: [
-            { id: '1', name: 'Grados Brix', value: '14.0', unit: '°Brix', target: '18-20' },
-            { id: '2', name: 'Firmeza', value: '12.0', unit: 'N', target: '8-10' },
-            { id: '3', name: 'Color', value: '3.5', unit: 'Escala', target: '5-6' }
-          ],
-          images: []
-        },
-        {
-          id: 'ev-prueba-1',
-          type: 'sampling',
-          title: 'Muestreo Inicial / Recepción',
-          timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-          user: 'Operador Demo',
-          data: [
-            { id: '1', name: 'Grados Brix', value: '8.5', unit: '°Brix', target: '18-20' },
-            { id: '2', name: 'Firmeza', value: '22.0', unit: 'N', target: '8-10' },
-            { id: '3', name: 'Color', value: '1.5', unit: 'Escala', target: '5-6' }
-          ],
-          images: []
-        }
-      ]
-    },
-    {
-      id: "PROC-2024-88",
-      client: { name: "Mango Aérea de Colombia S.A.", type: "external" },
-      batch: { 
-        product: "Mango Tommy Atkins", 
-        origin: "Tolima, Finca La Esperanza", 
-        quantity_kg: 4500, 
-        quantity_m3: 12.5, 
-        box_count: 320, 
-        entry_date: "2024-02-02T08:30:00" 
-      },
-      status: "active",
-      phase: "Aplicación Etileno",
-      start_date: "2024-02-02",
-      progress: 35,
-      recipe: {
-        name: "Maduración Exportación Aérea v3",
-        duration_hours: 72,
-        targets: { brix: "14-16", firmness: "10-12", color: "4.5-5.0" }
-      },
-      image: "https://images.unsplash.com/photo-1663018084454-86fd8150f950?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=400",
-      timeline: []
-    },
-    {
-      id: "PROC-2024-92",
-      client: { name: "Agroindustrial Camposol S.A.", type: "external" },
-      batch: { 
-        product: "Palta Hass", 
-        origin: "La Libertad, Perú", 
-        quantity_kg: 22000, 
-        quantity_m3: 65.0, 
-        box_count: 2100, 
-        entry_date: "2024-02-01T06:00:00" 
-      },
-      status: "active",
-      phase: "Ventilación Controlada",
-      start_date: "2024-02-01",
-      progress: 68,
-      recipe: {
-        name: "Maduración Ready-to-Eat (Hass)",
-        duration_hours: 96,
-        targets: { brix: "22-24 (MS)", firmness: "4-6", color: "5 (Negro)" }
-      },
-      image: "https://images.unsplash.com/photo-1601039641847-7857b994d704?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhdm9jYWRvc3xlbnwxfHx8fDE3NzAxMzcxNjZ8MA&ixlib=rb-4.1.0&q=80&w=400",
-      timeline: []
+  const role = getStoredUser()?.role;
+  const canCreate = role === 'operator' || role === 'admin' || role === 'superadmin';
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const data = await fetchRipeningProcesses();
+      setRawRows(data);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : t('load_processes_error'));
+      setRawRows([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  }, [t]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const listViews = useMemo(() => rawRows.map((r) => mapRowToProcessView(r)), [rawRows]);
+
+  const filtered = useMemo(() => {
+    const q = searchQ.trim().toLowerCase();
+    if (!q) return listViews;
+    return listViews.filter(
+      (p) =>
+        p.client.name.toLowerCase().includes(q) ||
+        String(p.batch.product).toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q) ||
+        (p.display_name || '').toLowerCase().includes(q)
+    );
+  }, [listViews, searchQ]);
 
   if (selectedProcess) {
-    return <ProcessDetail processData={selectedProcess} onBack={() => setSelectedProcess(null)} />;
+    return (
+      <ProcessDetail
+        processData={selectedProcess}
+        onBack={() => {
+          setSelectedProcess(null);
+          void load();
+        }}
+        onProcessUpdated={(u) => {
+          setSelectedProcess(u);
+          void load();
+        }}
+      />
+    );
   }
 
   if (view === 'create') {
-    return <CreateProcessForm onCancel={() => setView('list')} onSave={() => setView('list')} />;
+    return (
+      <CreateProcessForm
+        onCancel={() => {
+          setView('list');
+          void load();
+        }}
+        onSave={() => {
+          setView('list');
+          void load();
+        }}
+      />
+    );
   }
 
   return (
@@ -159,267 +108,188 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
           <h1 className="text-2xl font-bold text-gray-900">{t('process_tracking')}</h1>
           <p className="text-gray-500 text-sm">{t('process_tracking_desc')}</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => setView('create')}>
-          <Plus className="w-4 h-4" />
-          {t('new_process')}
-        </Button>
+        <div className="flex flex-wrap gap-2 w-full md:w-auto justify-stretch md:justify-end">
+          <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50/80 text-sm">
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={clsx(
+                'px-3 py-1.5 rounded-md transition',
+                view === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              {t('seguimiento')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('admin')}
+              className={clsx(
+                'px-3 py-1.5 rounded-md transition flex items-center gap-1.5',
+                view === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+              )}
+            >
+              <Database className="w-3.5 h-3.5" />
+              {t('process_data_mgmt')}
+            </button>
+          </div>
+          {canCreate && (
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => setView('create')}>
+              <Plus className="w-4 h-4" />
+              {t('new_process')}
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-          <input 
-            type="text" 
-            placeholder={t('search_process_placeholder')} 
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      {view === 'admin' ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-500">{t('process_data_mgmt_desc')}</p>
+          <ProcessDataAdmin
+            rows={rawRows}
+            loading={loading}
+            onRefresh={load}
+            onView={(v) => {
+              setSelectedProcess(v);
+              onSelectProcess?.(v.id);
+            }}
           />
         </div>
-        <Button variant="outline" className="gap-2 text-gray-600">
-          <Filter className="w-4 h-4" /> {t('filters')}
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {activeProcesses.map((proc) => (
-          <Card 
-            key={proc.id} 
-            className="hover:shadow-md transition-shadow cursor-pointer group border-gray-200 overflow-hidden"
-            onClick={() => setSelectedProcess(proc)}
-          >
-            <div className="h-32 w-full relative overflow-hidden">
-               <ImageWithFallback src={proc.image} alt={proc.batch.product} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-               <div className="absolute top-2 right-2">
-                 <span className={clsx(
-                   "px-2 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md",
-                   proc.status === 'active' ? "bg-green-500/90 text-white" : "bg-orange-500/90 text-white"
-                 )}>
-                   {proc.status === 'active' ? t('in_process') : t('attention')}
-                 </span>
-               </div>
+      ) : (
+        <>
+          <div className="flex gap-4 mb-6">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                value={searchQ}
+                onChange={(e) => setSearchQ(e.target.value)}
+                placeholder={t('search_process_placeholder')}
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-            <CardContent className="p-5">
-              <div className="mb-4">
-                <h3 className="font-bold text-gray-900 text-lg truncate">{proc.client.name}</h3>
-                <p className="text-sm text-gray-500">{proc.batch.product} • {proc.id}</p>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                   <span className="text-gray-500 flex items-center gap-1"><Package className="w-4 h-4" /> {t('current_phase')}</span>
-                   <span className="font-medium text-blue-600">{proc.phase}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                   <span className="text-gray-500 flex items-center gap-1"><Calendar className="w-4 h-4" /> {t('start')}</span>
-                   <span className="font-medium text-gray-900">{proc.start_date}</span>
-                </div>
-                
-                <div className="pt-2">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-500">{t('estimated_progress')}</span>
-                    <span className="font-bold text-gray-900">{proc.progress}%</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-blue-600 h-full rounded-full" style={{ width: `${proc.progress}%` }}></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
-                 <span className="text-sm font-medium text-blue-600 group-hover:underline flex items-center gap-1">
-                   {t('view_details')} <ChevronRight className="w-4 h-4" />
-                 </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
-        {/* Create New Card Placeholder */}
-        <div 
-          onClick={() => setView('create')}
-          className="border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center p-8 text-gray-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50 transition-all cursor-pointer min-h-[300px]"
-        >
-          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3 group-hover:bg-blue-100">
-            <Plus className="w-6 h-6" />
+            <Button variant="outline" className="gap-2 text-gray-600" type="button" disabled>
+              <Filter className="w-4 h-4" /> {t('filters')}
+            </Button>
           </div>
-          <h3 className="font-semibold text-lg">{t('start_new_process')}</h3>
-          <p className="text-sm text-center mt-1 max-w-[200px]">{t('start_new_process_desc')}</p>
-        </div>
-      </div>
-    </div>
-  );
-};
 
-// --- Subcomponent: Create Process Form ---
-const CreateProcessForm = ({ onCancel, onSave }: any) => {
-  const [step, setStep] = useState<'form' | 'custom-recipe'>('form');
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
-  const [customRecipe, setCustomRecipe] = useState<Recipe | null>(null);
-  const [productRows, setProductRows] = useState<AppProduct[]>([]);
-  const { t } = useSettings();
+          {loadError && (
+            <p className="text-sm text-red-600" role="alert">
+              {loadError}
+            </p>
+          )}
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchProducts()
-      .then((p) => {
-        if (!cancelled) setProductRows(p);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+          {loading && (
+            <div className="flex items-center justify-center py-20 text-gray-500 gap-2">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              {t('loading')}
+            </div>
+          )}
 
-  const productOptions = useMemo(() => {
-    if (productRows.length > 0) {
-      return productRows.map((p) => ({ id: p.id, name: p.name }));
-    }
-    return FALLBACK_PRODUCT_NAMES.map((name, i) => ({ id: `local-${i}`, name }));
-  }, [productRows]);
-
-  const activeRecipe = customRecipe || PERUVIAN_RECIPES.find(r => r.id === selectedRecipeId);
-
-  const handleCustomRecipeSave = (recipe: Recipe) => {
-    setCustomRecipe(recipe);
-    setSelectedRecipeId('custom');
-    setStep('form');
-  };
-
-  if (step === 'custom-recipe') {
-    return (
-      <div className="pt-4">
-        <RecipeBuilder 
-          products={productOptions}
-          onCancel={() => setStep('form')} 
-          onSave={handleCustomRecipeSave} 
-          initialData={customRecipe || undefined}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-3xl mx-auto animate-in slide-in-from-bottom-4 duration-300">
-      <Card className="border-gray-200 shadow-lg">
-        <CardContent className="p-8">
-           <div className="mb-8 border-b border-gray-100 pb-4">
-             <h2 className="text-2xl font-bold text-gray-900">{t('new_maturation_process')}</h2>
-             <p className="text-gray-500 mt-1">{t('new_process_desc')}</p>
-           </div>
-
-           <form className="space-y-6" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
-             {/* Section 1: Client & Origin */}
-             <div className="space-y-4">
-               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">1</span>
-                 {t('client_info')}
-               </h3>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('client_type')}</label>
-                   <select className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                     <option>Servicio Externo</option>
-                     <option>Propio / Interno</option>
-                   </select>
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('client_name')}</label>
-                   <input type="text" className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="Ej. Mango Aérea Colombia" />
-                 </div>
-               </div>
-             </div>
-
-             <div className="h-px bg-gray-100 my-6"></div>
-
-             {/* Section 2: Batch Details */}
-             <div className="space-y-4">
-               <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">2</span>
-                 {t('batch_details')}
-               </h3>
-               
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('product')}</label>
-                    <select className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                      <option>Seleccionar...</option>
-                      <option>Mango Tommy Atkins</option>
-                      <option>Mango Kent</option>
-                      <option>Banano Cavendish</option>
-                      <option>Aguacate Hass</option>
-                    </select>
+          {!loading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              {filtered.map((proc) => (
+                <Card
+                  key={proc.id}
+                  className="hover:shadow-md transition-shadow cursor-pointer group border-gray-200 overflow-hidden"
+                  onClick={() => {
+                    setSelectedProcess(proc);
+                    onSelectProcess?.(proc.id);
+                  }}
+                >
+                  <div className="h-32 w-full relative overflow-hidden">
+                    {proc.firstEvidenceApiPath ? (
+                      <AuthedImage
+                        apiPath={proc.firstEvidenceApiPath}
+                        alt={proc.batch.product}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    ) : (
+                      <ImageWithFallback
+                        src={proc.image}
+                        alt={proc.batch.product}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <span
+                        className={clsx(
+                          'px-2 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md',
+                          proc.status === 'active'
+                            ? 'bg-green-500/90 text-white'
+                            : proc.status === 'cancelled'
+                              ? 'bg-slate-600/90 text-white'
+                              : 'bg-orange-500/90 text-white'
+                        )}
+                      >
+                        {proc.status === 'active'
+                          ? t('in_process')
+                          : proc.status === 'cancelled'
+                            ? t('status_ripening_cancelled')
+                            : t('attention')}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('quantity_kg')}</label>
-                    <input type="number" className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="0.00" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('control_device')}</label>
-                    <select className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                       <option>Cámara 01 (Disponible)</option>
-                       <option>Cámara 04 (Disponible)</option>
-                    </select>
-                  </div>
-               </div>
-             </div>
+                  <CardContent className="p-5">
+                    <div className="mb-4">
+                      <h3 className="font-bold text-gray-900 text-lg truncate">{proc.client.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {proc.batch.product} • {proc.id.slice(0, 8)}…
+                      </p>
+                    </div>
 
-             <div className="h-px bg-gray-100 my-6"></div>
-
-             {/* Section 3: Recipe Selection */}
-             <div className="space-y-4">
-               <div className="flex justify-between items-center">
-                 <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-                   <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">3</span>
-                   {t('recipe_planning')}
-                 </h3>
-                 <Button type="button" variant="outline" size="sm" onClick={() => setStep('custom-recipe')}>
-                   <Plus className="w-3 h-3 mr-1" /> {t('create_edit_custom')}
-                 </Button>
-               </div>
-               
-               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                 <label className="block text-sm font-medium text-blue-800 mb-2">{t('select_recipe_library')}</label>
-                 <select 
-                   value={selectedRecipeId}
-                   onChange={(e) => {
-                     setSelectedRecipeId(e.target.value);
-                     setCustomRecipe(null);
-                   }}
-                   className="w-full border-blue-200 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
-                 >
-                   <option value="">-- Seleccionar Protocolo --</option>
-                   {customRecipe && <option value="custom">★ Receta Personalizada Actual</option>}
-                   {PERUVIAN_RECIPES.map(r => (
-                     <option key={r.id} value={r.id}>{r.name} ({r.fruit})</option>
-                   ))}
-                 </select>
-
-                 {/* Recipe Preview */}
-                 {activeRecipe && (
-                   <div className="mt-4 bg-white/60 p-3 rounded-md border border-blue-100 text-sm">
-                      <p className="font-semibold text-blue-900 mb-1">{activeRecipe.name}</p>
-                      <p className="text-gray-600 text-xs mb-2">{activeRecipe.description}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {activeRecipe.phases.filter(p => p.enabled).map((p, i) => (
-                          <span key={i} className="px-2 py-1 bg-white border border-blue-100 rounded text-xs text-blue-700 font-medium">
-                            {i+1}. {p.type.toUpperCase()} ({p.duration}h)
-                          </span>
-                        ))}
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500 flex items-center gap-1">
+                          <Package className="w-4 h-4" /> {t('current_phase')}
+                        </span>
+                        <span className="font-medium text-blue-600">{proc.phase}</span>
                       </div>
-                   </div>
-                 )}
-               </div>
-             </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500 flex items-center gap-1">
+                          <Calendar className="w-4 h-4" /> {t('start')}
+                        </span>
+                        <span className="font-medium text-gray-900">{proc.start_date}</span>
+                      </div>
 
-             <div className="flex justify-end gap-3 pt-6">
-               <Button type="button" variant="ghost" onClick={onCancel}>{t('cancel')}</Button>
-               <Button type="submit" disabled={!activeRecipe} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[150px]">
-                 {t('start_process')}
-               </Button>
-             </div>
-           </form>
-        </CardContent>
-      </Card>
+                      <div className="pt-2">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-gray-500">{t('estimated_progress')}</span>
+                          <span className="font-bold text-gray-900">{proc.progress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-blue-600 h-full rounded-full"
+                            style={{ width: `${proc.progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+                      <span className="text-sm font-medium text-blue-600 group-hover:underline flex items-center gap-1">
+                        {t('view_details')} <ChevronRight className="w-4 h-4" />
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {canCreate && (
+                <div
+                  onClick={() => setView('create')}
+                  className="border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center p-8 text-gray-400 hover:border-blue-300 hover:text-blue-500 hover:bg-blue-50 transition-all cursor-pointer min-h-[300px]"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3 group-hover:bg-blue-100">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <h3 className="font-semibold text-lg">{t('start_new_process')}</h3>
+                  <p className="text-sm text-center mt-1 max-w-[200px]">{t('start_new_process_desc')}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 };

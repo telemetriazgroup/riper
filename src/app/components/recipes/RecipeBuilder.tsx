@@ -16,6 +16,8 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { clsx } from 'clsx';
 import { useSettings } from '../../contexts/SettingsContext';
+import { ProductCombobox, type ProductRow } from './ProductCombobox';
+import type { AppProduct } from '@/app/lib/productsApi';
 
 // --- Types ---
 export type PhaseType = 'homogenization' | 'ripening' | 'venting' | 'cooling';
@@ -40,6 +42,8 @@ export interface Recipe {
   fruit: string;
   description: string;
   phases: PhaseConfig[]; // Ordered list of configured phases
+  /** Receta del sistema (no editable in situ; se duplica) — solo lectura vía API */
+  is_system?: boolean;
 }
 
 export interface ProductOption {
@@ -53,6 +57,15 @@ interface RecipeBuilderProps {
   products: ProductOption[];
   onSave: (recipe: Recipe) => void;
   onCancel: () => void;
+  /** Ver protocolo sin modificar (detalle) */
+  readOnly?: boolean;
+  /** En modo detalle, pasar a edición (solo recetas no estándar) */
+  onStartEdit?: () => void;
+  /** En modo detalle, crear copia editable */
+  onDuplicateFromView?: () => void;
+  /** Admin/superadmin: crear producto sin salir del editor */
+  canCreateProduct?: boolean;
+  onProductCreated?: (product: AppProduct) => void;
 }
 
 // --- Constants ---
@@ -139,7 +152,17 @@ const getPhaseConfig = (phases: PhaseConfig[], type: PhaseType): PhaseConfig => 
   return defaults as PhaseConfig;
 };
 
-export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, products, onSave, onCancel }) => {
+export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
+  initialData,
+  products,
+  onSave,
+  onCancel,
+  readOnly = false,
+  onStartEdit,
+  onDuplicateFromView,
+  canCreateProduct = false,
+  onProductCreated,
+}) => {
   const { t } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
   const [fruit, setFruit] = useState(initialData?.fruit || '');
@@ -161,6 +184,32 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
     cooling: getPhaseConfig(initialData?.phases || [], 'cooling'),
   });
 
+  // Al abrir otra receta o un duplicado, volver a hidratar desde initialData
+  const recipeId = initialData?.id ?? 'new';
+  const recipeNameKey = initialData?.name ?? '';
+  React.useEffect(() => {
+    if (!initialData) {
+      setName('');
+      setDescription('');
+      setPhases({
+        homogenization: getPhaseConfig([], 'homogenization'),
+        ripening: getPhaseConfig([], 'ripening'),
+        venting: getPhaseConfig([], 'venting'),
+        cooling: getPhaseConfig([], 'cooling'),
+      });
+      return;
+    }
+    setName(initialData.name);
+    setFruit(initialData.fruit);
+    setDescription(initialData.description);
+    setPhases({
+      homogenization: getPhaseConfig(initialData.phases, 'homogenization'),
+      ripening: getPhaseConfig(initialData.phases, 'ripening'),
+      venting: getPhaseConfig(initialData.phases, 'venting'),
+      cooling: getPhaseConfig(initialData.phases, 'cooling'),
+    });
+  }, [recipeId, recipeNameKey]);
+
   const handlePhaseChange = (type: PhaseType, updates: Partial<PhaseConfig>) => {
     setPhases(prev => ({
       ...prev,
@@ -169,6 +218,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
   };
 
   const togglePhase = (type: PhaseType) => {
+    if (readOnly) return;
     setPhases(prev => ({
       ...prev,
       [type]: { ...prev[type], enabled: !prev[type].enabled }
@@ -176,6 +226,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
   };
 
   const handleSave = () => {
+    if (readOnly) return;
     const orderedPhases = PHASES_DEF
       .map(def => phases[def.type])
       .filter(p => p.enabled);
@@ -185,7 +236,8 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
       name,
       fruit: fruit.trim() || (products[0]?.name ?? ''),
       description,
-      phases: orderedPhases
+      phases: orderedPhases,
+      is_system: initialData?.is_system,
     });
   };
 
@@ -200,6 +252,15 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
     }
     return names;
   }, [products, initialData?.fruit, fruit]);
+
+  const fruitOptionRows: ProductRow[] = React.useMemo(
+    () =>
+      fruitOptions.map((name) => ({
+        name,
+        id: products.find((p) => p.name === name)?.id ?? `__extra__-${name}`,
+      })),
+    [fruitOptions, products]
+  );
 
   React.useEffect(() => {
     if (!fruitOptions.length) return;
@@ -236,59 +297,108 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
             <ChefHat className="w-6 h-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900">{initialData ? t('edit_recipe') : t('new_recipe')}</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {readOnly
+                ? t('recipe_view_title')
+                : initialData && initialData.id !== 'new'
+                  ? t('edit_recipe')
+                  : t('new_recipe')}
+            </h1>
             <p className="text-xs text-gray-500">
               {t('total_duration')}: <span className="font-semibold text-blue-600">{getTotalDuration().toFixed(1)} {t('hours')}</span>
             </p>
+            {readOnly && initialData?.is_system && (
+              <p className="text-xs text-amber-800 mt-1 bg-amber-50 border border-amber-100 rounded px-2 py-1 inline-block">
+                {t('recipe_system_readonly_hint')}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="ghost" onClick={onCancel} className="flex-1 md:flex-none">{t('cancel')}</Button>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 flex-1 md:flex-none" onClick={handleSave}>
-            <Save className="w-4 h-4" /> {t('save')}
-          </Button>
+        <div className="flex flex-wrap gap-2 w-full md:w-auto justify-end">
+          {readOnly ? (
+            <>
+              <Button variant="ghost" onClick={onCancel} className="flex-1 md:flex-none">
+                {t('back_to_recipe_list')}
+              </Button>
+              {onDuplicateFromView && (
+                <Button
+                  variant="outline"
+                  className="gap-2 border-slate-300"
+                  onClick={onDuplicateFromView}
+                >
+                  {t('duplicate_recipe')}
+                </Button>
+              )}
+              {!initialData?.is_system && onStartEdit && (
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                  onClick={onStartEdit}
+                >
+                  {t('edit_recipe')}
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onCancel} className="flex-1 md:flex-none">
+                {t('cancel')}
+              </Button>
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2 flex-1 md:flex-none" onClick={handleSave}>
+                <Save className="w-4 h-4" /> {t('save')}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {/* General Info */}
       <Card className="border-gray-200 shadow-sm">
         <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="col-span-full md:col-span-1">
+            <div className="col-span-full md:col-span-1">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('protocol_name')}</label>
              <input 
                type="text" 
                value={name}
+               disabled={readOnly}
                onChange={e => setName(e.target.value)}
                placeholder={t('protocol_placeholder')}
-               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-800"
              />
           </div>
           <div className="col-span-full md:col-span-1">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('product_label')}</label>
-             {products.length === 0 && !fruit ? (
+             {readOnly ? (
+               <input
+                 type="text"
+                 readOnly
+                 value={fruit}
+                 className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
+               />
+             ) : (products.length > 0 || canCreateProduct) ? (
+               <ProductCombobox
+                 value={fruit}
+                 onChange={setFruit}
+                 items={fruitOptionRows}
+                 disabled={false}
+                 canCreateProduct={canCreateProduct}
+                 onProductCreated={onProductCreated ?? (() => {})}
+                 createSortOrder={products.length}
+               />
+             ) : (
                <p className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                  {t('products_empty')}
                </p>
-             ) : (
-               <select 
-                 value={fruit}
-                 onChange={e => setFruit(e.target.value)}
-                 className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-               >
-                 {fruitOptions.map((n) => (
-                   <option key={n} value={n}>{n}</option>
-                 ))}
-               </select>
              )}
           </div>
           <div className="col-span-full">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('description_notes')}</label>
              <textarea 
                value={description}
+               disabled={readOnly}
                onChange={e => setDescription(e.target.value)}
                rows={2}
                placeholder={t('description_placeholder')}
-               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm"
+               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50"
              />
           </div>
         </CardContent>
@@ -328,9 +438,12 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                        </div>
                      </div>
                      <button 
+                       type="button"
                        onClick={() => togglePhase(def.type)}
+                       disabled={readOnly}
                        className={clsx("flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors", 
-                         isEnabled ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                         isEnabled ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-200 text-gray-600 hover:bg-gray-300",
+                         readOnly && "opacity-80 cursor-not-allowed"
                        )}
                      >
                        {isEnabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
@@ -346,13 +459,13 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                         {def.type === 'homogenization' && (
                           <>
                             <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                              <input type="number" step="0.1" value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                             <InputGroup label={t('set_humidity')} icon={Droplets} unit="%">
-                              <input type="number" step="1" min={80} max={98} value={config.humidity ?? 95} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="1" min={80} max={98} disabled={readOnly} value={config.humidity ?? 95} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                             <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_hours')}>
-                              <input type="number" step="1" value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="1" disabled={readOnly} value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                           </>
                         )}
@@ -361,20 +474,20 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                         {def.type === 'ripening' && (
                           <>
                              <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                               <input type="number" step="0.1" value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                               <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                              </InputGroup>
                              <InputGroup label={t('set_ethylene')} icon={FlaskConical} unit={t('unit_ppm')}>
-                               <input type="number" step="10" value={config.ethylene} onChange={e => handlePhaseChange(def.type, { ethylene: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                               <input type="number" step="10" disabled={readOnly} value={config.ethylene} onChange={e => handlePhaseChange(def.type, { ethylene: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                              </InputGroup>
                              <InputGroup label={t('set_co2')} icon={Wind} unit="%">
-                               <input type="number" step="0.1" value={config.co2Limit} onChange={e => handlePhaseChange(def.type, { co2Limit: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                               <input type="number" step="0.1" disabled={readOnly} value={config.co2Limit} onChange={e => handlePhaseChange(def.type, { co2Limit: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                              </InputGroup>
                              <InputGroup label={t('set_humidity')} icon={Droplets} unit="%">
-                               <input type="number" step="1" value={config.humidity} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                               <input type="number" step="1" disabled={readOnly} value={config.humidity} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                              </InputGroup>
                              <div className="lg:col-span-4 max-w-[200px]">
                                <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_hours')}>
-                                 <input type="number" step="1" value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                                 <input type="number" step="1" disabled={readOnly} value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                                </InputGroup>
                              </div>
                           </>
@@ -384,13 +497,13 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                         {def.type === 'venting' && (
                           <>
                             <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                              <input type="number" step="0.1" value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                             <InputGroup label={t('target_co2')} icon={Wind} unit="%">
-                              <input type="number" step="0.1" value={config.co2Limit} onChange={e => handlePhaseChange(def.type, { co2Limit: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="0.1" disabled={readOnly} value={config.co2Limit} onChange={e => handlePhaseChange(def.type, { co2Limit: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                             <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_minutes')} highlight>
-                              <input type="number" step="1" value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent text-blue-600" />
+                              <input type="number" step="1" disabled={readOnly} value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent text-blue-600" />
                             </InputGroup>
                           </>
                         )}
@@ -406,6 +519,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                                   <input 
                                     type="number" 
                                     step="0.1"
+                                    disabled={readOnly}
                                     value={config.temp} 
                                     onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} 
                                     className="w-full text-center font-bold outline-none text-cyan-700" 
@@ -416,7 +530,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({ initialData, produ
                             </div>
 
                             <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_hours')}>
-                              <input type="number" step="1" value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
+                              <input type="number" step="1" disabled={readOnly} value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
                           </>
                         )}

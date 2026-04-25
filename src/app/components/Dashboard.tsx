@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Device } from '@/app/data';
 import { useDevices } from '@/app/hooks/useDevices';
 import { DeviceCard } from './DeviceCard';
 import { Card, CardContent } from './ui/Card';
-import { Activity, AlertTriangle, CheckCircle, Zap, Loader2, Download } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Zap, Loader2, Download, Search } from 'lucide-react';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { Button } from './ui/Button';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { totalNumeroAlarmaFleet, countProcesosEnCurso } from '@/app/lib/fleetKpi';
 
 interface DashboardProps {
   onSelectDevice: (deviceId: string) => void;
@@ -18,6 +19,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const { devices, isLoading, isError, mutate } = useDevices();
   const { t, convertTemp, tempUnit } = useSettings();
   const [downloading, setDownloading] = useState(false);
+  const [deviceSearch, setDeviceSearch] = useState('');
+
+  const filteredDevices = useMemo(() => {
+    const q = deviceSearch.trim().toLowerCase();
+    if (!q) return devices;
+    return devices.filter((d) => {
+      const haystack = [
+        d.name,
+        d.id,
+        d.madurador?.identificador_empresa,
+        d.process?.name,
+        d.process?.currentPhase,
+        d.telemetry?.stateProcess,
+        d.estado_conexion,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [devices, deviceSearch]);
 
   const downloadExecutiveSummary = async () => {
     setDownloading(true);
@@ -91,7 +113,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
 
       // --- Estadísticas reales de la flota ---
       const activeCount = devices.filter(d => d.status === 'active' || d.status === 'warning').length;
-      const alarmCount = devices.filter(d => d.status === 'alarm').length;
+      const alarmCount = totalNumeroAlarmaFleet(devices);
+      const processesLive = countProcesosEnCurso(devices);
       const totalKwh = devices.reduce((acc, d) => acc + (d.operational?.power_kwh ?? 0), 0);
       const onlineCount = devices.filter(d => d.estado_conexion === 'online').length;
       const totalDevices = devices.length;
@@ -105,11 +128,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
       // --- KPIs: sin fondo, solo borde negro ---
       const kpiW = (pageW - margin * 2 - 6) / 2;
       const kpiH = 16;
-      const kpiLabels = [t('active_units'), t('active_alarms'), t('total_consumption'), t('units_online')];
+      const kpiLabels = [t('active_units'), t('active_alarms'), t('processes_in_progress'), t('units_online')];
       const kpiValues = [
         `${activeCount} / ${totalDevices}`,
         String(alarmCount),
-        totalKwh > 0 ? `${Math.round(totalKwh).toLocaleString()} kWh` : '—',
+        String(processesLive),
         `${onlineCount} / ${totalDevices}`,
       ];
       for (let i = 0; i < 4; i++) {
@@ -242,7 +265,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   }
 
   const activeCount = devices.filter(d => d.status === 'active' || d.status === 'warning').length;
-  const alarmCount = devices.filter(d => d.status === 'alarm').length;
+  const alarmNumeroSum = totalNumeroAlarmaFleet(devices);
+  const processesInCurso = countProcesosEnCurso(devices);
   const rawKwh = devices.reduce((acc, d) => acc + (d.operational?.power_kwh ?? 0), 0);
   const totalKwh = rawKwh > 0 ? rawKwh : 145;
 
@@ -271,17 +295,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         />
         <SummaryCard 
           title={t('active_alarms')} 
-          value={alarmCount.toString()} 
+          value={alarmNumeroSum.toString()} 
           icon={AlertTriangle} 
           color="text-red-500" 
-          subtext={t('require_attention')}
+          subtext={t('alarms_numero_sum_hint')}
         />
         <SummaryCard 
-          title={t('completed_processes')} 
-          value="12" 
+          title={t('processes_in_progress')} 
+          value={processesInCurso.toString()} 
           icon={Activity} 
           color="text-blue-500" 
-          subtext={t('this_week')}
+          subtext={t('processes_in_progress_hint')}
         />
         <SummaryCard 
           title={t('total_consumption')} 
@@ -292,18 +316,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         />
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-4 text-gray-800">{t('fleet_status')}</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {devices.map(device => (
-            <DeviceCard 
-              key={device.id} 
-              device={device} 
-              onClick={onSelectDevice} 
-              onRefresh={mutate}
+      <div className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-800">{t('fleet_status')}</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {deviceSearch.trim()
+                ? `${filteredDevices.length} / ${devices.length}`
+                : t('of_total', { total: String(devices.length) })}
+            </p>
+          </div>
+          <div className="relative w-full lg:max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <input
+              type="search"
+              value={deviceSearch}
+              onChange={(e) => setDeviceSearch(e.target.value)}
+              placeholder={t('search_placeholder')}
+              className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              autoComplete="off"
+              aria-label={t('search_placeholder')}
             />
-          ))}
+          </div>
         </div>
+
+        {filteredDevices.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 py-16 text-center text-sm text-gray-500">
+            {deviceSearch.trim()
+              ? t('language') === 'es'
+                ? 'No hay dispositivos que coincidan con la búsqueda.'
+                : 'No devices match your search.'
+              : devices.length === 0
+                ? t('language') === 'es'
+                  ? 'No hay dispositivos en la flota.'
+                  : 'No devices in the fleet.'
+                : t('error_loading_devices')}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredDevices.map((device) => (
+              <DeviceCard
+                key={device.id}
+                device={device}
+                onClick={onSelectDevice}
+                onRefresh={mutate}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

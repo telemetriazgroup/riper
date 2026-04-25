@@ -207,9 +207,11 @@ export function buildTunnelDeviceFromJson(json: unknown): Device {
   const setPoint = b && b.set_point != null ? toNum(b.set_point) ?? 22 : 22;
   const rh = b && b.relative_humidity != null ? toNum(b.relative_humidity) ?? 0 : 0;
 
+  const tLabel = `Túnel ${grupoNombre}`;
   const device: Device = {
     id: GOURMET_TUNEL_DEVICE_ID,
-    name: `Túnel ${grupoNombre}`,
+    nombreApi: tLabel,
+    name: tLabel,
     status,
     estado_conexion,
     last_seen: lastSeen,
@@ -257,9 +259,11 @@ export function buildTunnelDeviceOffline(): Device {
       datos: {},
     })),
   };
+  const tOffline = 'Túnel TUNEL_GREAT';
   const device: Device = {
     id: GOURMET_TUNEL_DEVICE_ID,
-    name: 'Túnel TUNEL_GREAT',
+    nombreApi: tOffline,
+    name: tOffline,
     status: 'offline',
     estado_conexion: 'offline',
     last_seen: new Date(0).toISOString(),

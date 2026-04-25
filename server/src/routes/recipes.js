@@ -12,6 +12,7 @@ function rowToRecipe(row) {
     fruit: row.fruit,
     description: row.description ?? '',
     phases: Array.isArray(phases) ? phases : [],
+    is_system: row.is_system === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -20,10 +21,10 @@ function rowToRecipe(row) {
 recipesRouter.get('/', async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, created_at, updated_at
+      `SELECT id, name, fruit, description, phases, is_system, created_at, updated_at
        FROM app_recipes
        WHERE deleted_at IS NULL
-       ORDER BY updated_at DESC`
+       ORDER BY is_system DESC, name ASC, updated_at DESC`
     );
     res.json({ data: rows.map(rowToRecipe) });
   } catch (e) {
@@ -35,7 +36,7 @@ recipesRouter.get('/', async (_req, res) => {
 recipesRouter.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, created_at, updated_at
+      `SELECT id, name, fruit, description, phases, is_system, created_at, updated_at
        FROM app_recipes
        WHERE id = $1 AND deleted_at IS NULL`,
       [req.params.id]
@@ -65,9 +66,9 @@ recipesRouter.post('/', requireStaff, async (req, res) => {
   const id = newRecipeId();
   try {
     const { rows } = await pool.query(
-      `INSERT INTO app_recipes (id, name, fruit, description, phases)
-       VALUES ($1, $2, $3, $4, $5::jsonb)
-       RETURNING id, name, fruit, description, phases, created_at, updated_at`,
+      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system)
+       VALUES ($1, $2, $3, $4, $5::jsonb, false)
+       RETURNING id, name, fruit, description, phases, is_system, created_at, updated_at`,
       [id, n, f, String(description), JSON.stringify(phases)]
     );
     res.status(201).json({ data: rowToRecipe(rows[0]) });
@@ -112,10 +113,21 @@ recipesRouter.patch('/:id', requireStaff, async (req, res) => {
   updates.push(`updated_at = now()`);
   vals.push(id);
   try {
+    const { rows: chk } = await pool.query(
+      `SELECT is_system FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (!chk.length) return res.status(404).json({ error: 'not_found' });
+    if (chk[0].is_system === true) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'system recipe cannot be modified; duplicate to customize',
+      });
+    }
     const { rows } = await pool.query(
       `UPDATE app_recipes SET ${updates.join(', ')}
-       WHERE id = $${i} AND deleted_at IS NULL
-       RETURNING id, name, fruit, description, phases, created_at, updated_at`,
+       WHERE id = $${i} AND deleted_at IS NULL AND (is_system IS NOT TRUE)
+       RETURNING id, name, fruit, description, phases, is_system, created_at, updated_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -129,9 +141,20 @@ recipesRouter.patch('/:id', requireStaff, async (req, res) => {
 recipesRouter.delete('/:id', requireStaff, async (req, res) => {
   const { id } = req.params;
   try {
+    const { rows: chk } = await pool.query(
+      `SELECT is_system FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
+      [id]
+    );
+    if (!chk.length) return res.status(404).json({ error: 'not_found' });
+    if (chk[0].is_system === true) {
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'standard recipes cannot be deleted; duplicate to create a custom copy',
+      });
+    }
     const { rowCount } = await pool.query(
       `UPDATE app_recipes SET deleted_at = now(), updated_at = now()
-       WHERE id = $1 AND deleted_at IS NULL`,
+       WHERE id = $1 AND deleted_at IS NULL AND (is_system IS NOT TRUE)`,
       [id]
     );
     if (!rowCount) return res.status(404).json({ error: 'not_found' });

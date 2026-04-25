@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import type { KeyedMutator } from 'swr';
 import { Device } from '@/app/data';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer, Layers } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { updateDeviceName } from '@/app/lib/api';
+import { applySobrenombresToDevice, deviceNameStorageKey, resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 import { toast } from 'sonner';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes, formatDistanceToNow, format } from 'date-fns';
@@ -13,28 +15,49 @@ import { es, enUS } from 'date-fns/locale';
 interface DeviceCardProps {
   device: Device;
   onClick: (deviceId: string) => void;
-  onRefresh?: () => void;
+  /** SWR `mutate` de la lista de dispositivos: permite alias optimista + revalidación. */
+  onRefresh?: KeyedMutator<Device[]>;
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefresh }) => {
   const { convertTemp, tempUnit, t, language } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
-  const [newName, setNewName] = useState(device.name);
+  const [newName, setNewName] = useState(() => resolveDeviceDisplayName(device));
   const [isSaving, setIsSaving] = useState(false);
+  const displayName = resolveDeviceDisplayName(device);
+
+  useEffect(() => {
+    setNewName(displayName);
+  }, [device.id, displayName]);
 
   const handleSaveName = async (e: React.MouseEvent | React.FormEvent) => {
     e.stopPropagation();
-    if (!newName.trim() || newName === device.name) {
+    const trimmed = newName.trim();
+    if (trimmed === displayName.trim()) {
       setIsEditing(false);
       return;
     }
 
     setIsSaving(true);
     try {
-      await updateDeviceName(device.id, newName);
+      const key = deviceNameStorageKey(device.id) || device.id;
+      await updateDeviceName(device.id, trimmed);
+      if (onRefresh) {
+        await onRefresh(
+          (current) =>
+            (current ?? []).map((d) =>
+              deviceNameStorageKey(d.id) === key
+                ? applySobrenombresToDevice(
+                    { ...d, nombreApi: d.nombreApi ?? d.name },
+                    { [key]: trimmed }
+                  )
+                : d
+            ),
+          { revalidate: true }
+        );
+      }
       toast.success(t('name_updated'));
       setIsEditing(false);
-      if (onRefresh) onRefresh();
     } catch (error) {
       toast.error(t('error_updating_name'));
     } finally {
@@ -44,7 +67,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
 
   const handleCancel = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setNewName(device.name);
+    setNewName(displayName);
     setIsEditing(false);
   };
 
@@ -134,7 +157,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
             </div>
           ) : (
             <div className="group flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-lg font-bold text-gray-800 truncate">{device.name}</CardTitle>
+              <CardTitle className="text-lg font-bold text-gray-800 truncate">{displayName}</CardTitle>
               {device.tunnel && (
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 shrink-0">
                   <Layers className="h-3 w-3" />
@@ -145,7 +168,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
                 <button 
                   onClick={(e) => {
                     e.stopPropagation();
-                    setNewName(device.name);
+                    setNewName(displayName);
                     setIsEditing(true);
                   }}
                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600"
@@ -259,15 +282,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-xs font-medium text-blue-600">{device.process.currentPhase}</span>
                   <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> {device.process.timeLeft}
+                    <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
                   </span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div 
-                    className="bg-blue-600 h-1.5 rounded-full" 
-                    style={{ width: `${device.process.progress}%` }}
-                  ></div>
-                </div>
+                {device.process.showProgressBar !== false && (
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className="bg-blue-600 h-1.5 rounded-full transition-all"
+                      style={{ width: `${device.process.progress}%` }}
+                    />
+                  </div>
+                )}
               </div>
             )}
             
