@@ -65,14 +65,39 @@ export async function seedFleetDemoUser() {
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
       `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
-       VALUES ($1, $2, 'viewer', $3, 'Demo flota visual', false, true, '1010')`,
+       VALUES ($1, $2, 'viewer', $3, 'Demo flota visual', false, true, '2001')`,
       ['Demo Flota (visual)', email, hash]
     );
     console.log(`[seed] fleet demo user: ${email} (set FLEET_DEMO_PASSWORD in production)`);
   }
 
   await pool.query(
-    `UPDATE app_users SET identificador = '1010', updated_at = now()
+    `UPDATE app_users SET identificador = '2001', updated_at = now()
+     WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+}
+
+/** ULTRAORGANICS: listado vía identificador 2001 (MADURADOR_API_BASE, p. ej. http://localhost:9059 en dev). Mismo patrón que demo-flota. */
+export async function seedUltraorganicsUser() {
+  const email = 'ultraorganics@riper.local';
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const password = process.env.ULTRAORGANICS_DEMO_PASSWORD || 'UltraOrganics2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'viewer', $3, 'ULTRAORGANICS', false, true, '2001')`,
+      ['ULTRAORGANICS', email, hash]
+    );
+    console.log(`[seed] ULTRAORGANICS user: ${email} (set ULTRAORGANICS_DEMO_PASSWORD in production)`);
+  }
+
+  await pool.query(
+    `UPDATE app_users SET identificador = '2001', updated_at = now()
      WHERE lower(email) = $1 AND deleted_at IS NULL
        AND (identificador IS NULL OR btrim(identificador) = '')`,
     [email]

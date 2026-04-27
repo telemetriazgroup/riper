@@ -30,8 +30,8 @@ services:
       SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-changeme123}
       UPLOAD_DIR: uploads
       MADURADOR_API_BASE: ${MADURADOR_API_BASE:-http://161.132.53.51:9051}
-      # Upstream API Madurador para proxy cuenta demo (desde el contenedor: host en :9090)
-      MADURADOR_DEMO_API_BASE: ${MADURADOR_DEMO_API_BASE:-http://host.docker.internal:9090}
+      # Upstream listar + buscar_datos (madurador-demo): …/9051/Madurador/…?identificador= (Vite: VITE_MADURADOR_DEMO_PROXY_TARGET)
+      MADURADOR_DEMO_API_BASE: ${MADURADOR_DEMO_API_BASE:-http://161.132.53.51:9051}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

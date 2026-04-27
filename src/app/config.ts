@@ -67,7 +67,8 @@ export function getRipenerApiBase(): string {
  * API Madurador para la cuenta demo: por defecto mismo origen vía Ripener
  * (`GET /api/v1/madurador-demo/Madurador/...` → servidor reenvía a MADURADOR_DEMO_API_BASE).
  * Así no hay CORS (nunca se llama a :9090 desde el navegador).
- * Override: VITE_MADURADOR_DEMO_API_URL (p. ej. `/madurador-demo` si usas solo proxy Vite a :9090).
+ * Override: VITE_MADURADOR_DEMO_API_URL (p. ej. `/madurador-demo` si usas proxy Vite al upstream).
+ * Upstream (Ripener: MADURADOR_DEMO_API_BASE, Vite: VITE_MADURADOR_DEMO_PROXY_TARGET) por defecto 161.132.53.51:9051.
  */
 const maduradorFromEnv: string | undefined = env?.VITE_MADURADOR_DEMO_API_URL as string | undefined;
 export const MADURADOR_DEMO_API_URL: string = maduradorFromEnv?.trim()
@@ -76,7 +77,7 @@ export const MADURADOR_DEMO_API_URL: string = maduradorFromEnv?.trim()
 
 /** identificador de empresa en listar_dispositivos_proceso_identificador_empresa (cuenta demo). */
 export const FLEET_DEMO_IDENTIFICADOR: string =
-  (env?.VITE_FLEET_DEMO_IDENTIFICADOR as string) || '1010';
+  (env?.VITE_FLEET_DEMO_IDENTIFICADOR as string) || '2001';
 
 /**
  * Si se define (URL absoluta o ruta tipo `/tunel-api/...`), el cliente llama ahí directamente.

@@ -9,11 +9,36 @@ import type {
 import type { HistoryPoint } from '@/app/lib/api';
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
+import { isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 
 export function hasMaduradorIdentificador(): boolean {
   const id = getStoredUser()?.identificador?.trim();
   return Boolean(id);
+}
+
+/**
+ * La API puede devolver varios IMEI bajo un mismo identificador (p. ej. MEX1001 y MEX1002).
+ * Se deja en pantalla el equipo cuyo IMEI termina con el identificador (1001 → …1001, 2001 → …2001).
+ * Si ninguno coincide, se asume otro esquema de nombres (legacy) y no se descarta nada.
+ */
+export function filterDevicesToIdentificadorImeiSuffix(
+  devices: Device[],
+  identificador: string | null | undefined
+): Device[] {
+  const id = String(identificador ?? '').trim();
+  if (!id || !devices.length) return devices;
+  const kept = devices.filter((d) => String(d.id ?? '').trim().endsWith(id));
+  if (kept.length === 0) return devices;
+  return kept;
+}
+
+/** Panel ULTRAORGANICS: solo MEX1001, MEX2001, MEX3001 (orden fijo). */
+export function filterDevicesToUltraorganicsPanel(devices: Device[]): Device[] {
+  const byId = new Map(devices.map((d) => [String(d.id).trim(), d]));
+  return (ULTRAORGANICS_PANEL_IMEIS as readonly string[])
+    .map((id) => byId.get(id))
+    .filter((d): d is Device => Boolean(d));
 }
 
 function toNum(v: unknown): number | null {
@@ -135,9 +160,11 @@ export function extractMaduradorOperativoSummary(row: Record<string, unknown>): 
 
   const asTramos = (x: unknown): MaduradorHistorialTramo[] | undefined =>
     Array.isArray(x) ? (x as MaduradorHistorialTramo[]) : undefined;
+  const historialSpEtileno: MaduradorHistorialTramo[] =
+    asTramos(row.historial_sp_etileno) ?? ([] as MaduradorHistorialTramo[]);
 
   return {
-    historial_sp_etileno: asTramos(row.historial_sp_etileno),
+    historial_sp_etileno: historialSpEtileno,
     ultima_fecha_apagado: row.ultima_fecha_apagado != null ? String(row.ultima_fecha_apagado) : null,
     modoVentilacion: modo,
     modoVentilacionLabel,
@@ -200,7 +227,9 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     new Date().toISOString();
   const lastSeen = lastSample;
 
-  const stateProcess = procesoToStateProcess(row.proceso);
+  const procesoRaw = row.proceso != null ? String(row.proceso).trim() : '';
+  const isManualProceso = !procesoRaw || isManualProcesoLabel(procesoRaw);
+  const stateProcess = procesoToStateProcess(procesoRaw || 'Manual');
 
   const lastMs = new Date(lastSeen).getTime();
   const mins = Number.isFinite(lastMs) ? (Date.now() - lastMs) / 60000 : 9999;
@@ -284,7 +313,10 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const c4 = inRange(toNum(flat.cargo_4_temp), -40, 100);
   const compTemp = inRange(toNum(flat.compress_coil_1), -60, 200);
   const spCo2Num = inRange(toNum(flat.set_point_co2), 0, 100);
-  const spEti = inRange(toNum(flat.sp_ethyleno), 0, 1e4);
+  const hasSpEtilenoField =
+    Object.prototype.hasOwnProperty.call(flat, 'sp_ethyleno') ||
+    Object.prototype.hasOwnProperty.call(row, 'sp_ethyleno');
+  const spEti = hasSpEtilenoField ? inRange(toNum(flat.sp_ethyleno ?? row.sp_ethyleno), 0, 1e4) : null;
 
   const madurador: MaduradorReference = {
     identificador_empresa: iden,
@@ -315,10 +347,12 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     compress_coil_1_temp: compTemp,
   };
 
-  const procesoRaw = row.proceso != null ? String(row.proceso) : '';
-  const procesoLabel = procesoRaw || 'Proceso';
-  const isManual = isManualProcesoLabel(procesoRaw);
-  const idProcesoVal = toNum(row.id_proceso);
+  const procesoLabel = procesoRaw || 'Manual';
+  const isManual = isManualProceso;
+  const hasIdProcesoField =
+    Object.prototype.hasOwnProperty.call(row, 'id_proceso') ||
+    Object.prototype.hasOwnProperty.call(flat, 'id_proceso');
+  const idProcesoVal = hasIdProcesoField ? toNum(flat.id_proceso !== undefined ? flat.id_proceso : row.id_proceso) : null;
   const numAlRounded = Math.max(0, Math.round(numAl ?? 0));
 
   const maduradorSummary = extractMaduradorOperativoSummary(row);
@@ -334,7 +368,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     last_seen: lastSeen,
     telemetry,
     operational,
-    procesoApi: procesoRaw || null,
+    procesoApi: procesoRaw || 'Manual',
     idProcesoApi: idProcesoVal,
     numeroAlarmaTotal: numAlRounded,
     process:
@@ -360,7 +394,11 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   if (!res.ok) throw new Error(`madurador: ${res.status}`);
   const body = (await res.json()) as { data?: unknown };
   const raw = Array.isArray(body.data) ? body.data : [];
-  return raw.map((r) => mapMaduradorRowToDevice(r as Record<string, unknown>));
+  const list = raw.map((r) => mapMaduradorRowToDevice(r as Record<string, unknown>));
+  if (isUltraorganicsSession()) {
+    return filterDevicesToUltraorganicsPanel(list);
+  }
+  return filterDevicesToIdentificadorImeiSuffix(list, getStoredUser()?.identificador);
 }
 
 export async function getMaduradorDevicesCached(): Promise<Device[]> {

@@ -1,7 +1,7 @@
 import { FLEET_DEMO_IDENTIFICADOR, MADURADOR_DEMO_API_URL } from '@/app/config';
 import type { Device } from '@/app/data';
 import { authHeaders } from '@/app/lib/auth';
-import { mapMaduradorRowToDevice } from '@/app/lib/madurador';
+import { filterDevicesToIdentificadorImeiSuffix, mapMaduradorRowToDevice } from '@/app/lib/madurador';
 
 function apiRoot(): string {
   return MADURADOR_DEMO_API_URL.replace(/\/$/, '');
@@ -21,7 +21,8 @@ export async function fetchFleetDemoMaduradorList(): Promise<Device[]> {
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) throw new Error(`madurador_list: ${res.status} ${res.statusText}`);
   const rows = await parseJsonArray(res);
-  return rows.map((r) => mapMaduradorRowToDevice(r));
+  const list = rows.map((r) => mapMaduradorRowToDevice(r));
+  return filterDevicesToIdentificadorImeiSuffix(list, FLEET_DEMO_IDENTIFICADOR);
 }
 
 /** Detalle: GET …/Madurador/buscar_datos_madurador_rango/?imei= */

@@ -3,12 +3,12 @@ import express from 'express';
 /**
  * Proxy same-origin para la API Madurador (cuenta demo): el navegador llama a
  * /api/v1/madurador-demo/Madurador/... y el servidor reenvía a MADURADOR_DEMO_API_BASE (ej. :9090).
- * Evita CORS al no cruzar orígenes.
+ * Evita CORS al no cruzar orígenes. Por defecto: 161.132.53.51:9051 (listar_dispositivos… / buscar_datos…).
  */
 export const maduradorDemoProxyRouter = express.Router();
 
 maduradorDemoProxyRouter.get(/.*/, async (req, res) => {
-  const base = (process.env.MADURADOR_DEMO_API_BASE || 'http://host.docker.internal:9090').replace(
+  const base = (process.env.MADURADOR_DEMO_API_BASE || 'http://161.132.53.51:9051').replace(
     /\/$/,
     ''
   );

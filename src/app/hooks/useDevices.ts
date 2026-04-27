@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { fetchDevices, fetchDevice, fetchDeviceHistory, type FetchHistoryOptions } from '@/app/lib/api';
 import { Device } from '@/app/data';
 import { isGourmetSession } from '@/app/lib/gourmet';
-import { isFleetDemoSession } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 import { getToken } from '@/app/lib/auth';
 import { devicesToProcessFollowPayload, syncDeviceProcessFollow } from '@/app/lib/deviceProcessFollowApi';
 
@@ -32,7 +32,7 @@ function historySwrKey(id: string | null, options: unknown): string | null {
 }
 
 export function useDevices() {
-  const showcase = isFleetDemoSession() || isGourmetSession();
+  const showcase = isFleetDemoSession() || isGourmetSession() || isUltraorganicsSession();
   const { data, error, isLoading, mutate } = useSWR<Device[]>(
     devicesSwrKey(),
     fetchDevices,
@@ -59,7 +59,7 @@ export function useDevices() {
 }
 
 export function useDevice(id: string | null) {
-  const showcase = isFleetDemoSession() || isGourmetSession();
+  const showcase = isFleetDemoSession() || isGourmetSession() || isUltraorganicsSession();
   const { data, error, isLoading, mutate } = useSWR<Device>(
     deviceSwrKey(id),
     () => fetchDevice(id!),
