@@ -117,6 +117,10 @@ export async function fetchMe(): Promise<AuthUser> {
   return user;
 }
 
+/**
+ * Usar siempre este helper para el fetch; no haga `{ ...authHeaders(), 'Content-Type': ... }`:
+ * al expandir un `Headers` a objeto se pierde `Authorization` en el navegador.
+ */
 export function authHeaders(extra?: HeadersInit): HeadersInit {
   const h = new Headers(extra);
   const t = getToken();

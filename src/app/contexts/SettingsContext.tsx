@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import {
+  DEFAULT_DISPLAY_TIMEZONE,
+  formatInDisplayTimeZone,
+  formatDateShortInDisplayTimeZone,
+  formatFileTimestampInDisplayTimeZone,
+} from '@/app/lib/displayTimeZone';
 
 type Language = 'es' | 'en';
 type Theme = 'light' | 'dark';
@@ -11,6 +17,13 @@ interface SettingsContextType {
   setTheme: (theme: Theme) => void;
   tempUnit: TempUnit;
   toggleTempUnit: () => void;
+  /** IANA, p. ej. Etc/GMT+5 (visualización GMT-5; datos de referencia por defecto). */
+  displayTimeZone: string;
+  setDisplayTimeZone: (iana: string) => void;
+  formatDateTime: (input: string | number | Date | null | undefined, withSeconds?: boolean) => string;
+  /** dd/MM + HH:mm en el huso (sin año), p. ej. columnas de tabla. */
+  formatDateShort: (input: string | number | Date | null | undefined) => string;
+  formatFileTimestamp: (input?: string | number | Date) => string;
   convertTemp: (celsius: number) => number;
   formatTemp: (celsius: number) => string;
   t: (key: string, replacements?: Record<string, string> | string) => string;
@@ -25,6 +38,7 @@ const translations: Record<Language, Record<string, string>> = {
     'control': 'Control de Dispositivos',
     'monitoring': 'Monitoreo y Análisis',
     'processes': 'Seguimiento (Plus)',
+    'control_module_menu': 'Procesos de control (panel)',
     'recipes': 'Recetas (Plus)',
     'users': 'Usuarios (Plus)',
     'settings': 'Configuración',
@@ -108,6 +122,19 @@ const translations: Record<Language, Record<string, string>> = {
     'gas_ex_manual': 'Manual',
     'gas_ex_auto': 'Automático',
     'temp_unit_hint': 'Unidad (°C/°F):',
+    'timezone_display_label': 'Hora (referencia)',
+    'timezone_data_hint': 'Los datos de telemetría se interpretan y muestran en el huso elegido. Por defecto GMT-5. Cambie a GMT-4, GMT-6, México, etc. según su criterio.',
+    'tz_reference_gmt5': 'GMT-5 (referencia por defecto)',
+    'tz_gmt4': 'GMT-4',
+    'tz_gmt5': 'GMT-5',
+    'tz_gmt6': 'GMT-6',
+    'tz_gmt7': 'GMT-7',
+    'tz_gmt8': 'GMT-8',
+    'tz_gmt3': 'GMT-3',
+    'tz_mexico_city': 'México (oficial)',
+    'tz_bogota': 'Colombia',
+    'tz_lima': 'Perú',
+    'tz_utc': 'UTC (referencia)',
     'operational_data': 'Datos Operacionales',
     'no_active_process': 'No hay proceso activo',
     'power_consumption': 'Consumo Energía',
@@ -123,6 +150,8 @@ const translations: Record<Language, Record<string, string>> = {
     'historical_data': 'Datos Históricos',
     'historical_data_table': 'Datos en tabla',
     'last_12_hours': 'Últimas 12 Horas',
+    'last_12h_no_data_title': 'No hay datos en las últimas 12 horas',
+    'last_12h_no_data_madurador': 'No hay series de temperatura (aire retorno), humedad, etileno (campo_1) ni dióxido de carbono (co2_reading) en el periodo. Si en origen `cantidad_datos` es 0, aún no hay histórico.',
     'preset_last12': 'Últimas 12 h',
     'preset_basic': 'Básico (Temp, HR, Etileno, CO₂)',
     'preset_temperatures': 'Solo temperaturas',
@@ -418,6 +447,42 @@ const translations: Record<Language, Record<string, string>> = {
     'last_connection': 'Última conexión',
     'last_values_registered_hint': 'Valores mostrados: última telemetría registrada antes de perder el enlace (sin conexión en vivo).',
 
+    'process': 'Proceso',
+    'control_module_title': 'Módulo control (panel)',
+    'no_control_process_active': 'No hay un proceso de control iniciado desde el panel (Homogenización, Maduración, Ventilación, Enfriamiento).',
+    'active_control_process': 'Proceso de control activo',
+    'control_process_params': 'Parámetros guardados',
+    'hours_progress': 'Avance (tiempo)',
+    'control_process_estimated_end': 'Fin estimado',
+    'control_process_started': 'Proceso registrado e iniciado',
+    'control_process_confirm': 'Confirmar e iniciar',
+    'control_process_confirm_title': 'Confirmar inicio de proceso',
+    'control_process_time_hint': 'Revise inicio, fin estimado y parámetros.',
+    'control_process_replace_title': 'Cambio de proceso',
+    'control_process_replace_desc': 'Ya hay un proceso de control activo en este equipo. Si continúa, el anterior se cancelará y se guardará el nuevo.',
+    'current': 'Actual',
+    'new': 'Nuevo',
+    'control_process_cancel_confirm': '¿Cancelar el proceso de control en curso?',
+    'control_process_cancelled': 'Proceso cancelado',
+    'cancel_process': 'Cancelar proceso',
+    'continue': 'Continuar',
+    'control_sessions_admin': 'Procesos de control guardados (histórico)',
+    'control_sessions_subtitle': 'Listado e histórico de sesiones iniciadas desde el panel de control (Homogenización, Maduración, Ventilación, Enfriamiento). Los administradores ven todas; el resto, solo las suyas.',
+    'control_sessions_page_title': 'Control de dispositivos — Procesos confirmados',
+    'control_sessions_hint_fleet': 'Desde el panel principal abra un equipo e inicie un proceso; al confirmarlo en el modal, el registro aparece aquí.',
+    'control_sessions_load_error': 'No se pudo cargar el listado de procesos.',
+    'control_sessions_load_error_hint': 'Compruebe que la API Ripener esté disponible (VITE_RIPENER_API_URL) y que su sesión sea válida.',
+    'refresh': 'Actualizar',
+    'control_session_edit_title': 'Editar proceso activo',
+    'control_session_edit_duration_hint': 'Se recalcula el fin estimado a partir del inicio original y la nueva duración.',
+    'control_session_params_invalid_json': 'El campo de parámetros debe ser un objeto JSON válido.',
+    'control_session_duration_invalid': 'Indique una duración en horas mayor que cero.',
+    'control_session_updated': 'Cambios guardados',
+    'control_session_delete': 'Eliminar',
+    'control_session_delete_confirm': '¿Eliminar este registro del listado? (No afecta a procesos activos; cancele primero si aplica.)',
+    'control_session_deleted': 'Registro eliminado',
+    'control_session_delete_active_hint': 'Cancele el proceso activo antes de eliminar el registro.',
+
     // Bitácora
     'event_log': 'Bitácora',
     'event_log_desc': 'Eventos y muestreos del equipo',
@@ -625,6 +690,7 @@ const translations: Record<Language, Record<string, string>> = {
     'control': 'Device Control',
     'monitoring': 'Monitoring & Analysis',
     'processes': 'Tracking (Plus)',
+    'control_module_menu': 'Control processes (panel)',
     'recipes': 'Recipes (Plus)',
     'users': 'Users (Plus)',
     'settings': 'Settings',
@@ -708,6 +774,19 @@ const translations: Record<Language, Record<string, string>> = {
     'gas_ex_manual': 'Manual',
     'gas_ex_auto': 'Auto',
     'temp_unit_hint': 'Temperature unit (°C/°F):',
+    'timezone_display_label': 'Time (time zone)',
+    'timezone_data_hint': 'Telemetry is shown in the selected time zone. Default GMT-5. Switch to GMT-4, GMT-6, Mexico, etc. as needed.',
+    'tz_reference_gmt5': 'GMT-5 (default reference)',
+    'tz_gmt4': 'GMT-4',
+    'tz_gmt5': 'GMT-5',
+    'tz_gmt6': 'GMT-6',
+    'tz_gmt7': 'GMT-7',
+    'tz_gmt8': 'GMT-8',
+    'tz_gmt3': 'GMT-3',
+    'tz_mexico_city': 'Mexico (official)',
+    'tz_bogota': 'Colombia',
+    'tz_lima': 'Peru',
+    'tz_utc': 'UTC (reference)',
     'operational_data': 'Operational Data',
     'no_active_process': 'No active process',
     'power_consumption': 'Power Consumption',
@@ -723,6 +802,8 @@ const translations: Record<Language, Record<string, string>> = {
     'historical_data': 'Historical Data',
     'historical_data_table': 'Data in table',
     'last_12_hours': 'Last 12 Hours',
+    'last_12h_no_data_title': 'No data in the last 12 hours',
+    'last_12h_no_data_madurador': 'No return-air temp, humidity, ethylene (campo_1), or CO₂ (co2_reading) in the window. If `cantidad_datos` is 0 at the source, there is no history yet.',
     'preset_last12': 'Last 12 h',
     'preset_basic': 'Basic (Temp, RH, Ethylene, CO₂)',
     'preset_temperatures': 'Temperatures only',
@@ -1019,6 +1100,42 @@ const translations: Record<Language, Record<string, string>> = {
     'last_connection': 'Last connection',
     'last_values_registered_hint': 'Values shown: last telemetry before the link was lost (no live connection).',
 
+    'process': 'Process',
+    'control_module_title': 'Control module (panel)',
+    'no_control_process_active': 'No control process started from the panel (Homogenization, Ripening, Ventilation, Cooling).',
+    'active_control_process': 'Active control process',
+    'control_process_params': 'Saved parameters',
+    'hours_progress': 'Progress (time)',
+    'control_process_estimated_end': 'Estimated end',
+    'control_process_started': 'Process registered and started',
+    'control_process_confirm': 'Confirm and start',
+    'control_process_confirm_title': 'Confirm process start',
+    'control_process_time_hint': 'Check start, estimated end, and parameters.',
+    'control_process_replace_title': 'Change process',
+    'control_process_replace_desc': 'A control process is already active. Continuing will cancel it and save the new one.',
+    'current': 'Current',
+    'new': 'New',
+    'control_process_cancel_confirm': 'Cancel the current control process?',
+    'control_process_cancelled': 'Process cancelled',
+    'cancel_process': 'Cancel process',
+    'continue': 'Continue',
+    'control_sessions_admin': 'Saved control processes (history)',
+    'control_sessions_subtitle': 'List and history of sessions started from the control panel. Admins see all; others only their own.',
+    'control_sessions_page_title': 'Device control — Confirmed processes',
+    'control_sessions_hint_fleet': 'Open a unit from the main dashboard and start a process; after you confirm it in the modal, it appears here.',
+    'control_sessions_load_error': 'Could not load the process list.',
+    'control_sessions_load_error_hint': 'Check that the Ripener API is reachable (VITE_RIPENER_API_URL) and your session is valid.',
+    'refresh': 'Refresh',
+    'control_session_edit_title': 'Edit active process',
+    'control_session_edit_duration_hint': 'Estimated end is recalculated from the original start time and the new duration.',
+    'control_session_params_invalid_json': 'Parameters must be valid JSON object.',
+    'control_session_duration_invalid': 'Enter a duration in hours greater than zero.',
+    'control_session_updated': 'Changes saved',
+    'control_session_delete': 'Delete',
+    'control_session_delete_confirm': 'Delete this record from the list? (Active processes must be cancelled first.)',
+    'control_session_deleted': 'Record removed',
+    'control_session_delete_active_hint': 'Cancel the active process before deleting the record.',
+
     // Event log
     'event_log': 'Event Log',
     'event_log_desc': 'Events and samplings for this unit',
@@ -1228,6 +1345,11 @@ const defaultContext: SettingsContextType = {
   setTheme: () => {},
   tempUnit: 'C',
   toggleTempUnit: () => {},
+  displayTimeZone: DEFAULT_DISPLAY_TIMEZONE,
+  setDisplayTimeZone: () => {},
+  formatDateTime: (input, withSeconds) => formatInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es', withSeconds),
+  formatDateShort: (input) => formatDateShortInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es'),
+  formatFileTimestamp: (input) => formatFileTimestampInDisplayTimeZone(input ?? new Date(), DEFAULT_DISPLAY_TIMEZONE),
   convertTemp: (c) => c,
   formatTemp: (c) => `${c}°C`,
   t: (key) => key,
@@ -1237,11 +1359,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [language, setLanguageState] = useState<Language>('es');
   const [theme, setThemeState] = useState<Theme>('light');
   const [tempUnit, setTempUnit] = useState<TempUnit>('C');
+  const [displayTimeZone, setDisplayTimeZoneState] = useState<string>(DEFAULT_DISPLAY_TIMEZONE);
 
   useEffect(() => {
     const savedLang = localStorage.getItem('app_language') as Language;
     const savedTheme = localStorage.getItem('app_theme') as Theme;
     const savedUnit = localStorage.getItem('app_temp_unit') as TempUnit;
+    const savedTz = localStorage.getItem('app_display_timezone')?.trim();
 
     if (savedLang && (savedLang === 'es' || savedLang === 'en')) {
       setLanguageState(savedLang);
@@ -1255,6 +1379,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     if (savedUnit && (savedUnit === 'C' || savedUnit === 'F')) {
       setTempUnit(savedUnit);
+    }
+
+    if (savedTz) {
+      setDisplayTimeZoneState(savedTz);
     }
   }, []);
 
@@ -1283,6 +1411,33 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return `${convertTemp(celsius)}°${tempUnit}`;
   };
 
+  const setDisplayTimeZone = (iana: string) => {
+    setDisplayTimeZoneState(iana);
+    try {
+      localStorage.setItem('app_display_timezone', iana);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const formatDateTime = useCallback(
+    (input: string | number | Date | null | undefined, withSeconds = false) =>
+      formatInDisplayTimeZone(input, displayTimeZone, language, withSeconds),
+    [displayTimeZone, language]
+  );
+
+  const formatDateShort = useCallback(
+    (input: string | number | Date | null | undefined) =>
+      formatDateShortInDisplayTimeZone(input, displayTimeZone, language),
+    [displayTimeZone, language]
+  );
+
+  const formatFileTimestamp = useCallback(
+    (input?: string | number | Date) =>
+      formatFileTimestampInDisplayTimeZone(input ?? new Date(), displayTimeZone),
+    [displayTimeZone]
+  );
+
   useEffect(() => {
     const root = document.documentElement;
     if (theme === 'dark') {
@@ -1309,7 +1464,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <SettingsContext.Provider value={{ language, setLanguage, theme, setTheme, tempUnit, toggleTempUnit, convertTemp, formatTemp, t }}>
+    <SettingsContext.Provider
+      value={{
+        language,
+        setLanguage,
+        theme,
+        setTheme,
+        tempUnit,
+        toggleTempUnit,
+        displayTimeZone,
+        setDisplayTimeZone,
+        formatDateTime,
+        formatDateShort,
+        formatFileTimestamp,
+        convertTemp,
+        formatTemp,
+        t,
+      }}
+    >
       {children}
     </SettingsContext.Provider>
   );

@@ -20,7 +20,7 @@ import {
 } from "@/app/components/ui/dialog";
 import { clsx } from 'clsx';
 import { format, subHours, subDays } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { formatChartPointLabels } from '@/app/lib/displayTimeZone';
 
 /** Etiquetas en español para cada campo de la gráfica histórica */
 export const CHART_METRIC_LABELS: Record<string, string> = {
@@ -277,14 +277,23 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     );
   }
 
-  const raw = (history ?? []).map((h: any) => ({
+  /** Serie de temperatura: `return_air` (API buscar_datos / Madurador); reserva `temp_supply_1` si no hay retorno. */
+  const raw = (history ?? []).map((h: any) => {
+    const tCels =
+      h.return_air != null && h.return_air !== ''
+        ? Number(h.return_air)
+        : h.temp_supply_1 != null
+          ? Number(h.temp_supply_1)
+          : null;
+    return {
     rawDate: new Date(h.timestamp),
     time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    tempRaw: h.temp_supply_1 != null ? Number(convertTemp(h.temp_supply_1)) : null,
+    tempRaw: tCels != null && Number.isFinite(tCels) ? Number(convertTemp(tCels)) : null,
     humidityRaw: h.relative_humidity != null ? Number(h.relative_humidity) : null,
     ethyleneRaw: h.ethylene != null ? Number(h.ethylene) : null,
     co2Raw: h.co2_reading != null ? Number(h.co2_reading) : null,
-  }));
+  };
+  });
   const temp = regularizeSeriesSmooth(raw.map((d: any) => d.tempRaw)).map((v) => Number(v.toFixed(2)));
   const humidity = regularizeHumiditySeries(raw.map((d: any) => d.humidityRaw)).map((v) => Number(v.toFixed(2)));
   const ethyleneRaw = regularizeSeries(raw.map((d: any) => d.ethyleneRaw), { lowThreshold: 20, highThreshold: 50 });
@@ -297,6 +306,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     ethylene: ethylene[i],
     co2: co2[i],
   }));
+
+  const noHistory = (history?.length ?? 0) === 0;
 
   return (
     <Card className="col-span-1 lg:col-span-2">
@@ -314,6 +325,12 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         </div>
       </CardHeader>
       <CardContent>
+        {noHistory ? (
+          <div className="h-[300px] w-full flex flex-col items-center justify-center text-center px-4 text-muted-foreground border border-dashed border-border rounded-lg bg-muted/20">
+            <p className="text-sm font-medium text-foreground">{t('last_12h_no_data_title')}</p>
+            <p className="text-xs mt-2 max-w-md">{t('last_12h_no_data_madurador')}</p>
+          </div>
+        ) : (
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
@@ -329,7 +346,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                 tickLine={false} 
                 axisLine={false} 
                 tickFormatter={(val) => val.toFixed(2)}
-                label={{ value: `Temp (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444' }} 
+                label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444' }} 
               />
               <YAxis 
                 yAxisId="right" 
@@ -348,13 +365,14 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                 labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
               />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Line yAxisId="left" type="monotone" dataKey="temp" name={`${t('temperature')} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
+              <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
               <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (PPM)`} stroke="#10b981" strokeWidth={2} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
 
       <HistoricalDataModal 
@@ -374,7 +392,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 // --- Historical Data Modal Component ---
 
 const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, onClose: () => void, deviceId?: string }) => {
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, displayTimeZone, language } = useSettings();
   
   // Initialize range to last 12 hours
   const [dateRange, setDateRange] = useState({ 
@@ -402,6 +420,16 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   const getLineColor = (key: string) => metricColors[key] ?? METRIC_COLORS[key] ?? '#64748b';
   const toggleLabels = (key: string) => setShowLabelsByMetric((prev) => ({ ...prev, [key]: !(prev[key] !== false) }));
 
+  const chartDataLabeled = useMemo(() => {
+    if (!chartData.length) return chartData;
+    return chartData.map((row, i) => {
+      const d = new Date(row.timestamp);
+      const prev = i > 0 ? new Date(chartData[i - 1].timestamp) : null;
+      const { timeStr, timeAxisLabel } = formatChartPointLabels(d, prev, displayTimeZone, language);
+      return { ...row, timeStr, timeAxisLabel };
+    });
+  }, [chartData, displayTimeZone, language]);
+
   const tempKeys = ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1', 'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point'];
   /** Eje Y2: porcentaje 0–100 (sombreados y humedad, ventilación, capacidad) */
   const percentKeys = ['relative_humidity', 'avl_pct', 'capacity_load', 'humidity_set_point'];
@@ -421,13 +449,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         return;
       }
       const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
-      const data = history.map((h: any, i: number) => {
+      const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
-        const timeStr = format(d, 'dd/MM HH:mm');
-        const prevDay = i > 0 ? new Date(history[i - 1].timestamp) : null;
-        const sameDay = prevDay && format(d, 'yyyy-MM-dd') === format(prevDay, 'yyyy-MM-dd');
-        const timeAxisLabel = sameDay ? format(d, 'HH:mm') : format(d, "d MMM 'a las' HH:mm", { locale: es });
-        const row: any = { timeStr, timeAxisLabel, timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
+        const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
         CHART_METRIC_KEYS.forEach((key) => {
           let v = h[key];
           if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
@@ -460,8 +484,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   };
 
   const combinedShadingSegments = useMemo(
-    () => (chartData.length ? computeCombinedShadingSegments(chartData) : []),
-    [chartData]
+    () => (chartDataLabeled.length ? computeCombinedShadingSegments(chartDataLabeled) : []),
+    [chartDataLabeled]
   );
 
   /** Recorta segmentos al rango visible y usa timeStr del slice para que ReferenceArea dibuje (x1/x2 deben existir en data del chart). */
@@ -471,21 +495,21 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
       brushStart: number,
       brushEnd: number
     ): { x1: string; x2: string; type: ShadingSegmentType }[] => {
-      if (!chartData.length) return [];
+      if (!chartDataLabeled.length) return [];
       return segments
         .map((seg) => {
           const vStart = Math.max(seg.startIndex, brushStart);
           const vEnd = Math.min(seg.endIndex, brushEnd);
           if (vStart > vEnd) return null;
           return {
-            x1: chartData[vStart].timeStr,
-            x2: chartData[vEnd].timeStr,
+            x1: chartDataLabeled[vStart].timeStr,
+            x2: chartDataLabeled[vEnd].timeStr,
             type: seg.type,
           };
         })
         .filter((s): s is { x1: string; x2: string; type: ShadingSegmentType } => s != null);
     },
-    [chartData]
+    [chartDataLabeled]
   );
 
   /** Dominio eje temperatura (Y1) a partir de las métricas de temp seleccionadas */
@@ -806,7 +830,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
 
           {/* Área gráfica: flexible y con zoom */}
           <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
-            {chartData.length > 0 ? (
+            {chartDataLabeled.length > 0 ? (
               <>
                 <div className="flex items-center justify-end gap-2 py-1 px-2 border-b border-gray-100 flex-shrink-0">
                   <Button
@@ -833,9 +857,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                   onTouchEnd={handleTouchEnd}
                   style={{ touchAction: 'none' }}
                 >
-                  <ResponsiveContainer width="100%" height="100%" key={`chart-${chartData.length}`}>
+                  <ResponsiveContainer width="100%" height="100%" key={`chart-${chartDataLabeled.length}`}>
                     <ComposedChart
-                      data={chartData.slice(brushStart, brushEnd + 1)}
+                      data={chartDataLabeled.slice(brushStart, brushEnd + 1)}
                       margin={{ top: 12, right: 72, bottom: 24, left: 40 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
@@ -846,7 +870,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                         tickLine={false}
                         tick={{ fontSize: 9 }}
                         interval="preserveStartEnd"
-                        tickFormatter={(_, index) => chartData.slice(brushStart, brushEnd + 1)[index]?.timeAxisLabel ?? ''}
+                        tickFormatter={(_, index) => chartDataLabeled.slice(brushStart, brushEnd + 1)[index]?.timeAxisLabel ?? ''}
                       />
                       <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickLine={false} tickFormatter={(v) => Number(v).toFixed(1)} domain={leftDomain} width={32} />
                       <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} stroke="#6366f1" fontSize={9} tickLine={false} tickFormatter={(v) => String(Number(v))} width={28} />
@@ -897,7 +921,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                         const color = getLineColor(key);
                         const showLabels = showLabelsByMetric[key] === true;
                         const visibleLen = brushEnd - brushStart + 1;
-                        const displayData = chartData.slice(brushStart, brushEnd + 1);
+                        const displayData = chartDataLabeled.slice(brushStart, brushEnd + 1);
                         const isHighVariation = key === 'ethylene' || key === 'relative_humidity';
                         const maxLabels = key === 'ethylene'
                           ? (visibleLen > 15 ? 15 : 8)
@@ -976,7 +1000,7 @@ const TABLE_PRESETS = [
 ];
 
 const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean; onClose: () => void; deviceId?: string }) => {
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp } = useSettings();
   const [dateRange, setDateRange] = useState({
     start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
     end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
@@ -984,6 +1008,11 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
   const [selectedColumns, setSelectedColumns] = useState<string[]>(TABLE_PRESETS[0].columns);
   const [tableData, setTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const tableDataLabeled = useMemo(
+    () => tableData.map((row) => ({ ...row, timeStr: formatDateTime(row.timestamp) })),
+    [tableData, formatDateTime]
+  );
 
   const loadData = async () => {
     if (!deviceId) return;
@@ -1000,8 +1029,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
       const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
-        const timeStr = format(d, 'dd/MM/yyyy HH:mm');
-        const row: any = { timeStr, timestamp: d.getTime() };
+        const row: any = { timestamp: d.getTime() };
         CHART_METRIC_KEYS.forEach((key) => {
           let v = h[key];
           if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
@@ -1058,7 +1086,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     return String(v);
   };
 
-  const exportRows = [...tableData].reverse();
+  const exportRows = [...tableDataLabeled].reverse();
   const exportHeader = ['Fecha / Hora', ...selectedColumns.map((k) => CHART_METRIC_LABELS[k])];
 
   const downloadPDF = () => {
@@ -1087,7 +1115,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     exportRows.forEach((row: any) => {
       drawRow([row.timeStr, ...selectedColumns.map((k) => formatCellForExport(row, k))]);
     });
-    pdf.save(`datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`);
+    pdf.save(`datos_historicos_${deviceId || 'tabla'}_${formatFileTimestamp()}.pdf`);
   };
 
   const downloadCSV = () => {
@@ -1100,7 +1128,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.csv`;
+    a.download = `datos_historicos_${deviceId || 'tabla'}_${formatFileTimestamp()}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -1110,7 +1138,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     const ws = XLSX.utils.aoa_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Datos');
-    XLSX.writeFile(wb, `datos_historicos_${deviceId || 'tabla'}_${format(new Date(), 'yyyy-MM-dd_HHmm')}.xlsx`);
+    XLSX.writeFile(wb, `datos_historicos_${deviceId || 'tabla'}_${formatFileTimestamp()}.xlsx`);
   };
 
   return (
@@ -1210,7 +1238,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                     </tr>
                   </thead>
                   <tbody>
-                    {[...tableData].reverse().map((row: any, i: number) => (
+                    {[...tableDataLabeled].reverse().map((row: any, i: number) => (
                       <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.timeStr}</td>
                         {selectedColumns.map((key) => (

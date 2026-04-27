@@ -16,6 +16,7 @@ import { tunelRouter } from './routes/tunel.js';
 import { deviceNamesRouter } from './routes/deviceNames.js';
 import { deviceProcessFollowRouter } from './routes/deviceProcessFollow.js';
 import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripeningProcesses.js';
+import { deviceControlRouter } from './routes/deviceControl.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 
@@ -58,6 +59,7 @@ async function main() {
   app.use('/api/v1/device-names', authMiddleware, deviceNamesRouter);
   app.use('/api/v1/device-process-follow', authMiddleware, deviceProcessFollowRouter);
   app.use('/api/v1/ripening-processes', authMiddleware, ripeningProcessesRouter);
+  app.use('/api/v1/device-control', authMiddleware, deviceControlRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

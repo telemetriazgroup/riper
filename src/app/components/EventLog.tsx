@@ -3,8 +3,6 @@ import { ClipboardList, Calendar, Droplets, Filter } from 'lucide-react';
 import { Card, CardContent } from './ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { getMockEventLog, type LogEntry, type LogEvent, type EventKind } from '@/app/data/eventLog';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 
 const EVENT_KIND_LABELS: Record<EventKind, string> = {
   process_start: 'Inicio de proceso',
@@ -25,7 +23,7 @@ interface EventLogProps {
 }
 
 export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, formatDateTime } = useSettings();
   const [filter, setFilter] = useState<'all' | 'events' | 'samplings'>('all');
 
   const rawLog = useMemo(() => getMockEventLog(deviceId), [deviceId]);
@@ -83,7 +81,7 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
               {log.map((entry) => (
                 <tr key={entry.id} className="hover:bg-gray-50/80">
                   <td className="px-4 py-2.5 text-gray-600 whitespace-nowrap">
-                    {format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm", { locale: es })}
+                    {formatDateTime(entry.timestamp)}
                   </td>
                   <td className="px-4 py-2.5">
                     {entry.type === 'event' ? (

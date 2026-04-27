@@ -6,6 +6,7 @@ import { DeviceDetail } from '@/app/components/DeviceDetail';
 import { Recipes } from '@/app/components/Recipes';
 import { UsersList } from '@/app/components/Users';
 import { ProcessList } from '@/app/components/ProcessList';
+import { DeviceControlAdmin } from '@/app/components/DeviceControlAdmin';
 import { UserProfile } from '@/app/components/UserProfile';
 import { DetailedUserManual } from '@/app/components/DetailedUserManual';
 import { Toaster, toast } from 'sonner';
@@ -115,7 +116,7 @@ function AppContent() {
           <Dashboard onSelectDevice={handleDeviceSelect} />
         );
       case 'control':
-        return <Dashboard onSelectDevice={handleDeviceSelect} />;
+        return <DeviceControlAdmin />;
       case 'monitoring':
         return (
           <Dashboard
@@ -130,6 +131,8 @@ function AppContent() {
         return <Recipes />;
       case 'processes':
         return <ProcessList />;
+      case 'control-sessions':
+        return <DeviceControlAdmin />;
       case 'users':
         return <UsersList />;
       case 'profile':

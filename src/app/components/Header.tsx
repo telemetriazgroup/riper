@@ -1,7 +1,8 @@
 import React from 'react';
-import { Bell, Menu, Search, User, LogOut, Sun, Moon, Languages, Thermometer } from 'lucide-react';
+import { Bell, Menu, Search, User, LogOut, Sun, Moon, Languages, Thermometer, Clock } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { DISPLAY_TIMEZONE_PRESETS } from '@/app/lib/displayTimeZone';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -22,7 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout,
   onProfileClick,
 }) => {
-  const { theme, setTheme, language, setLanguage, tempUnit, toggleTempUnit, t } = useSettings();
+  const { theme, setTheme, language, setLanguage, tempUnit, toggleTempUnit, t, displayTimeZone, setDisplayTimeZone } =
+    useSettings();
 
   const toggleTheme = () => setTheme(theme === 'light' ? 'dark' : 'light');
   const toggleLanguage = () => setLanguage(language === 'es' ? 'en' : 'es');
@@ -48,6 +50,25 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-1 border-r border-border pr-2 mr-2">
+          <div
+            className="hidden sm:flex items-center gap-0.5 text-muted-foreground"
+            title={t('timezone_data_hint')}
+          >
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <select
+              className="max-w-[10.5rem] text-xs font-medium bg-transparent border border-border rounded-md px-1.5 py-1 text-foreground cursor-pointer focus:ring-1 focus:ring-blue-500 outline-none"
+              value={displayTimeZone}
+              onChange={(e) => setDisplayTimeZone(e.target.value)}
+              aria-label={t('timezone_display_label')}
+            >
+              {DISPLAY_TIMEZONE_PRESETS.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {t(p.labelKey) !== p.labelKey ? t(p.labelKey) : p.gmtLabel}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <Button 
             variant="ghost" 
             size="sm" 

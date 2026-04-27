@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { format, differenceInMinutes } from 'date-fns';
-import { es as esLocale } from 'date-fns/locale';
+import { differenceInMinutes } from 'date-fns';
 import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
@@ -16,6 +15,7 @@ import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 import { TunnelDeviceDetail } from '@/app/components/TunnelDeviceDetail';
 import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperativoSummaryPanel';
 import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
+import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -28,7 +28,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   const { history } = useDeviceHistory(deviceId);
   const [controlMode, setControlMode] = useState('manual');
   const [activeView, setActiveView] = useState(initialView);
-  const { t, convertTemp, tempUnit, formatTemp, toggleTempUnit, language } = useSettings();
+  const { t, convertTemp, tempUnit, formatTemp, toggleTempUnit, formatDateTime } = useSettings();
 
   useEffect(() => {
     if (!device) return;
@@ -69,9 +69,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
   }
 
   const lastCommFormatted =
-    lastSeenDate && !isNaN(lastSeenDate.getTime())
-      ? format(lastSeenDate, "dd/MM/yyyy HH:mm", { locale: language === 'es' ? esLocale : undefined })
-      : '—';
+    lastSeenDate && !isNaN(lastSeenDate.getTime()) ? formatDateTime(lastSeenDate) : '—';
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -167,6 +165,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
             tempUnit={tempUnit}
             toggleTempUnit={toggleTempUnit}
           />
+          <DeviceControlProcessPanel deviceId={deviceId} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* Left Column: Control Panel */}
           <div className="lg:col-span-1">
@@ -309,9 +308,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                        <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
                          <span className="text-gray-500">{t('madurador_process_start')}</span>
                          <span className="font-mono text-right text-xs">
-                           {format(new Date(device.madurador.fecha_inicio), 'dd/MM/yyyy HH:mm', {
-                             locale: language === 'es' ? esLocale : undefined,
-                           })}
+                           {formatDateTime(device.madurador.fecha_inicio)}
                          </span>
                        </div>
                      )}
@@ -320,9 +317,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                        <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
                          <span className="text-gray-500">{t('madurador_fecha_procesada')}</span>
                          <span className="font-mono text-right text-xs">
-                           {format(new Date(device.madurador.fecha_procesada), 'dd/MM/yyyy HH:mm', {
-                             locale: language === 'es' ? esLocale : undefined,
-                           })}
+                           {formatDateTime(device.madurador.fecha_procesada)}
                          </span>
                        </div>
                      )}
@@ -330,11 +325,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                        <span className="text-gray-500">{t('madurador_last_on')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.ultima_fecha_encendido
-                           ? format(
-                               new Date(device.madurador.ultima_fecha_encendido),
-                               'dd/MM/yyyy HH:mm',
-                               { locale: language === 'es' ? esLocale : undefined }
-                             )
+                           ? formatDateTime(device.madurador.ultima_fecha_encendido)
                            : '—'}
                        </span>
                      </div>
@@ -342,9 +333,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                        <span className="text-gray-500">{t('madurador_until')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.hasta
-                           ? format(new Date(device.madurador.hasta), 'dd/MM/yyyy HH:mm', {
-                               locale: language === 'es' ? esLocale : undefined,
-                             })
+                           ? formatDateTime(device.madurador.hasta)
                            : '—'}
                        </span>
                      </div>
@@ -352,9 +341,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                        <span className="text-gray-500">{t('madurador_last_sample')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.last_sample_fecha
-                           ? format(new Date(device.madurador.last_sample_fecha), 'dd/MM/yyyy HH:mm', {
-                               locale: language === 'es' ? esLocale : undefined,
-                             })
+                           ? formatDateTime(device.madurador.last_sample_fecha)
                            : '—'}
                        </span>
                      </div>
@@ -366,7 +353,6 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
                  <MaduradorOperativoSummaryPanel
                    summary={device.maduradorSummary}
                    ultimaFechaEncendido={device.madurador?.ultima_fecha_encendido}
-                   language={language}
                  />
                ) : null}
             </div>

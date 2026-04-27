@@ -21,6 +21,8 @@ import { sendControlCommand } from '@/app/lib/api';
 import { Device } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes } from 'date-fns';
+import { ControlProcessStartFlow } from '@/app/components/ControlProcessStartFlow';
+import type { StartControlProcessBody } from '@/app/lib/deviceControlProcessApi';
 
 interface ControlPanelProps {
   mode: string;
@@ -29,8 +31,18 @@ interface ControlPanelProps {
   device?: Device;
 }
 
+type ControlStartDraft = Omit<StartControlProcessBody, 'deviceId' | 'startedAt'>;
+
 export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, deviceId, device }) => {
-  const { t } = useSettings();
+  const { t, tempUnit } = useSettings();
+  const [flowOpen, setFlowOpen] = useState(false);
+  const [flowDraft, setFlowDraft] = useState<ControlStartDraft | null>(null);
+
+  const openStartFlow = (partial: ControlStartDraft) => {
+    if (!deviceId) return;
+    setFlowDraft(partial);
+    setFlowOpen(true);
+  };
 
   const modes = [
     { id: 'manual', label: t('manual_mode'), icon: Zap },
@@ -73,11 +85,37 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
       </div>
       <CardContent className="p-6">
         {mode === 'manual' && <ManualControl deviceId={deviceId} device={device} />}
-        {mode === 'homogenization' && <HomogenizationControl deviceId={deviceId} disabled={areProcessesDisabled} />}
-        {mode === 'ripening' && <RipeningControl deviceId={deviceId} disabled={areProcessesDisabled} />}
-        {mode === 'ventilation' && <VentilationControl deviceId={deviceId} disabled={areProcessesDisabled} />}
-        {mode === 'cooling' && <CoolingControl deviceId={deviceId} disabled={areProcessesDisabled} />}
+        {mode === 'homogenization' && (
+          <HomogenizationControl
+            deviceId={deviceId}
+            disabled={areProcessesDisabled}
+            onBeginStart={openStartFlow}
+            tempUnitKey={tempUnit}
+          />
+        )}
+        {mode === 'ripening' && (
+          <RipeningControl
+            deviceId={deviceId}
+            disabled={areProcessesDisabled}
+            onBeginStart={openStartFlow}
+            tempUnitKey={tempUnit}
+          />
+        )}
+        {mode === 'ventilation' && <VentilationControl deviceId={deviceId} disabled={areProcessesDisabled} onBeginStart={openStartFlow} />}
+        {mode === 'cooling' && (
+          <CoolingControl deviceId={deviceId} disabled={areProcessesDisabled} onBeginStart={openStartFlow} tempUnitKey={tempUnit} />
+        )}
       </CardContent>
+      <ControlProcessStartFlow
+        open={flowOpen}
+        onOpenChange={(o) => {
+          setFlowOpen(o);
+          if (!o) setFlowDraft(null);
+        }}
+        deviceId={deviceId}
+        draft={flowDraft}
+        onCompleted={() => {}}
+      />
     </Card>
   );
 };
@@ -403,30 +441,36 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
   );
 };
 
-const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: boolean }) => {
+const HomogenizationControl = ({
+  deviceId,
+  disabled,
+  onBeginStart,
+  tempUnitKey,
+}: {
+  deviceId?: string;
+  disabled?: boolean;
+  onBeginStart: (d: ControlStartDraft) => void;
+  tempUnitKey: string;
+}) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const [temp, setTemp] = useState(18);
   const [humidity, setHumidity] = useState(95);
   const [duration, setDuration] = useState(6);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleStart = async () => {
+  const handleStart = () => {
     if (!deviceId) return;
-    setIsSubmitting(true);
-    try {
-      await sendControlCommand(deviceId, 'set_process', {
-        type: 'Homogenization',
-        name: 'Homogenización Manual',
+    onBeginStart({
+      processType: 'Homogenization',
+      displayLabel: t('homogenization'),
+      params: {
         setPoint: temp,
         humiditySetPoint: humidity,
-        durationHours: duration
-      });
-      toast.success(t('start') + " OK");
-    } catch (e) {
-      toast.error("Error");
-    } finally {
-      setIsSubmitting(false);
-    }
+        durationHours: duration,
+        name: 'Homogenización',
+        tempUnit: tempUnitKey,
+      },
+      durationHours: duration,
+    });
   };
 
   return (
@@ -466,40 +510,47 @@ const HomogenizationControl = ({ deviceId, disabled }: { deviceId?: string, disa
         <p className="font-medium text-gray-900">De ~{convertTemp(8)}°{tempUnit} a {convertTemp(temp)}°{tempUnit}, humedad {humidity}%, en {duration} h</p>
       </div>
 
-      <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleStart} disabled={isSubmitting || disabled}>
-        {isSubmitting ? t('starting') : t('start_process')}
+      <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleStart} disabled={disabled}>
+        {t('start_process')}
       </Button>
     </div>
   );
 };
 
-const RipeningControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: boolean }) => {
+const RipeningControl = ({
+  deviceId,
+  disabled,
+  onBeginStart,
+  tempUnitKey,
+}: {
+  deviceId?: string;
+  disabled?: boolean;
+  onBeginStart: (d: ControlStartDraft) => void;
+  tempUnitKey: string;
+}) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const [temp, setTemp] = useState(20);
   const [humidity, setHumidity] = useState(95);
   const [ethylene, setEthylene] = useState(100);
   const [co2, setCo2] = useState(3.5);
   const [duration, setDuration] = useState(72);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleStart = async () => {
+  const handleStart = () => {
     if (!deviceId) return;
-    setIsSubmitting(true);
-    try {
-      await sendControlCommand(deviceId, 'set_process', {
-        type: 'Ripening',
-        name: 'Maduración Manual',
+    onBeginStart({
+      processType: 'Ripening',
+      displayLabel: t('ripening'),
+      params: {
         setPoint: temp,
+        humiditySetPoint: humidity,
         durationHours: duration,
         ethylene,
-        co2
-      });
-      toast.success("OK");
-    } catch (e) {
-      toast.error("Error");
-    } finally {
-      setIsSubmitting(false);
-    }
+        co2,
+        name: 'Maduración',
+        tempUnit: tempUnitKey,
+      },
+      durationHours: duration,
+    });
   };
 
   return (
@@ -529,28 +580,39 @@ const RipeningControl = ({ deviceId, disabled }: { deviceId?: string, disabled?:
         <RangeControl label={t('process_time')} value={duration} unit="Horas" min={24} max={120} onChange={setDuration} disabled={disabled} />
       </ControlGroup>
 
-      <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleStart} disabled={isSubmitting || disabled}>
-        {isSubmitting ? t('starting') : t('start_process')}
+      <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleStart} disabled={disabled}>
+        {t('start_process')}
       </Button>
     </div>
   );
 };
 
-const VentilationControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: boolean }) => {
+const VentilationControl = ({
+  deviceId,
+  disabled,
+  onBeginStart,
+}: {
+  deviceId?: string;
+  disabled?: boolean;
+  onBeginStart: (d: ControlStartDraft) => void;
+}) => {
   const { t } = useSettings();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const handleStart = async () => {
+  const [co2, setCo2] = useState(0.5);
+  const [durationMin, setDurationMin] = useState(60);
+  const durationHours = Math.max(durationMin / 60, 1 / 60);
+
+  const handleStart = () => {
     if (!deviceId) return;
-    setIsSubmitting(true);
-    try {
-       await sendControlCommand(deviceId, 'set_process', {
-         type: 'Ventilation',
-         name: 'Ventilación Manual',
-         durationHours: 1
-       });
-       toast.success("OK");
-    } catch (e) { toast.error("Error"); }
-    finally { setIsSubmitting(false); }
+    onBeginStart({
+      processType: 'Ventilation',
+      displayLabel: t('ventilation'),
+      params: {
+        targetCo2: co2,
+        durationMin,
+        name: 'Ventilación',
+      },
+      durationHours,
+    });
   };
   return (
   <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
@@ -559,29 +621,41 @@ const VentilationControl = ({ deviceId, disabled }: { deviceId?: string, disable
       <p>Evacuación rápida de gases (Etileno/CO2) post-maduración.</p>
     </div>
     <ControlGroup title="Parámetros">
-       <RangeControl label={t('target_co2')} value={0.5} unit="%" min={0} max={5} onChange={() => {}} disabled={disabled} />
-       <RangeControl label={t('max_duration')} value={60} unit="min" min={10} max={180} onChange={() => {}} disabled={disabled} />
+       <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} />
+       <RangeControl label={t('max_duration')} value={durationMin} unit="min" min={10} max={180} onChange={setDurationMin} disabled={disabled} />
     </ControlGroup>
-    <Button className="w-full" onClick={handleStart} disabled={isSubmitting || disabled}>{isSubmitting ? t('starting') : t('start')}</Button>
+    <Button className="w-full" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>
   </div>
 )};
 
-const CoolingControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: boolean }) => {
+const CoolingControl = ({
+  deviceId,
+  disabled,
+  onBeginStart,
+  tempUnitKey,
+}: {
+  deviceId?: string;
+  disabled?: boolean;
+  onBeginStart: (d: ControlStartDraft) => void;
+  tempUnitKey: string;
+}) => {
   const { t, convertTemp, tempUnit } = useSettings();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const handleStart = async () => {
+  const [target, setTarget] = useState(10);
+  const [rampHours, setRampHours] = useState(8);
+
+  const handleStart = () => {
     if (!deviceId) return;
-    setIsSubmitting(true);
-    try {
-       await sendControlCommand(deviceId, 'set_process', {
-         type: 'Cooling',
-         name: 'Cooling Manual',
-         durationHours: 8,
-         setPoint: 10
-       });
-       toast.success("OK");
-    } catch (e) { toast.error("Error"); }
-    finally { setIsSubmitting(false); }
+    onBeginStart({
+      processType: 'Cooling',
+      displayLabel: t('cooling'),
+      params: {
+        setPoint: target,
+        durationHours: rampHours,
+        name: 'Enfriamiento',
+        tempUnit: tempUnitKey,
+      },
+      durationHours: rampHours,
+    });
   };
 
   return (
@@ -593,15 +667,18 @@ const CoolingControl = ({ deviceId, disabled }: { deviceId?: string, disabled?: 
     <ControlGroup title={t('settings')}>
       <RangeControl 
         label={t('final_temperature')} 
-        value={convertTemp(10)} 
+        value={convertTemp(target)} 
         unit={`°${tempUnit}`} 
         min={convertTemp(5)} 
         max={convertTemp(15)} 
-        onChange={() => {}} 
+        onChange={(val: number) => {
+             const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
+             setTarget(Number(cVal.toFixed(1)));
+          }} 
         disabled={disabled}
       />
-      <RangeControl label={t('cooling_ramp')} value={8} unit="Horas" min={2} max={24} onChange={() => {}} disabled={disabled} />
+      <RangeControl label={t('cooling_ramp')} value={rampHours} unit="Horas" min={2} max={24} onChange={setRampHours} disabled={disabled} />
     </ControlGroup>
-    <Button className="w-full bg-blue-600" onClick={handleStart} disabled={isSubmitting || disabled}>{isSubmitting ? t('starting') : t('start')}</Button>
+    <Button className="w-full bg-blue-600" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>
   </div>
 )};

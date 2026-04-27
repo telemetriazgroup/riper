@@ -1,23 +1,15 @@
 import React from 'react';
 import type { MaduradorHistorialTramo, MaduradorOperativoSummary } from '@/app/data';
-import { format } from 'date-fns';
-import { es, enUS } from 'date-fns/locale';
-
-function fmtDate(iso: string | undefined, lang: string): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return format(d, 'dd/MM/yyyy HH:mm', { locale: lang === 'es' ? es : enUS });
-}
+import { useSettings } from '@/app/contexts/SettingsContext';
 
 function TramosTable({
   title,
   rows,
-  lang,
+  fmtDate,
 }: {
   title: string;
   rows?: MaduradorHistorialTramo[];
-  lang: string;
+  fmtDate: (iso: string | undefined) => string;
 }) {
   if (!rows?.length) return null;
   return (
@@ -37,8 +29,8 @@ function TramosTable({
             {rows.map((r, i) => (
               <tr key={i} className="border-t border-gray-100">
                 <td className="p-2 font-mono">{r.valor ?? '—'}</td>
-                <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.desde, lang)}</td>
-                <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.hasta, lang)}</td>
+                <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.desde)}</td>
+                <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.hasta)}</td>
                 <td className="p-2">{r.estado ?? '—'}</td>
               </tr>
             ))}
@@ -49,7 +41,7 @@ function TramosTable({
   );
 }
 
-function formatUltimaAlarmas(entries: unknown[], lang: string): React.ReactNode {
+function formatUltimaAlarmas(entries: unknown[], fmtDate: (iso: string | undefined) => string): React.ReactNode {
   return entries.map((entry, i) => {
     if (!entry || typeof entry !== 'object') return <li key={i}>{String(entry)}</li>;
     const parts: string[] = [];
@@ -57,7 +49,7 @@ function formatUltimaAlarmas(entries: unknown[], lang: string): React.ReactNode 
       if (v && typeof v === 'object' && 'numero' in (v as object)) {
         const o = v as { numero?: unknown; desde?: string; hasta?: string };
         parts.push(
-          `${k}: #${o.numero ?? '—'} (${fmtDate(o.desde, lang)} → ${fmtDate(o.hasta, lang)})`
+          `${k}: #${o.numero ?? '—'} (${fmtDate(o.desde)} → ${fmtDate(o.hasta)})`
         );
       } else {
         parts.push(`${k}: ${JSON.stringify(v)}`);
@@ -74,14 +66,14 @@ function formatUltimaAlarmas(entries: unknown[], lang: string): React.ReactNode 
 interface MaduradorOperativoSummaryPanelProps {
   summary: MaduradorOperativoSummary;
   ultimaFechaEncendido?: string | null;
-  language: string;
 }
 
 export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryPanelProps> = ({
   summary: s,
   ultimaFechaEncendido,
-  language,
 }) => {
+  const { formatDateTime } = useSettings();
+  const fmtDate = (iso: string | undefined) => (iso == null || iso === '' ? '—' : formatDateTime(iso));
   const alarmas = s.alarmas as {
     numero_alarma?: number;
     activas?: unknown[];
@@ -105,11 +97,11 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
         </div>
         <div className="border-b border-gray-50 pb-2">
           <span className="text-gray-500 text-xs">Última fecha encendido</span>
-          <p className="font-mono text-xs mt-0.5">{fmtDate(ultimaFechaEncendido ?? undefined, language)}</p>
+          <p className="font-mono text-xs mt-0.5">{fmtDate(ultimaFechaEncendido ?? undefined)}</p>
         </div>
         <div className="border-b border-gray-50 pb-2">
           <span className="text-gray-500 text-xs">Última fecha apagado</span>
-          <p className="font-mono text-xs mt-0.5">{fmtDate(s.ultima_fecha_apagado ?? undefined, language)}</p>
+          <p className="font-mono text-xs mt-0.5">{fmtDate(s.ultima_fecha_apagado ?? undefined)}</p>
         </div>
         {cc && (
           <div className="border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-1">
@@ -140,16 +132,16 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
           ) : null}
           <p className="text-xs font-medium text-gray-800 mb-1">Últimas alarmas</p>
           <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
-            {formatUltimaAlarmas(alarmas.ultima_alarmas ?? [], language)}
+            {formatUltimaAlarmas(alarmas.ultima_alarmas ?? [], fmtDate)}
           </ul>
         </div>
       ) : null}
 
-      <TramosTable title="Historial SP etileno" rows={s.historial_sp_etileno} lang={language} />
-      <TramosTable title="Histórico set point (temperatura)" rows={s.historico_set_point} lang={language} />
-      <TramosTable title="Historial humidity set point" rows={s.historial_humidity_set_point} lang={language} />
-      <TramosTable title="Historial set point CO₂" rows={s.historial_set_point_co2} lang={language} />
-      <TramosTable title="Historial power state" rows={s.historial_power_state} lang={language} />
+      <TramosTable title="Historial SP etileno" rows={s.historial_sp_etileno} fmtDate={fmtDate} />
+      <TramosTable title="Histórico set point (temperatura)" rows={s.historico_set_point} fmtDate={fmtDate} />
+      <TramosTable title="Historial humidity set point" rows={s.historial_humidity_set_point} fmtDate={fmtDate} />
+      <TramosTable title="Historial set point CO₂" rows={s.historial_set_point_co2} fmtDate={fmtDate} />
+      <TramosTable title="Historial power state" rows={s.historial_power_state} fmtDate={fmtDate} />
     </div>
   );
 };

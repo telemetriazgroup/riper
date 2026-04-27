@@ -3,7 +3,12 @@ import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession } from '@/app/lib/gourmet';
 import { isFleetDemoSession } from '@/app/lib/fleetDemo';
 import { fetchFleetDemoMaduradorDetail, fetchFleetDemoMaduradorList } from '@/app/lib/maduradorFleetDirect';
-import { buildMaduradorHistoryFromDevice, getMaduradorDevicesCached, hasMaduradorIdentificador } from '@/app/lib/madurador';
+import {
+  fetchMaduradorRangoHistoryForImei,
+  getMaduradorDevicesCached,
+  hasMaduradorIdentificador,
+  shouldUseMaduradorRangoHistory,
+} from '@/app/lib/madurador';
 import {
   GOURMET_TUNEL_DEVICE_ID,
   getCachedGourmetTunnelDevice,
@@ -190,9 +195,9 @@ export async function fetchDeviceHistory(
   id: string,
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
-  if (isFleetDemoSession()) {
-    const dev = await fetchDevice(id);
-    return buildMaduradorHistoryFromDevice(dev, options ?? {});
+  if (shouldUseMaduradorRangoHistory()) {
+    const { points } = await fetchMaduradorRangoHistoryForImei(id, options ?? {});
+    return points;
   }
   if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
@@ -230,10 +235,6 @@ export async function fetchDeviceHistory(
         power_kwh: op.power_kwh,
       },
     ];
-  }
-  if (hasMaduradorIdentificador()) {
-    const dev = await fetchDevice(id);
-    return buildMaduradorHistoryFromDevice(dev, options);
   }
   if (isGourmetSession()) {
     const pts = buildGourmetHistoryPoints();

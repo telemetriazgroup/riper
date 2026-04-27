@@ -6,10 +6,10 @@ import type {
   OperationalData,
   TelemetryData,
 } from '@/app/data';
-import type { HistoryPoint } from '@/app/lib/api';
-import { RIPENER_API_URL } from '@/app/config';
+import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
+import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 
 export function hasMaduradorIdentificador(): boolean {
@@ -470,6 +470,170 @@ export function buildMaduradorHistoryFromDevice(
     });
   }
   return pts;
+}
+
+function maduradorDemoApiBase(): string {
+  return MADURADOR_DEMO_API_URL.replace(/\/$/, '');
+}
+
+/** Formato query en API: `YYYY-MM-DD_HH-mm-ss` (ver `ejemplo.md` / buscar_datos_madurador_rango). */
+function formatMaduradorRangoParam(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
+
+function extractRangoDatos(row: Record<string, unknown>): { cantidad_datos: number; datos: Record<string, unknown>[] } {
+  const rawList = row.datos;
+  const datos = Array.isArray(rawList) ? (rawList as Record<string, unknown>[]) : [];
+  const nRaw = toNum(row.cantidad_datos);
+  const cantidad_datos =
+    nRaw != null && Number.isFinite(nRaw)
+      ? Math.max(0, Math.round(nRaw))
+      : datos.length;
+  return { cantidad_datos, datos };
+}
+
+function parseBuscarDatosRangoJson(json: unknown): { cantidad_datos: number; datos: Record<string, unknown>[] } {
+  if (Array.isArray(json) && json.length > 0) {
+    const first = json[0];
+    if (first && typeof first === 'object' && !Array.isArray(first) && 'datos' in first) {
+      return extractRangoDatos(first as Record<string, unknown>);
+    }
+    const asRows = json.filter((x) => x && typeof x === 'object') as Record<string, unknown>[];
+    if (asRows.length && (Object.prototype.hasOwnProperty.call(asRows[0], 'fecha') || Object.prototype.hasOwnProperty.call(asRows[0], 'return_air'))) {
+      return { cantidad_datos: asRows.length, datos: asRows };
+    }
+    if (first && typeof first === 'object' && !Array.isArray(first)) {
+      return extractRangoDatos(first as Record<string, unknown>);
+    }
+  }
+  if (json && typeof json === 'object' && !Array.isArray(json)) {
+    return extractRangoDatos(json as Record<string, unknown>);
+  }
+  return { cantidad_datos: 0, datos: [] };
+}
+
+/**
+ * Convierte una muestra de `datos[]` (buscar_datos_madurador_rango) a `HistoryPoint`.
+ * Temperatura de la serie: `return_air`; etileno: `campo_1` → `ethylene`.
+ */
+export function mapMaduradorDatoMuestraToHistoryPoint(row: Record<string, unknown>): HistoryPoint {
+  const flat = flatMaduradorRow(row);
+  const ts =
+    parseMaduradorMongoDate(flat.fecha) ??
+    (typeof flat.fecha === 'string' && flat.fecha.trim() ? flat.fecha.trim() : null) ??
+    new Date().toISOString();
+
+  const return_air = inRange(toNum(flat.return_air), -40, 120) ?? 0;
+  const temp_supply_1 = inRange(toNum(flat.temp_supply_1), -40, 120) ?? return_air;
+  const rh = sanitizeHumidity(flat.relative_humidity) ?? 0;
+  const eth = inRange(toNum(flat.campo_1 ?? flat.ethylene), 0, 500);
+  const co2n = inRange(toNum(flat.co2_reading), 0, 100);
+
+  const evap = inRange(toNum(flat.evaporation_coil), -60, 80) ?? 0;
+  const cond = inRange(toNum(flat.condensation_coil), -20, 90) ?? 0;
+  const amb = inRange(toNum(flat.ambient_air), -40, 60) ?? 0;
+  const avlRaw = toNum(flat.avl);
+  const avl_pct = fanPctFromAvl(avlRaw);
+  const lineV = inRange(toNum(flat.line_voltage), 90, 600) ?? 0;
+  const lf = inRange(toNum(flat.line_frequency), 0, 100) ?? 60;
+  const cap = inRange(toNum(flat.capacity_load), 0, 100) ?? 0;
+  const ps = toNum(flat.power_state);
+  const power_state: 0 | 1 = ps === 1 ? 1 : 0;
+  const hsp = inRange(toNum(flat.humidity_set_point), 0, 100) ?? 0;
+  const sp = inRange(toNum(flat.set_point), -40, 40) ?? 0;
+  const spO2 = inRange(toNum(flat.set_point_o2), 0, 100);
+  const spCo2 = inRange(toNum(flat.set_point_co2), 0, 100);
+  const spEth = inRange(toNum(flat.sp_ethyleno), 0, 1e4) ?? 0;
+  const o2 = inRange(toNum(flat.o2_reading), 0, 100);
+  const inj = toNum(flat.iCtrlRip);
+
+  return {
+    timestamp: ts,
+    temp_supply_1,
+    return_air,
+    evaporation_coil: evap,
+    condensation_coil: cond,
+    compress_coil_1: inRange(toNum(flat.compress_coil_1), -60, 200) ?? 0,
+    ambient_air: amb,
+    cargo_1_temp: inRange(toNum(flat.cargo_1_temp), -40, 100),
+    cargo_2_temp: inRange(toNum(flat.cargo_2_temp), -40, 100),
+    cargo_3_temp: inRange(toNum(flat.cargo_3_temp), -40, 100),
+    cargo_4_temp: inRange(toNum(flat.cargo_4_temp), -40, 100),
+    relative_humidity: rh,
+    avl_pct,
+    line_voltage: lineV,
+    line_frequency: lf,
+    co2_reading: co2n,
+    o2_reading: o2,
+    set_point: sp,
+    capacity_load: cap,
+    power_state,
+    humidity_set_point: hsp,
+    set_point_o2: spO2,
+    set_point_co2: spCo2,
+    sp_ethyleno: spEth,
+    ethylene: eth,
+    iCtrlRip: inj === 1 ? 1 : 0,
+    power_kwh: inRange(toNum(flat.power_kwh), 0, 1e9) ?? 0,
+  };
+}
+
+/**
+ * GET `.../Madurador/buscar_datos_madurador_rango/?imei=…` (y opc. rango de fechas).
+ * Si `cantidad_datos === 0` o `datos` vacío, devuelve `points: []` (vista: sin datos últimas 12h).
+ */
+export async function fetchMaduradorRangoHistoryForImei(
+  imei: string,
+  options: FetchHistoryOptions = {}
+): Promise<{ cantidad_datos: number; points: HistoryPoint[] }> {
+  const base = maduradorDemoApiBase();
+  const imeiQ = encodeURIComponent(imei.trim());
+  let url: string;
+  if (options.fecha_inicio && options.fecha_fin) {
+    const a = new Date(options.fecha_inicio);
+    const b = new Date(options.fecha_fin);
+    if (Number.isFinite(a.getTime()) && Number.isFinite(b.getTime()) && b > a) {
+      const params = new URLSearchParams();
+      params.set('imei', imei.trim());
+      params.set('fecha_inicio', formatMaduradorRangoParam(a));
+      params.set('fecha_fin', formatMaduradorRangoParam(b));
+      url = `${base}/Madurador/buscar_datos_madurador_rango/?${params.toString()}`;
+    } else {
+      url = `${base}/Madurador/buscar_datos_madurador_rango/?imei=${imeiQ}`;
+    }
+  } else {
+    /** Por defecto solo `imei` (misma URL que en documentación; el upstream suele servir ~últimas 12 h). */
+    url = `${base}/Madurador/buscar_datos_madurador_rango/?imei=${imeiQ}`;
+  }
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(t || `madurador_rango: ${res.status}`);
+  }
+  const text = await res.text();
+  if (!text.trim()) return { cantidad_datos: 0, points: [] };
+  const json: unknown = JSON.parse(text);
+  const { cantidad_datos, datos } = parseBuscarDatosRangoJson(json);
+  if (cantidad_datos === 0 || !datos.length) {
+    return { cantidad_datos, points: [] };
+  }
+  const points = datos
+    .map((row) => {
+      try {
+        return mapMaduradorDatoMuestraToHistoryPoint(row);
+      } catch {
+        return null;
+      }
+    })
+    .filter((p): p is HistoryPoint => p != null);
+  points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  return { cantidad_datos, points };
+}
+
+/** Úsese historial real por rango si aplica (flota demo, identificador Madurador, ULTRAORGANICS). */
+export function shouldUseMaduradorRangoHistory(): boolean {
+  return isFleetDemoSession() || hasMaduradorIdentificador() || isUltraorganicsSession();
 }
 
 export function formatMaduradorScalar(value: string | number | null | undefined): string {

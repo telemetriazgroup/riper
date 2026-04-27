@@ -9,7 +9,7 @@ import { updateDeviceName } from '@/app/lib/api';
 import { applySobrenombresToDevice, deviceNameStorageKey, resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 import { toast } from 'sonner';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { differenceInMinutes, formatDistanceToNow, format } from 'date-fns';
+import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 
 interface DeviceCardProps {
@@ -20,7 +20,7 @@ interface DeviceCardProps {
 }
 
 export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefresh }) => {
-  const { convertTemp, tempUnit, t, language } = useSettings();
+  const { convertTemp, tempUnit, t, language, formatDateTime } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(() => resolveDeviceDisplayName(device));
   const [isSaving, setIsSaving] = useState(false);
@@ -195,7 +195,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
                  <WifiOff className="h-4 w-4 shrink-0" />
                  {t('device_disconnected')}
                </div>
-               <div className="text-xs mt-1">{t('last_connection')}: {isDateValid ? format(lastSeenDate, 'dd/MM/yyyy HH:mm') : '—'}</div>
+               <div className="text-xs mt-1">{t('last_connection')}: {isDateValid ? formatDateTime(lastSeenDate) : '—'}</div>
                <div className="text-xs text-amber-900/90 mt-0.5">{t('last_values_registered_hint')}</div>
              </div>
              <div className="grid grid-cols-2 gap-4">

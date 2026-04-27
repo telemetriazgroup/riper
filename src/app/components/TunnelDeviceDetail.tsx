@@ -4,8 +4,6 @@ import { ArrowLeft, Thermometer, Wind, Activity, Droplets, Power, Loader2, Layer
 import { Button } from '@/app/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { format } from 'date-fns';
-import { es as esLocale } from 'date-fns/locale';
 import { clsx } from 'clsx';
 import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
 
@@ -15,15 +13,13 @@ interface TunnelDeviceDetailProps {
 }
 
 export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, onBack }) => {
-  const { t, convertTemp, tempUnit, language } = useSettings();
+  const { t, convertTemp, tempUnit, language, formatDateTime } = useSettings();
   const tunnel = device.tunnel;
   if (!tunnel) return null;
 
   const muestra = tunnel.muestraFecha;
   const muestraFmt =
-    muestra && !isNaN(new Date(muestra).getTime())
-      ? format(new Date(muestra), 'dd/MM/yyyy HH:mm', { locale: language === 'es' ? esLocale : undefined })
-      : '—';
+    muestra && !isNaN(new Date(muestra).getTime()) ? formatDateTime(muestra) : '—';
 
   const avgLabel =
     tunnel.averageMode === 'powered_on'

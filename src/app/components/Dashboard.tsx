@@ -8,7 +8,6 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { Button } from './ui/Button';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 import { totalNumeroAlarmaFleet, countProcesosEnCurso } from '@/app/lib/fleetKpi';
 
 interface DashboardProps {
@@ -17,7 +16,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const { devices, isLoading, isError, mutate } = useDevices();
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, formatDateTime, formatDateShort, formatFileTimestamp } = useSettings();
   const [downloading, setDownloading] = useState(false);
   const [deviceSearch, setDeviceSearch] = useState('');
 
@@ -107,7 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
       pdf.setFontSize(9);
       pdf.setFont('helvetica', 'normal');
       pdf.text(t('executive_summary'), margin + logoW + 6, 18);
-      pdf.text(format(new Date(), "dd/MM/yyyy HH:mm"), pageW - margin - 40, 14);
+      pdf.text(formatDateTime(new Date()), pageW - margin - 40, 14);
       pdf.setTextColor(0, 0, 0);
       y = headerH + margin;
 
@@ -121,7 +120,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
 
       pdf.setFontSize(8);
       pdf.setTextColor(0.4, 0.4, 0.45);
-      addText((t('fleet_status') as string).toLowerCase() + ' · ' + format(new Date(), "dd/MM/yyyy HH:mm"), margin);
+      addText((t('fleet_status') as string).toLowerCase() + ' · ' + formatDateTime(new Date()), margin);
       pdf.setTextColor(0, 0, 0);
       y += 4;
 
@@ -191,7 +190,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
       });
       y += headH;
 
-      const formatLast = (d: Device) => d.last_seen ? format(new Date(d.last_seen), 'dd/MM HH:mm') : '—';
+      const formatLast = (d: Device) => d.last_seen ? formatDateShort(d.last_seen) : '—';
       const spaceFirstPage = pageH - y - 14;
       const spaceNextPage = pageH - margin - headH - 14;
       const maxRowsPerPage = Math.max(1, Math.min(
@@ -237,12 +236,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
       pdf.setFontSize(6);
       pdf.setTextColor(0.5, 0.5, 0.55);
       pdf.text(
-        t('executive_summary') + ' · ZTRACK TELEMETRY · ' + format(new Date(), "dd/MM/yyyy HH:mm"),
+        t('executive_summary') + ' · ZTRACK TELEMETRY · ' + formatDateTime(new Date()),
         margin,
         y
       );
 
-      pdf.save(`ZTRACK_Resumen_Ejecutivo_${format(new Date(), 'yyyy-MM-dd_HHmm')}.pdf`);
+      pdf.save(`ZTRACK_Resumen_Ejecutivo_${formatFileTimestamp()}.pdf`);
       toast.success(t('language') === 'es' ? 'Resumen descargado.' : 'Summary downloaded.');
     } catch (e) {
       console.error(e);
