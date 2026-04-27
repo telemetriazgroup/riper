@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import type { KeyedMutator } from 'swr';
 import { Device } from '@/app/data';
+import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
+import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
+import { getFleetProcesoMaduradorLabel, getPanelControlProcessTitle } from '@/app/lib/fleetProcessLabels';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer, Layers } from 'lucide-react';
 import { cn } from '@/app/lib/utils';
@@ -17,9 +20,11 @@ interface DeviceCardProps {
   onClick: (deviceId: string) => void;
   /** SWR `mutate` de la lista de dispositivos: permite alias optimista + revalidación. */
   onRefresh?: KeyedMutator<Device[]>;
+  /** Sesión activa iniciada desde el panel (prioridad sobre proceso API Madurador). */
+  panelActiveSession?: DeviceControlSessionRow | null;
 }
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefresh }) => {
+export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefresh, panelActiveSession }) => {
   const { convertTemp, tempUnit, t, language, formatDateTime } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(() => resolveDeviceDisplayName(device));
@@ -277,22 +282,65 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
               </div>
             </div>
 
-            {device.process && (
+            {(panelActiveSession || device.process) && (
               <div className="col-span-2 mt-2 pt-2 border-t border-gray-100">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-medium text-blue-600">{device.process.currentPhase}</span>
-                  <span className="text-xs text-gray-500 flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
-                  </span>
-                </div>
-                {device.process.showProgressBar !== false && (
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className="bg-blue-600 h-1.5 rounded-full transition-all"
-                      style={{ width: `${device.process.progress}%` }}
-                    />
+                {panelActiveSession ? (
+                  <div className="rounded-md border border-indigo-200/80 bg-indigo-50/60 px-2 py-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                      {t('fleet_process_panel')}
+                    </div>
+                    <p className="text-sm font-semibold text-indigo-950 mt-0.5">
+                      {getPanelControlProcessTitle(
+                        panelActiveSession.process_type,
+                        panelActiveSession.display_label,
+                        t
+                      )}
+                    </p>
+                    <div className="text-[11px] text-indigo-900/90 mt-1 space-y-0.5">
+                      <div>
+                        <span className="text-indigo-700/80">{t('start')}: </span>
+                        {formatDateTime(panelActiveSession.started_at)}
+                      </div>
+                      <div>
+                        <span className="text-indigo-700/80">{t('control_process_estimated_end')}: </span>
+                        {formatDateTime(panelActiveSession.estimated_end_at)}
+                      </div>
+                    </div>
+                    <div className="w-full bg-indigo-200/80 rounded-full h-1.5 mt-2">
+                      <div
+                        className="bg-indigo-600 h-1.5 rounded-full transition-all"
+                        style={{ width: `${controlSessionProgressPct(panelActiveSession)}%` }}
+                      />
+                    </div>
                   </div>
-                )}
+                ) : device.process ? (
+                  <div>
+                    <div className="flex justify-between items-center mb-1 gap-2">
+                      <span className="text-xs font-medium text-blue-600">
+                        {getFleetProcesoMaduradorLabel(device.procesoApi, t)}
+                      </span>
+                      <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                        <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
+                      <div>
+                        {t('start')}: {formatDateTime(device.process.startTime)}
+                      </div>
+                      <div>
+                        {t('end')}: {formatDateTime(device.process.endTime)}
+                      </div>
+                    </div>
+                    {device.process.showProgressBar !== false && (
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-600 h-1.5 rounded-full transition-all"
+                          style={{ width: `${device.process.progress}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
             )}
             

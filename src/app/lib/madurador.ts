@@ -359,6 +359,9 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
 
   const endProcess = row.hasta != null ? String(row.hasta) : lastSeen;
 
+  const hasProcessInfo =
+    row.fecha_inicio != null || (Boolean(procesoRaw) && !isManual);
+
   return {
     id: imei,
     nombreApi: name,
@@ -371,18 +374,19 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     procesoApi: procesoRaw || 'Manual',
     idProcesoApi: idProcesoVal,
     numeroAlarmaTotal: numAlRounded,
-    process:
-      row.fecha_inicio != null
-        ? {
-            name: procesoLabel,
-            progress: computeMaduradorProcessProgress(row, isManual),
-            startTime: String(row.fecha_inicio),
-            endTime: endProcess,
-            currentPhase: procesoLabel,
-            timeLeft: formatProcessTimeLeft(row),
-            showProgressBar: !isManual,
-          }
-        : undefined,
+    process: hasProcessInfo
+      ? {
+          name: procesoLabel,
+          progress: computeMaduradorProcessProgress(row, isManual),
+          startTime: String(
+            row.fecha_inicio ?? row.fecha_procesada ?? (parseMaduradorMongoDate(flat.fecha) ?? lastSeen)
+          ),
+          endTime: endProcess,
+          currentPhase: procesoLabel,
+          timeLeft: formatProcessTimeLeft(row),
+          showProgressBar: row.fecha_inicio != null && !isManual,
+        }
+      : undefined,
     madurador,
     maduradorSummary,
   };
@@ -476,10 +480,13 @@ function maduradorDemoApiBase(): string {
   return MADURADOR_DEMO_API_URL.replace(/\/$/, '');
 }
 
-/** Formato query en API: `YYYY-MM-DD_HH-mm-ss` (ver `ejemplo.md` / buscar_datos_madurador_rango). */
+/**
+ * Fechas en query de `buscar_datos_madurador_rango` (misma forma que en historial y URLs como
+ * `...&fecha_inicio=2026-04-26T10:12:12&fecha_fin=...`).
+ */
 function formatMaduradorRangoParam(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function extractRangoDatos(row: Record<string, unknown>): { cantidad_datos: number; datos: Record<string, unknown>[] } {
