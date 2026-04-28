@@ -6,6 +6,11 @@ export const maduradorRouter = express.Router();
 const ULTRAORGANICS_EMAIL = 'ultraorganics@riper.local';
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
 
+/** Listado upstream sin filtrar IMEI; por defecto el mismo endpoint que empresa 2001. */
+function superadminIdentificador() {
+  return String(process.env.MADURADOR_SUPERADMIN_IDENTIFICADOR ?? '2001').trim();
+}
+
 function rowImeiFromMaduradorRow(row) {
   if (!row || typeof row !== 'object') return '';
   const flat = { ...row };
@@ -39,6 +44,30 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
     const base = (process.env.MADURADOR_API_BASE || 'http://161.132.53.51:9051').replace(/\/$/, '');
     const ctrl = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined;
     const email = String(req.user?.email || '').toLowerCase();
+    /** JWT `role === 'superadmin'`: mismo upstream ?identificador= sin filtrado por sufijo IMEI */
+    const jwtSuperadmin = req.user?.role === 'superadmin';
+
+    if (jwtSuperadmin) {
+      const iden = superadminIdentificador();
+      const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(iden)}`;
+      const r = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl });
+      if (!r.ok) {
+        console.error('[madurador] superadmin upstream', r.status, url);
+        return res.status(502).json({ error: 'madurador_upstream', message: `upstream ${r.status}` });
+      }
+      const text = await r.text();
+      let json;
+      try {
+        json = text ? JSON.parse(text) : [];
+      } catch (e) {
+        console.error('[madurador] superadmin json', e);
+        return res.status(502).json({ error: 'madurador_parse', message: 'invalid json' });
+      }
+      if (!Array.isArray(json)) {
+        return res.json({ data: [] });
+      }
+      return res.json({ data: json });
+    }
 
     if (email === ULTRAORGANICS_EMAIL) {
       const idents = ['1001', '2001', '3001'];

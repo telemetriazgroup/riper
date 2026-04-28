@@ -103,3 +103,61 @@ export async function seedUltraorganicsUser() {
     [email]
   );
 }
+
+/**
+ * Equipo ULTRAORGANICS: mismos equipos que ultraorganics@riper.local (identificador 2001).
+ * Sin alta/baja/edición de otros usuarios (controlado en api + ocultación de menú).
+ * Overrides: RECEPCION_ULTRAORGANICS_PASSWORD, OPERACION_ULTRAORGANICS_PASSWORD, CALIDAD_ULTRAORGANICS_PASSWORD.
+ */
+export async function seedUltraorganicsTeamUsers() {
+  const ident = '2001';
+  const company = 'ULTRAORGANICS';
+
+  const team = [
+    {
+      email: 'recepcionultraorganics@riper.local',
+      name: 'Recepción ULTRAORGANICS',
+      role: 'admin',
+      password: process.env.RECEPCION_ULTRAORGANICS_PASSWORD || 'ultraorganics2026recepcion!',
+    },
+    {
+      email: 'operacionultraorganics@riper.local',
+      name: 'Operación ULTRAORGANICS',
+      role: 'viewer',
+      password: process.env.OPERACION_ULTRAORGANICS_PASSWORD || 'operacionultraorganics2026!',
+    },
+    {
+      email: 'calidadultraorganics@riper.local',
+      name: 'Calidad ULTRAORGANICS',
+      role: 'viewer',
+      password: process.env.CALIDAD_ULTRAORGANICS_PASSWORD || 'calidad2026ultraorganics!',
+    },
+  ];
+
+  for (const u of team) {
+    const em = u.email.trim().toLowerCase();
+    const { rows } = await pool.query(
+      `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+      [em]
+    );
+    if (rows.length > 0) continue;
+
+    const hash = await bcrypt.hash(u.password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, $3, $4, $5, false, true, $6)`,
+      [u.name, em, u.role, hash, company, ident]
+    );
+    console.log(`[seed] ULTRAORGANICS team user created: ${em} (${u.role})`);
+  }
+
+  for (const u of team) {
+    const em = u.email.trim().toLowerCase();
+    await pool.query(
+      `UPDATE app_users SET identificador = $1, company = $2, updated_at = now()
+       WHERE lower(email) = $3 AND deleted_at IS NULL
+         AND (identificador IS NULL OR btrim(identificador) = '')`,
+      [ident, company, em]
+    );
+  }
+}

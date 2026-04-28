@@ -12,7 +12,18 @@ import { authHeaders, getStoredUser } from '@/app/lib/auth';
 import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 
+export type MaduradorRangoFetchOptions = FetchHistoryOptions & {
+  /** Incluye filas crudos `datos[]` para métricas (avl CFM, fresh_air_ex_mode). */
+  includeRawDatos?: boolean;
+};
+
+/** Incluye superadmin: usa GET /madurador/dispositivos sin necesidad de `identificador` en perfil. */
+export function isMaduradorSuperadminFullList(): boolean {
+  return getStoredUser()?.role === 'superadmin';
+}
+
 export function hasMaduradorIdentificador(): boolean {
+  if (isMaduradorSuperadminFullList()) return true;
   const id = getStoredUser()?.identificador?.trim();
   return Boolean(id);
 }
@@ -402,6 +413,9 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   if (isUltraorganicsSession()) {
     return filterDevicesToUltraorganicsPanel(list);
   }
+  if (isMaduradorSuperadminFullList()) {
+    return list;
+  }
   return filterDevicesToIdentificadorImeiSuffix(list, getStoredUser()?.identificador);
 }
 
@@ -487,6 +501,29 @@ function maduradorDemoApiBase(): string {
 function formatMaduradorRangoParam(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/** Query Madurador: instante civil en America/Lima (GMT-5, ej. Perú). */
+export function formatMaduradorRangoParamAmericaLima(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const map = Object.fromEntries(parts.filter((p) => p.type !== 'literal').map((p) => [p.type, p.value]));
+  const y = map.year ?? '';
+  const mo = pad(Number(map.month ?? 1));
+  const da = pad(Number(map.day ?? 1));
+  const h = pad(Number(map.hour ?? 0));
+  const mi = pad(Number(map.minute ?? 0));
+  const s = pad(Number(map.second ?? 0));
+  return `${y}-${mo}-${da}T${h}:${mi}:${s}`;
 }
 
 function extractRangoDatos(row: Record<string, unknown>): { cantidad_datos: number; datos: Record<string, unknown>[] } {
@@ -592,19 +629,21 @@ export function mapMaduradorDatoMuestraToHistoryPoint(row: Record<string, unknow
  */
 export async function fetchMaduradorRangoHistoryForImei(
   imei: string,
-  options: FetchHistoryOptions = {}
-): Promise<{ cantidad_datos: number; points: HistoryPoint[] }> {
+  options: MaduradorRangoFetchOptions = {}
+): Promise<{ cantidad_datos: number; points: HistoryPoint[]; rawDatos?: Record<string, unknown>[] }> {
   const base = maduradorDemoApiBase();
   const imeiQ = encodeURIComponent(imei.trim());
   let url: string;
+  const useLima = Boolean(options.maduradorAmericaLima);
+  const fmt = useLima ? formatMaduradorRangoParamAmericaLima : formatMaduradorRangoParam;
   if (options.fecha_inicio && options.fecha_fin) {
     const a = new Date(options.fecha_inicio);
     const b = new Date(options.fecha_fin);
     if (Number.isFinite(a.getTime()) && Number.isFinite(b.getTime()) && b > a) {
       const params = new URLSearchParams();
       params.set('imei', imei.trim());
-      params.set('fecha_inicio', formatMaduradorRangoParam(a));
-      params.set('fecha_fin', formatMaduradorRangoParam(b));
+      params.set('fecha_inicio', fmt(a));
+      params.set('fecha_fin', fmt(b));
       url = `${base}/Madurador/buscar_datos_madurador_rango/?${params.toString()}`;
     } else {
       url = `${base}/Madurador/buscar_datos_madurador_rango/?imei=${imeiQ}`;
@@ -619,11 +658,12 @@ export async function fetchMaduradorRangoHistoryForImei(
     throw new Error(t || `madurador_rango: ${res.status}`);
   }
   const text = await res.text();
-  if (!text.trim()) return { cantidad_datos: 0, points: [] };
+  if (!text.trim())
+    return { cantidad_datos: 0, points: [], rawDatos: options.includeRawDatos ? [] : undefined };
   const json: unknown = JSON.parse(text);
   const { cantidad_datos, datos } = parseBuscarDatosRangoJson(json);
   if (cantidad_datos === 0 || !datos.length) {
-    return { cantidad_datos, points: [] };
+    return { cantidad_datos, points: [], rawDatos: options.includeRawDatos ? [] : undefined };
   }
   const points = datos
     .map((row) => {
@@ -635,7 +675,11 @@ export async function fetchMaduradorRangoHistoryForImei(
     })
     .filter((p): p is HistoryPoint => p != null);
   points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  return { cantidad_datos, points };
+  return {
+    cantidad_datos,
+    points,
+    rawDatos: options.includeRawDatos ? datos : undefined,
+  };
 }
 
 /** Úsese historial real por rango si aplica (flota demo, identificador Madurador, ULTRAORGANICS). */

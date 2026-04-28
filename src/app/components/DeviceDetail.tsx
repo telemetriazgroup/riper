@@ -3,7 +3,6 @@ import { differenceInMinutes } from 'date-fns';
 import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
-import { WeeklySummary } from './WeeklySummary';
 import { EventLog } from './EventLog';
 import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap, ClipboardList } from 'lucide-react';
 import { Button } from './ui/Button';
@@ -17,14 +16,22 @@ import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperat
 import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
 import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
 import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
+import { DeviceMonitoringAnalysis } from '@/app/components/DeviceMonitoringAnalysis';
 
 interface DeviceDetailProps {
   deviceId: string;
   onBack: () => void;
   initialView?: 'operation' | 'analysis' | 'log';
+  /** Abre la vista Seguimiento / procesos para crear seguimiento con receta. */
+  onGoToCreateTracking?: () => void;
 }
 
-export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, initialView = 'operation' }) => {
+export const DeviceDetail: React.FC<DeviceDetailProps> = ({
+  deviceId,
+  onBack,
+  initialView = 'operation',
+  onGoToCreateTracking,
+}) => {
   const { device, isLoading } = useDevice(deviceId);
   const { history } = useDeviceHistory(deviceId);
   const [controlMode, setControlMode] = useState('manual');
@@ -369,7 +376,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
         </div>
       ) : (
         <div className="bg-white p-6 rounded-lg border shadow-sm min-h-[600px]">
-          <WeeklySummary deviceId={deviceId} />
+          <DeviceMonitoringAnalysis deviceId={deviceId} onGoToCreateTracking={onGoToCreateTracking} />
         </div>
       )}
     </div>

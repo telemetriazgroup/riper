@@ -4,7 +4,13 @@ import express from 'express';
 import { pool } from './db.js';
 import { usersRouter, ensureUploadDirs } from './routes/users.js';
 import { runMigrate } from './migrate.js';
-import { seedSuperuser, seedGourmetDemoUser, seedFleetDemoUser, seedUltraorganicsUser } from './seed.js';
+import {
+  seedSuperuser,
+  seedGourmetDemoUser,
+  seedFleetDemoUser,
+  seedUltraorganicsUser,
+  seedUltraorganicsTeamUsers,
+} from './seed.js';
 import { seedCatalog } from './seedCatalog.js';
 import { authRouter } from './routes/auth.js';
 import { authMiddleware } from './authMiddleware.js';
@@ -28,6 +34,7 @@ async function main() {
   await seedGourmetDemoUser();
   await seedFleetDemoUser();
   await seedUltraorganicsUser();
+  await seedUltraorganicsTeamUsers();
   await seedCatalog();
 
   const app = express();

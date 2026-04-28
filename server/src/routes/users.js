@@ -33,6 +33,11 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
+/** Misma convención que el front: cuentas *.ultraorganics@riper.local (sin CRUD de usuarios en API). */
+function isUltraorganicsFleetEmail(email) {
+  return normalizeEmail(email).endsWith('ultraorganics@riper.local');
+}
+
 function normalizeCompany(c) {
   const s = String(c ?? '').trim();
   return s.length ? s : 'sin empresa';
@@ -73,6 +78,9 @@ usersRouter.get('/', async (req, res) => {
 });
 
 usersRouter.post('/', requireAdmin, async (req, res) => {
+  if (isUltraorganicsFleetEmail(req.user?.email)) {
+    return res.status(403).json({ error: 'forbidden', message: 'user management not allowed for this account' });
+  }
   const { name, email, role, active = true, password, company, identificador } = req.body || {};
   const n = String(name || '').trim();
   const em = normalizeEmail(email);
@@ -110,6 +118,9 @@ usersRouter.post('/', requireAdmin, async (req, res) => {
 usersRouter.patch('/:id', async (req, res) => {
   const { id } = req.params;
   const self = req.user.id === id;
+  if (!self && isUltraorganicsFleetEmail(req.user?.email)) {
+    return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
+  }
   if (!self && !isAdmin(req)) {
     return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
   }
@@ -218,6 +229,9 @@ usersRouter.patch('/:id', async (req, res) => {
 });
 
 usersRouter.delete('/:id', requireAdmin, async (req, res) => {
+  if (isUltraorganicsFleetEmail(req.user?.email)) {
+    return res.status(403).json({ error: 'forbidden', message: 'user management not allowed for this account' });
+  }
   const { id } = req.params;
   try {
     const { rows } = await pool.query(

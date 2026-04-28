@@ -152,6 +152,11 @@ export interface FetchHistoryOptions {
   /** Por defecto: últimas 12 horas */
   fecha_inicio?: string;
   fecha_fin?: string;
+  /**
+   * Formato fechas en query `buscar_datos_madurador_rango` como hora local America/Lima (GMT-5),
+   * en lugar de la zona horaria del navegador.
+   */
+  maduradorAmericaLima?: boolean;
 }
 
 /** Formato ISO para API: YYYY-MM-DDTHH:mm:ss */
