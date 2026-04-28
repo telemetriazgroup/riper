@@ -110,9 +110,9 @@ const translations: Record<Language, Record<string, string>> = {
     'current_process_status': 'Estado del Proceso Actual',
     'status_current_title': 'Estatus actual',
     'status_last_data_time': 'Último dato:',
-    'cannot_power_off_pending_title': 'No se puede apagar el equipo',
+    'cannot_power_off_pending_title': 'No se puede programar STOP PLAN',
     'cannot_power_off_pending_desc':
-      'Hay un proceso pendiente o activo (panel de control o proceso en el madurador). Cancele ese proceso antes de apagar el equipo.',
+      'Hay un proceso automático en marcha en el madurador (distinto de «manual»). Cámbielo a manual o termínelo en el equipo; luego podrá definir STOP PLAN hasta la hora elegida.',
     'control_follow_loading': 'Comprobando seguimiento de proceso…',
     'control_follow_active_title': 'Seguimiento de proceso activo',
     'control_follow_stage': 'Etapa / proceso',
@@ -327,6 +327,9 @@ const translations: Record<Language, Record<string, string>> = {
     'device_active_ack_replace':
       'Entiendo y deseo continuar: se cancelará el proceso en curso vinculado a este dispositivo y el nuevo reemplazará a ese. No se podrán registrar más muestreos en el proceso cancelado.',
     'status_ripening_cancelled': 'CANCELADO',
+    'status_ripening_completed': 'FINALIZADO',
+    'process_completed_info':
+      'El proceso alcanzó la fecha y hora de fin programadas. El seguimiento quedó FINALIZADO de forma automática; conserva datos y muestras para consulta.',
     'process_cancelled_info':
       'Proceso cancelado: la información y la bitácora se conservan para trazabilidad. No se admiten nuevos muestreos.',
     'sampling_forbidden_cancelled': 'No se pueden añadir muestreos a un proceso cancelado.',
@@ -526,6 +529,18 @@ const translations: Record<Language, Record<string, string>> = {
     'completed': 'Completado',
     'turn_on': 'Encender',
     'turn_off': 'Apagar',
+    'stop_plan_modal_title': 'Programar STOP PLAN',
+    'stop_plan_modal_intro':
+      'Indica hasta qué hora quiere mantener el equipo en STOP PLAN.',
+    'stop_plan_modal_technical':
+      'El equipo no se corta por completo: entra en modo STOP PLAN — se detienen las operaciones habituales de la máquina y el controlador permanece energizado hasta reanudar.',
+    'stop_plan_until_label': 'Mantener STOP PLAN hasta',
+    'stop_plan_confirm': 'Confirmar y registrar proceso',
+    'stop_plan_registered': 'STOP PLAN registrado en Control de dispositivos hasta la hora indicada.',
+    'stop_plan_process_label': 'STOP PLAN planificado',
+    'stop_plan_process_short': 'STOP PLAN',
+    'stop_plan_end_must_be_future': 'La fecha y hora deben ser posteriores al momento actual.',
+    'stop_plan_min_duration': 'Seleccione una fecha al menos un minuto después de ahora.',
     'device_on': 'Dispositivo Encendido',
     'device_off': 'Dispositivo Apagado',
     'confirm_power_on': 'Encender equipo',
@@ -890,9 +905,9 @@ const translations: Record<Language, Record<string, string>> = {
     'current_process_status': 'Current Process Status',
     'status_current_title': 'Current status',
     'status_last_data_time': 'Last sample:',
-    'cannot_power_off_pending_title': 'Cannot turn off the equipment',
+    'cannot_power_off_pending_title': 'STOP PLAN unavailable',
     'cannot_power_off_pending_desc':
-      'There is a pending or active process (control panel or ripening process). Cancel that process before turning the equipment off.',
+      'Automatic ripening-room process is running (not Manual). Switch to manual or finish it on the unit first; then you can schedule STOP PLAN until your chosen end time.',
     'control_follow_loading': 'Checking process tracking…',
     'control_follow_active_title': 'Active process tracking',
     'control_follow_stage': 'Stage / process',
@@ -1106,6 +1121,9 @@ const translations: Record<Language, Record<string, string>> = {
     'device_active_ack_replace':
       'I understand: the current process for this device will be cancelled and the new one will replace it. No further samplings can be added to the cancelled process.',
     'status_ripening_cancelled': 'CANCELLED',
+    'status_ripening_completed': 'FINISHED',
+    'process_completed_info':
+      'Scheduled end date and time was reached. Tracking was finalized automatically; data and samplings remain available.',
     'process_cancelled_info':
       'This process is cancelled. Records and the log remain for traceability. New samplings are not allowed.',
     'sampling_forbidden_cancelled': 'Cannot add samplings to a cancelled process.',
@@ -1305,7 +1323,18 @@ const translations: Record<Language, Record<string, string>> = {
     'status_powered_off': 'Off',
     'completed': 'Completed',
     'turn_on': 'Turn On',
-    'turn_off': 'Turn Off',
+    'turn_off': 'Turn off',
+    'stop_plan_modal_title': 'Schedule STOP PLAN',
+    'stop_plan_modal_intro': 'Until what time should the unit stay in STOP PLAN?',
+    'stop_plan_modal_technical':
+      'The rack is not fully de-energized: STOP PLAN stops normal machine cycling while keeping the controller powered until you resume.',
+    'stop_plan_until_label': 'Keep STOP PLAN until',
+    'stop_plan_confirm': 'Confirm and register process',
+    'stop_plan_registered': 'STOP PLAN saved under Device Control until the selected time.',
+    'stop_plan_process_label': 'Scheduled STOP PLAN',
+    'stop_plan_process_short': 'STOP PLAN',
+    'stop_plan_end_must_be_future': 'The date and time must be later than now.',
+    'stop_plan_min_duration': 'Pick a time at least one minute ahead.',
     'device_on': 'Device On',
     'device_off': 'Device Off',
     'confirm_power_on': 'Turn on device',

@@ -2,6 +2,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { writeAudit } from '../auditLog.js';
 import { requireSuperAdmin } from '../authMiddleware.js';
+import { maybeFinalizeDeviceControlDebounced } from '../autoFinalizeDueProcesses.js';
 
 function parseIncludeArchived(req) {
   const v = req.query.includeArchived ?? req.query.include_archived;
@@ -26,6 +27,17 @@ function canModifyControlSession(req, row) {
 }
 
 export const deviceControlRouter = express.Router();
+
+/** Antes de GET, marcar sesiones vencidas como completadas. */
+deviceControlRouter.use(async (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  try {
+    await maybeFinalizeDeviceControlDebounced();
+  } catch {
+    /* log en debounce */
+  }
+  next();
+});
 
 /**
  * Sesión activa de panel Homogenización/… para el equipo (visible para todos los que ven el dispositivo).
@@ -69,7 +81,7 @@ deviceControlRouter.post('/start', async (req, res) => {
   if (!deviceId) {
     return res.status(400).json({ error: 'validation', message: 'deviceId required' });
   }
-  if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling'].includes(processType)) {
+  if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling', 'StopPlan'].includes(processType)) {
     return res.status(400).json({ error: 'validation', message: 'invalid processType' });
   }
   if (!Number.isFinite(durationHours) || durationHours <= 0 || durationHours > 10000) {

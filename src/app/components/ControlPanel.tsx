@@ -22,6 +22,7 @@ import { Device } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes } from 'date-fns';
 import { ControlProcessStartFlow } from '@/app/components/ControlProcessStartFlow';
+import { StopPlanScheduleModal } from '@/app/components/StopPlanScheduleModal';
 import type { StartControlProcessBody } from '@/app/lib/deviceControlProcessApi';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
@@ -285,7 +286,7 @@ const ManualControl = ({
   readOnly?: boolean;
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
-  const { session } = useDeviceControlSession(deviceId);
+  const { mutate: sessionMutate } = useDeviceControlSession(deviceId);
   const md = device?.madurador;
   const [temp, setTemp] = useState(() =>
     clamp(device?.telemetry.set_point ?? 19, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C)
@@ -307,12 +308,13 @@ const ManualControl = ({
 
   const [isPowerConfirmOpen, setIsPowerConfirmOpen] = useState(false);
   const [cannotPowerOffOpen, setCannotPowerOffOpen] = useState(false);
+  const [stopPlanModalOpen, setStopPlanModalOpen] = useState(false);
 
-  const pendingProcessBlocksPowerOff = useMemo(() => {
-    if (session?.status === 'active') return true;
+  /** Solo proceso integral en madurador (no manual) bloquea; STOP PLAN sí puede sustituir el proceso del panel. */
+  const maduradorNonManualBlocksPowerSchedule = useMemo(() => {
     const lbl = device?.procesoApi?.trim();
     return Boolean(lbl && !isManualProcesoLabel(lbl));
-  }, [session?.status, device?.procesoApi]);
+  }, [device?.procesoApi]);
 
   useEffect(() => {
     if (device) {
@@ -380,11 +382,12 @@ const ManualControl = ({
       setIsPowerConfirmOpen(true);
       return;
     }
-    if (pendingProcessBlocksPowerOff) {
+    /** “Apagar” en la app programa STOP PLAN (no corte total de energía) y registra proceso en Control de dispositivos. */
+    if (maduradorNonManualBlocksPowerSchedule) {
       setCannotPowerOffOpen(true);
       return;
     }
-    executePowerToggle(false);
+    setStopPlanModalOpen(true);
   };
 
   const executePowerToggle = async (turningOn: boolean) => {
@@ -453,18 +456,18 @@ const ManualControl = ({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-            <span className="text-sm font-medium text-gray-500">
-                {isPoweredOn ? t('turn_off') : t('turn_on')}
-            </span>
-            <Switch 
-                disabled={powerLoading || status.disabled || readOnly}
-                checked={isPoweredOn}
-                onCheckedChange={handlePowerToggleRequest}
-                className={cn(
-                    "w-11 h-6 rounded-full transition-colors",
-                    isPoweredOn ? "data-[state=checked]:bg-green-500" : "bg-gray-200"
-                )} 
-            />
+          <span className="text-sm font-medium text-gray-500">
+            {isPoweredOn ? t('turn_off') : t('turn_on')}
+          </span>
+          <Switch
+            disabled={powerLoading || status.disabled || readOnly}
+            checked={isPoweredOn}
+            onCheckedChange={handlePowerToggleRequest}
+            className={cn(
+              'w-11 h-6 rounded-full transition-colors',
+              isPoweredOn ? 'data-[state=checked]:bg-green-500' : 'bg-gray-200'
+            )}
+          />
         </div>
       </div>
 
@@ -498,6 +501,15 @@ const ManualControl = ({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StopPlanScheduleModal
+        open={stopPlanModalOpen}
+        onOpenChange={setStopPlanModalOpen}
+        deviceId={deviceId}
+        onCompleted={async () => {
+          await sessionMutate();
+        }}
+      />
 
       <div className={cn("transition-opacity duration-200", controlsDisabledPanel && "opacity-50 pointer-events-none grayscale-[0.5]")}>
         <ControlGroup title={t('climatization')}>

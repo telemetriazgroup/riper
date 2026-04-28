@@ -24,7 +24,7 @@ async function handle<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-export type ControlProcessType = 'Homogenization' | 'Ripening' | 'Ventilation' | 'Cooling';
+export type ControlProcessType = 'Homogenization' | 'Ripening' | 'Ventilation' | 'Cooling' | 'StopPlan';
 
 export type DeviceControlSessionRow = {
   id: string;

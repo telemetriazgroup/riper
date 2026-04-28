@@ -24,8 +24,13 @@ import { deviceProcessFollowRouter } from './routes/deviceProcessFollow.js';
 import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripeningProcesses.js';
 import { deviceControlRouter } from './routes/deviceControl.js';
 import { auditRouter } from './routes/audit.js';
+import {
+  finalizeDueRipeningProcesses,
+  finalizeDueDeviceControlSessions,
+} from './autoFinalizeDueProcesses.js';
 
 const PORT = Number(process.env.PORT) || 4000;
+const AUTO_FINALIZE_MS = Math.max(15000, Number(process.env.AUTO_FINALIZE_INTERVAL_MS) || 60000);
 
 async function main() {
   await runMigrate();
@@ -78,6 +83,12 @@ async function main() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[api] listening on :${PORT}`);
   });
+
+  setInterval(() => {
+    Promise.all([finalizeDueRipeningProcesses(), finalizeDueDeviceControlSessions()]).catch((e) =>
+      console.error('[auto-finalize]', e.message)
+    );
+  }, AUTO_FINALIZE_MS).unref?.();
 }
 
 main().catch((e) => {

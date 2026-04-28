@@ -96,16 +96,20 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
                         'px-2 py-0.5 rounded text-xs font-medium',
                         row.status === 'active'
                           ? 'bg-green-100 text-green-800'
-                          : row.status === 'cancelled'
-                            ? 'bg-slate-200 text-slate-800'
-                            : 'bg-gray-100 text-gray-700'
+                          : row.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-900'
+                            : row.status === 'cancelled'
+                              ? 'bg-slate-200 text-slate-800'
+                              : 'bg-gray-100 text-gray-700'
                       )}
                     >
                       {row.status === 'active'
                         ? t('in_process')
-                        : row.status === 'cancelled'
-                          ? t('status_ripening_cancelled')
-                          : row.status}
+                        : row.status === 'completed'
+                          ? t('status_ripening_completed')
+                          : row.status === 'cancelled'
+                            ? t('status_ripening_cancelled')
+                            : row.status}
                     </span>
                   </div>
                 </td>

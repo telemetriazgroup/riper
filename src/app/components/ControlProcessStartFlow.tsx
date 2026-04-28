@@ -10,6 +10,7 @@ import { Button } from '@/app/components/ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { startControlProcess, type StartControlProcessBody } from '@/app/lib/deviceControlProcessApi';
 import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
+import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { sendControlCommand } from '@/app/lib/api';
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -60,6 +61,7 @@ export const ControlProcessStartFlow: React.FC<Props> = ({ open, onOpenChange, d
         startedAt,
       });
       void revalidateControlSessionsList();
+      void revalidateFleetActiveControlSessions();
       await sendControlCommand(deviceId, 'set_process', {
         type: draft.processType,
         name: draft.displayLabel,

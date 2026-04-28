@@ -29,6 +29,8 @@ export function getControlProcessTypeLabel(processType: string | null | undefine
       return t('ventilation');
     case 'Cooling':
       return t('cooling');
+    case 'StopPlan':
+      return t('stop_plan_process_short');
     default:
       return p || t('process');
   }

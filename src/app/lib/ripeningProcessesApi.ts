@@ -27,6 +27,7 @@ async function handle<T>(res: Response): Promise<T> {
 export type RipeningProcessRow = {
   id: string;
   user_id: string;
+  /** Seguimiento: active | cancelled | completed (completed = automatizado al vencer tiempo planificado). */
   status: string;
   display_name: string;
   payload: Record<string, unknown> & {

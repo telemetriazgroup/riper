@@ -175,7 +175,13 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
           className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800 space-y-2"
           role="status"
         >
-          <p>{processStatus === 'cancelled' ? t('process_cancelled_info') : t('process_not_active_generic')}</p>
+          <p>
+            {processStatus === 'cancelled'
+              ? t('process_cancelled_info')
+              : processStatus === 'completed'
+                ? t('process_completed_info')
+                : t('process_not_active_generic')}
+          </p>
           {processStatus === 'cancelled' &&
             (data as ReturnType<typeof mapRowToProcessView>).cancelledMeta?.at && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950 text-xs space-y-0.5">

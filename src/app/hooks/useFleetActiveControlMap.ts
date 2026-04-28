@@ -1,8 +1,13 @@
 import { useMemo } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as swrMutate } from 'swr';
 import { listControlSessions, type DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 
-const KEY = 'fleet-active-control-sessions';
+export const FLEET_ACTIVE_CONTROL_SESSIONS_KEY = 'fleet-active-control-sessions';
+
+/** Tras iniciar/cancelar/completar una sesión de control desde cualquier vista. */
+export function revalidateFleetActiveControlSessions() {
+  return swrMutate(FLEET_ACTIVE_CONTROL_SESSIONS_KEY);
+}
 
 /**
  * Un solo listado de sesiones de control; se filtra por `status === 'active'`
@@ -10,7 +15,7 @@ const KEY = 'fleet-active-control-sessions';
  */
 export function useFleetActiveControlMap() {
   const { data, error, isLoading } = useSWR(
-    KEY,
+    FLEET_ACTIVE_CONTROL_SESSIONS_KEY,
     listControlSessions,
     { revalidateOnFocus: true, refreshInterval: 60_000 }
   );

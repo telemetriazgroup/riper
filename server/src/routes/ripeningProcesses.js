@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
+import { maybeFinalizeRipeningDebounced } from '../autoFinalizeDueProcesses.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -172,6 +173,17 @@ function mapRecipeTargets(payload) {
 }
 
 export const ripeningProcessesRouter = express.Router();
+
+/** Antes de responder GET de seguimiento, completar registros si ya pasó fecha/hora de fin planificada. */
+ripeningProcessesRouter.use(async (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  try {
+    await maybeFinalizeRipeningDebounced();
+  } catch {
+    /* log en debounce */
+  }
+  next();
+});
 
 /**
  * Seguimiento activo en este dispositivo (cualquier usuario); Visualizadores y resto pueden ver estado en panel/detalle.
@@ -605,6 +617,15 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
     return res.status(403).json({ error: 'forbidden', message: 'read only' });
   }
   const { status, display_name, payload: bodyPayload } = req.body || {};
+  if (String(row.status || '').toLowerCase() === 'completed') {
+    return res.status(403).json({ error: 'process_completed', message: 'process is finalized; editing is disabled' });
+  }
+  if (status !== undefined && String(status).trim().toLowerCase() === 'completed') {
+    return res.status(400).json({
+      error: 'validation',
+      message: 'status completed is set automatically when the scheduled end time is reached',
+    });
+  }
   if (role === 'operator') {
     if (display_name != null || bodyPayload != null) {
       return res.status(403).json({ error: 'forbidden', message: 'operator may only cancel (status)' });

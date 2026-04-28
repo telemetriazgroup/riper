@@ -245,16 +245,20 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                           'px-2 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md',
                           proc.status === 'active'
                             ? 'bg-green-500/90 text-white'
-                            : proc.status === 'cancelled'
-                              ? 'bg-slate-600/90 text-white'
-                              : 'bg-orange-500/90 text-white'
+                            : proc.status === 'completed'
+                              ? 'bg-emerald-800/90 text-white'
+                              : proc.status === 'cancelled'
+                                ? 'bg-slate-600/90 text-white'
+                                : 'bg-orange-500/90 text-white'
                         )}
                       >
                         {proc.status === 'active'
                           ? t('in_process')
-                          : proc.status === 'cancelled'
-                            ? t('status_ripening_cancelled')
-                            : t('attention')}
+                          : proc.status === 'completed'
+                            ? t('status_ripening_completed')
+                            : proc.status === 'cancelled'
+                              ? t('status_ripening_cancelled')
+                              : t('attention')}
                       </span>
                     </div>
                   </div>

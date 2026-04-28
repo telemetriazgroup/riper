@@ -38,8 +38,8 @@ type Props = {
 
 function statusLabel(status: string, t: (k: string) => string) {
   if (status === 'active') return t('in_process');
+  if (status === 'completed') return t('status_ripening_completed');
   if (status === 'cancelled') return t('status_ripening_cancelled');
-  if (status === 'completed') return t('completed');
   return status || '—';
 }
 
