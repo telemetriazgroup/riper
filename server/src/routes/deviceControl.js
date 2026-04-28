@@ -6,10 +6,22 @@ function isAdminRole(req) {
   return r === 'superadmin' || r === 'admin';
 }
 
+function isViewer(req) {
+  return req.user?.role === 'viewer';
+}
+
+/** Ver / completar cancelar sesión ajena si operador+. Visualizadores: sólo lectura (API rechaza escritura). */
+function canModifyControlSession(req, row) {
+  if (isViewer(req)) return false;
+  if (req.user?.id === row.user_id) return true;
+  const r = req.user?.role;
+  return r === 'superadmin' || r === 'admin' || r === 'operator';
+}
+
 export const deviceControlRouter = express.Router();
 
 /**
- * Proceso de control activo (panel Homogenization / …) para un dispositivo y el usuario actual.
+ * Sesión activa de panel Homogenización/… para el equipo (visible para todos los que ven el dispositivo).
  */
 deviceControlRouter.get('/active', async (req, res) => {
   try {
@@ -18,11 +30,15 @@ deviceControlRouter.get('/active', async (req, res) => {
       return res.status(400).json({ error: 'validation', message: 'deviceId required' });
     }
     const { rows } = await pool.query(
-      `SELECT * FROM app_device_control_sessions
-       WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active'
-       ORDER BY started_at DESC
+      `SELECT s.*, u.name AS user_name, u.email AS user_email,
+              uc.name AS cancelled_by_name, uc.email AS cancelled_by_email
+       FROM app_device_control_sessions s
+       JOIN app_users u ON u.id = s.user_id
+       LEFT JOIN app_users uc ON uc.id = s.cancelled_by_user_id
+       WHERE s.device_id = $1 AND s.status = 'active'
+       ORDER BY s.started_at DESC
        LIMIT 1`,
-      [req.user.id, deviceId]
+      [deviceId]
     );
     return res.json({ data: rows[0] ?? null });
   } catch (e) {
@@ -52,6 +68,9 @@ deviceControlRouter.post('/start', async (req, res) => {
   if (!Number.isFinite(durationHours) || durationHours <= 0 || durationHours > 10000) {
     return res.status(400).json({ error: 'validation', message: 'invalid durationHours' });
   }
+  if (isViewer(req)) {
+    return res.status(403).json({ error: 'forbidden', message: 'viewers cannot start control sessions' });
+  }
 
   const started = startedAtRaw ? new Date(String(startedAtRaw)) : new Date();
   if (Number.isNaN(started.getTime())) {
@@ -63,11 +82,44 @@ deviceControlRouter.post('/start', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const { rows: ripeningBusy } = await client.query(
+      `SELECT 1 FROM app_ripening_processes
+       WHERE deleted_at IS NULL AND status = 'active'
+         AND (payload->>'deviceId') = $1
+       LIMIT 1`,
+      [deviceId]
+    );
+    if (ripeningBusy.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'device_ripening_active',
+        message: 'an active ripening tracking exists for this device; cancel or finish it first',
+      });
+    }
+
+    const { rows: otherCtrl } = await client.query(
+      `SELECT id FROM app_device_control_sessions
+       WHERE device_id = $1 AND status = 'active' AND user_id <> $2::uuid
+       LIMIT 1`,
+      [deviceId, req.user.id]
+    );
+    if (otherCtrl.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'device_control_busy',
+        message: 'another active control session exists for this device',
+      });
+    }
+
     await client.query(
       `UPDATE app_device_control_sessions
-       SET status = 'cancelled', updated_at = now()
+       SET status = 'cancelled',
+           cancelled_at = now(),
+           cancelled_by_user_id = $3::uuid,
+           updated_at = now()
        WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active'`,
-      [req.user.id, deviceId]
+      [req.user.id, deviceId, req.user.id]
     );
     const { rows } = await client.query(
       `INSERT INTO app_device_control_sessions
@@ -97,26 +149,21 @@ deviceControlRouter.post('/start', async (req, res) => {
 });
 
 /**
- * Listado: el usuario ve lo suyo; admin/superadmin ve todo.
+ * Listado global (solo lectura diferenciando permisos en el cliente).
  */
 deviceControlRouter.get('/sessions', async (req, res) => {
   try {
-    if (isAdminRole(req)) {
-      const { rows } = await pool.query(
-        `SELECT s.*, u.name AS user_name, u.email AS user_email
+    const { rows } = await pool.query(
+      `SELECT s.*,
+              u.name AS user_name,
+              u.email AS user_email,
+              uc.name AS cancelled_by_name,
+              uc.email AS cancelled_by_email
          FROM app_device_control_sessions s
          JOIN app_users u ON u.id = s.user_id
+         LEFT JOIN app_users uc ON uc.id = s.cancelled_by_user_id
          ORDER BY s.created_at DESC
          LIMIT 500`
-      );
-      return res.json({ data: rows });
-    }
-    const { rows } = await pool.query(
-      `SELECT * FROM app_device_control_sessions
-       WHERE user_id = $1::uuid
-       ORDER BY created_at DESC
-       LIMIT 200`,
-      [req.user.id]
     );
     return res.json({ data: rows });
   } catch (e) {
@@ -138,7 +185,7 @@ deviceControlRouter.post('/:id/complete', async (req, res) => {
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
     const row = cur[0];
-    if (row.user_id !== req.user.id && !isAdminRole(req)) {
+    if (!canModifyControlSession(req, row)) {
       return res.status(403).json({ error: 'forbidden' });
     }
     if (row.status !== 'active') {
@@ -171,18 +218,22 @@ deviceControlRouter.post('/:id/cancel', async (req, res) => {
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
     const row = cur[0];
-    if (row.user_id !== req.user.id && !isAdminRole(req)) {
+    if (!canModifyControlSession(req, row)) {
       return res.status(403).json({ error: 'forbidden' });
     }
     if (row.status !== 'active') {
       return res.json({ data: row });
     }
+    const uid = req.user.id;
     const { rows: upd } = await pool.query(
       `UPDATE app_device_control_sessions
-       SET status = 'cancelled', updated_at = now()
+       SET status = 'cancelled',
+           cancelled_at = now(),
+           cancelled_by_user_id = $2::uuid,
+           updated_at = now()
        WHERE id = $1::uuid
        RETURNING *`,
-      [id]
+      [id, uid]
     );
     return res.json({ data: upd[0] });
   } catch (e) {
@@ -204,7 +255,7 @@ deviceControlRouter.patch('/:id', async (req, res) => {
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
     const row = cur[0];
-    if (row.user_id !== req.user.id && !isAdminRole(req)) {
+    if (!canModifyControlSession(req, row)) {
       return res.status(403).json({ error: 'forbidden' });
     }
     if (row.status !== 'active') {
@@ -263,8 +314,8 @@ deviceControlRouter.delete('/:id', async (req, res) => {
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
     const row = cur[0];
-    if (row.user_id !== req.user.id && !isAdminRole(req)) {
-      return res.status(403).json({ error: 'forbidden' });
+    if (!isAdminRole(req)) {
+      return res.status(403).json({ error: 'forbidden', message: 'only administrators can delete session rows' });
     }
     if (row.status === 'active') {
       return res.status(400).json({

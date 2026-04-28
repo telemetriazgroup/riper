@@ -1,8 +1,5 @@
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 
-const DEFAULT_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=400&q=80';
-
 function inferPhase(payload: RipeningProcessRow['payload']): string {
   const raw = (payload.recipe as { phases?: { enabled?: boolean; name?: string; type?: string }[] } | undefined)
     ?.phases;
@@ -102,9 +99,31 @@ export function mapRowToProcessView(row: RipeningProcessRow) {
       duration_hours: schedule.totalDurationHours ?? 0,
       targets: targetsFromPayload(p),
     },
-    image: DEFAULT_PLACEHOLDER,
+    /** Sin URL ficticia; la UI muestra fondo cuando no hay `firstEvidenceApiPath`. */
+    image: '',
     firstEvidenceApiPath: firstRel,
     display_name: row.display_name,
+    cancelledMeta:
+      p._cancelledMeta != null && typeof p._cancelledMeta === 'object'
+        ? {
+            at:
+              typeof (p._cancelledMeta as { at?: unknown }).at === 'string'
+                ? String((p._cancelledMeta as { at: string }).at)
+                : null,
+            byUserId:
+              typeof (p._cancelledMeta as { byUserId?: unknown }).byUserId === 'string'
+                ? String((p._cancelledMeta as { byUserId: string }).byUserId)
+                : null,
+            byEmail:
+              (p._cancelledMeta as { byEmail?: unknown }).byEmail != null
+                ? String((p._cancelledMeta as { byEmail: unknown }).byEmail)
+                : null,
+            byName:
+              (p._cancelledMeta as { byName?: unknown }).byName != null
+                ? String((p._cancelledMeta as { byName: unknown }).byName)
+                : null,
+          }
+        : null,
     scheduleSummary: schedule,
     timeline: Array.isArray(row.timeline) ? row.timeline : [],
     _row: row,

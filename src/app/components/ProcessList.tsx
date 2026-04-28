@@ -12,13 +12,13 @@ import {
 import { Button } from './ui/Button';
 import { Card, CardContent } from './ui/Card';
 import { clsx } from 'clsx';
-import { ImageWithFallback } from './figma/ImageWithFallback';
 import { AuthedImage } from './AuthedImage';
 import { ProcessDetail } from './ProcessDetail';
 import { CreateProcessForm } from './CreateProcessForm';
 import { ProcessDataAdmin } from './ProcessDataAdmin';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
+import { canCreateRipeningProcess } from '@/app/lib/permissions';
 import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 
@@ -36,7 +36,8 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
   const { t } = useSettings();
 
   const role = getStoredUser()?.role;
-  const canCreate = role === 'operator' || role === 'admin' || role === 'superadmin';
+  const canCreate = canCreateRipeningProcess();
+  const showProcessDataTab = role === 'operator' || role === 'admin' || role === 'superadmin';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +56,16 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const r = getStoredUser()?.role;
+    if (r === 'viewer' && (view === 'admin' || view === 'create')) {
+      setView('list');
+    }
+    if (!canCreateRipeningProcess() && view === 'create') {
+      setView('list');
+    }
+  }, [view]);
 
   const listViews = useMemo(() => rawRows.map((r) => mapRowToProcessView(r)), [rawRows]);
 
@@ -120,17 +131,19 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
             >
               {t('seguimiento')}
             </button>
-            <button
-              type="button"
-              onClick={() => setView('admin')}
-              className={clsx(
-                'px-3 py-1.5 rounded-md transition flex items-center gap-1.5',
-                view === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
-              )}
-            >
-              <Database className="w-3.5 h-3.5" />
-              {t('process_data_mgmt')}
-            </button>
+            {showProcessDataTab && (
+              <button
+                type="button"
+                onClick={() => setView('admin')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-md transition flex items-center gap-1.5',
+                  view === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                )}
+              >
+                <Database className="w-3.5 h-3.5" />
+                {t('process_data_mgmt')}
+              </button>
+            )}
           </div>
           {canCreate && (
             <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => setView('create')}>
@@ -204,11 +217,7 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (
-                      <ImageWithFallback
-                        src={proc.image}
-                        alt={proc.batch.product}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                      <div className="w-full h-full bg-blue-100" aria-hidden />
                     )}
                     <div className="absolute top-2 right-2">
                       <span

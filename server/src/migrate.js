@@ -127,6 +127,11 @@ CREATE INDEX IF NOT EXISTS idx_dctrl_device
   ON app_device_control_sessions (device_id, status);
 `;
 
+const SQL_DEVICE_CONTROL_CANCEL_META = `
+ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ NULL;
+ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS cancelled_by_user_id UUID NULL REFERENCES app_users(id) ON DELETE SET NULL;
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -150,6 +155,7 @@ export async function runMigrate() {
     await client.query(SQL_PROCESS_FOLLOW);
     await client.query(SQL_RIPENING_PROCESSES);
     await client.query(SQL_DEVICE_CONTROL);
+    await client.query(SQL_DEVICE_CONTROL_CANCEL_META);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

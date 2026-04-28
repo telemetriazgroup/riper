@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
-import { requireStaff } from '../authMiddleware.js';
+import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -59,9 +59,9 @@ async function getUserName(userId) {
   return rows[0].name || rows[0].email || 'Usuario';
 }
 
-async function getProcessOr404(req, res) {
-  const { id } = req.params;
-  if (!id) {
+async function fetchProcessById(rawId, res) {
+  const id = String(rawId || '').trim();
+  if (!id || id === 'files') {
     res.status(400).json({ error: 'validation', message: 'id required' });
     return null;
   }
@@ -74,13 +74,12 @@ async function getProcessOr404(req, res) {
     res.status(404).json({ error: 'not_found', message: 'process not found' });
     return null;
   }
-  const row = rows[0];
-  if (isAdminRole(req)) return row;
-  if (row.user_id !== req.user.id) {
-    res.status(403).json({ error: 'forbidden', message: 'forbidden' });
-    return null;
-  }
-  return row;
+  return rows[0];
+}
+
+async function getProcessRowFromReq(req, res) {
+  const { id } = req.params;
+  return fetchProcessById(id, res);
 }
 
 function toParamRows(arr) {
@@ -166,9 +165,9 @@ function mapRecipeTargets(payload) {
 export const ripeningProcessesRouter = express.Router();
 
 /**
- * Proceso activo del usuario en un dispositivo (mismo user_id + deviceId en payload)
+ * Seguimiento activo en este dispositivo (cualquier usuario); Visualizadores y resto pueden ver estado en panel/detalle.
  */
-ripeningProcessesRouter.get('/active-for-device', requireStaff, async (req, res) => {
+ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
   const deviceId = String(req.query.deviceId || '').trim();
   if (!deviceId) {
     return res.status(400).json({ error: 'validation', message: 'deviceId query required' });
@@ -176,13 +175,12 @@ ripeningProcessesRouter.get('/active-for-device', requireStaff, async (req, res)
   try {
     const { rows } = await pool.query(
       `SELECT * FROM app_ripening_processes
-       WHERE user_id = $1::uuid
-         AND deleted_at IS NULL
+       WHERE deleted_at IS NULL
          AND status = 'active'
-         AND (payload->>'deviceId') = $2
+         AND (payload->>'deviceId') = $1
        ORDER BY created_at DESC
        LIMIT 1`,
-      [req.user.id, deviceId]
+      [deviceId]
     );
     if (!rows.length) {
       return res.json({ data: null });
@@ -213,21 +211,14 @@ ripeningProcessesRouter.get('/active-for-device', requireStaff, async (req, res)
   }
 });
 
-/** Listar procesos (propios; admin: todos) */
+/** Listar todos los seguimientos (incl. Visualizador) para ver procesos en curso */
 ripeningProcessesRouter.get('/', async (req, res) => {
   try {
-    const ownOnly = !isAdminRole(req);
     const { rows } = await pool.query(
-      ownOnly
-        ? `SELECT id, user_id, status, display_name, payload, timeline, created_at, updated_at
-             FROM app_ripening_processes
-            WHERE deleted_at IS NULL AND user_id = $1::uuid
-            ORDER BY created_at DESC`
-        : `SELECT id, user_id, status, display_name, payload, timeline, created_at, updated_at
-             FROM app_ripening_processes
-            WHERE deleted_at IS NULL
-            ORDER BY created_at DESC`,
-      ownOnly ? [req.user.id] : []
+      `SELECT id, user_id, status, display_name, payload, timeline, created_at, updated_at
+         FROM app_ripening_processes
+        WHERE deleted_at IS NULL
+        ORDER BY created_at DESC`
     );
     res.json({ data: rows });
   } catch (e) {
@@ -237,7 +228,7 @@ ripeningProcessesRouter.get('/', async (req, res) => {
 });
 
 ripeningProcessesRouter.get('/:id/files/:filename', async (req, res) => {
-  const row = await getProcessOr404(req, res);
+  const row = await getProcessRowFromReq(req, res);
   if (!row) return;
   const name = safeRelName(req.params.filename);
   if (!name) {
@@ -272,11 +263,7 @@ ripeningProcessesRouter.get('/:id', async (req, res) => {
     if (!rows.length) {
       return res.status(404).json({ error: 'not_found' });
     }
-    const row = rows[0];
-    if (!isAdminRole(req) && row.user_id !== req.user.id) {
-      return res.status(403).json({ error: 'forbidden' });
-    }
-    res.json({ data: row });
+    res.json({ data: rows[0] });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -285,7 +272,7 @@ ripeningProcessesRouter.get('/:id', async (req, res) => {
 
 ripeningProcessesRouter.post(
   '/',
-  requireStaff,
+  requireAdmin,
   stagingDirMiddleware,
   upload.array('evidence', 24),
   async (req, res) => {
@@ -458,11 +445,11 @@ ripeningProcessesRouter.post(
 /** Añadir muestreo (timeline + archivos opcionales) */
 ripeningProcessesRouter.post(
   '/:id/sampling',
-  requireStaff,
+  requireOperatorPlus,
   stagingDirMiddleware,
   upload.array('evidence', 24),
   async (req, res) => {
-    const row = await getProcessOr404(req, res);
+    const row = await getProcessRowFromReq(req, res);
     if (!row) return;
     if (row.status !== 'active') {
       const cleanupStagingErr = () => {
@@ -551,25 +538,73 @@ ripeningProcessesRouter.post(
   }
 );
 
-ripeningProcessesRouter.patch('/:id', requireStaff, async (req, res) => {
-  const row = await getProcessOr404(req, res);
+ripeningProcessesRouter.patch('/:id', async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
   if (!row) return;
-  const { status, display_name, payload } = req.body || {};
+  const role = req.user?.role;
+  if (role === 'viewer') {
+    return res.status(403).json({ error: 'forbidden', message: 'read only' });
+  }
+  const { status, display_name, payload: bodyPayload } = req.body || {};
+  if (role === 'operator') {
+    if (display_name != null || bodyPayload != null) {
+      return res.status(403).json({ error: 'forbidden', message: 'operator may only cancel (status)' });
+    }
+    if (status == null || String(status).toLowerCase() !== 'cancelled') {
+      return res.status(400).json({
+        error: 'validation',
+        message: 'operator can only set status to cancelled',
+      });
+    }
+  }
+
+  const isAdminTier = role === 'superadmin' || role === 'admin';
+  const basePayload =
+    row.payload != null && typeof row.payload === 'object' ? { ...row.payload } : {};
+  let mergedPayload = basePayload;
+
+  if (isAdminTier && bodyPayload != null && typeof bodyPayload === 'object') {
+    mergedPayload = { ...mergedPayload, ...bodyPayload };
+  }
+
+  if (status !== undefined && String(status).trim().toLowerCase() === 'cancelled') {
+    const uid = req.user.id;
+    const { rows: urows } = await pool.query(
+      `SELECT name, email FROM app_users WHERE id = $1::uuid AND deleted_at IS NULL`,
+      [uid]
+    );
+    const unm = urows[0];
+    mergedPayload = {
+      ...mergedPayload,
+      _cancelledMeta: {
+        at: new Date().toISOString(),
+        byUserId: uid,
+        byEmail: unm?.email != null ? String(unm.email) : req.user.email || null,
+        byName: unm?.name != null ? String(unm.name) : null,
+      },
+    };
+  }
+
+  const mustWritePayload =
+    (isAdminTier && bodyPayload != null && typeof bodyPayload === 'object') ||
+    (status !== undefined && String(status).trim().toLowerCase() === 'cancelled');
+
   const parts = [];
-  const values = [row.id];
+  const vals = [row.id];
   let i = 2;
-  if (status != null) {
+  if (status !== undefined) {
     parts.push(`status = $${i++}`);
-    values.push(String(status).slice(0, 32));
+    vals.push(String(status).slice(0, 32));
   }
-  if (display_name != null) {
+  if (display_name !== undefined) {
     parts.push(`display_name = $${i++}`);
-    values.push(String(display_name).slice(0, 500));
+    vals.push(String(display_name).slice(0, 500));
   }
-  if (payload != null) {
+  if (mustWritePayload) {
     parts.push(`payload = $${i++}::jsonb`);
-    values.push(JSON.stringify(payload));
+    vals.push(JSON.stringify(mergedPayload));
   }
+
   if (!parts.length) {
     return res.status(400).json({ error: 'validation', message: 'nothing to update' });
   }
@@ -578,7 +613,7 @@ ripeningProcessesRouter.patch('/:id', requireStaff, async (req, res) => {
       `UPDATE app_ripening_processes SET ${parts.join(', ')}, updated_at = now()
        WHERE id = $1::uuid AND deleted_at IS NULL
        RETURNING *`,
-      values
+      vals
     );
     if (!rows.length) {
       return res.status(404).json({ error: 'not_found' });
@@ -590,8 +625,8 @@ ripeningProcessesRouter.patch('/:id', requireStaff, async (req, res) => {
   }
 });
 
-ripeningProcessesRouter.delete('/:id', requireStaff, async (req, res) => {
-  const row = await getProcessOr404(req, res);
+ripeningProcessesRouter.delete('/:id', requireAdmin, async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
   if (!row) return;
   try {
     await pool.query(

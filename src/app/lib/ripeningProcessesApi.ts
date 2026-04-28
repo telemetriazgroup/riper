@@ -40,6 +40,12 @@ export type RipeningProcessRow = {
     initialSample?: unknown;
     recipe?: { name?: string; phases?: unknown; targets?: { brix?: string; firmness?: string; color?: string } };
     objectives?: { name: string; value: string; unit: string }[];
+    _cancelledMeta?: {
+      at?: string;
+      byUserId?: string;
+      byEmail?: string | null;
+      byName?: string | null;
+    };
   };
   timeline: unknown;
   created_at: string;
@@ -137,6 +143,20 @@ export async function postRipeningSampling(
     method: 'POST',
     body: form,
     headers,
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function patchRipeningProcess(
+  id: string,
+  body: Partial<Pick<RipeningProcessRow, 'status' | 'display_name'>> & { payload?: Record<string, unknown> }
+): Promise<RipeningProcessRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
   });
   const json = await handle<{ data: RipeningProcessRow }>(res);
   if (!json.data) throw new Error('sin datos');

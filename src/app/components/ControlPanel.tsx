@@ -26,6 +26,7 @@ import type { StartControlProcessBody } from '@/app/lib/deviceControlProcessApi'
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
+import { canOperateDeviceControl } from '@/app/lib/permissions';
 
 /** Objetivos manual en °C / % / ppm (telemetría). */
 const MANUAL_TEMP_MIN_C = 5;
@@ -62,6 +63,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
 
   const openStartFlow = (partial: ControlStartDraft) => {
     if (!deviceId) return;
+    if (!canOperateDeviceControl()) {
+      toast.error(t('viewer_cannot_control_panel'));
+      return;
+    }
     if (followBlocksPanelProcesses) {
       toast.error(t('control_follow_blocked_toast'));
       return;
@@ -88,7 +93,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   // Processes require device to be ONLINE and POWERED ON
   const areProcessesDisabled = isOffline || isStandby || isPoweredOff;
   const processModesBlockedByFollow = followBlocksPanelProcesses;
-  const processModesDisabled = areProcessesDisabled || processModesBlockedByFollow;
+  const processModesDisabled =
+    areProcessesDisabled || processModesBlockedByFollow || !canOperateDeviceControl();
 
   return (
     <Card className="h-full">
@@ -113,7 +119,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
       </div>
       <CardContent className="p-6">
         {mode === 'manual' && (
-          <ManualControl deviceId={deviceId} device={device} followBlocksPanelProcesses={processModesBlockedByFollow} />
+          <ManualControl
+            deviceId={deviceId}
+            device={device}
+            followBlocksPanelProcesses={processModesBlockedByFollow}
+            readOnly={!canOperateDeviceControl()}
+          />
         )}
         {mode === 'homogenization' && (
           <HomogenizationControl
@@ -264,11 +275,14 @@ const ManualControl = ({
   deviceId,
   device,
   followBlocksPanelProcesses = false,
+  readOnly = false,
 }: {
   deviceId?: string;
   device?: Device;
   /** Seguimiento Madurador activo (no Manual): bloquea aplicar cambios manuales hasta cancelar seguimiento. */
   followBlocksPanelProcesses?: boolean;
+  /** Visualizador: no ajustar ni encender/apagar desde aquí. */
+  readOnly?: boolean;
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const { session } = useDeviceControlSession(deviceId);
@@ -419,7 +433,7 @@ const ManualControl = ({
 
   const status = getStatusDisplay();
   const controlsDisabled = status.disabled;
-  const controlsDisabledPanel = controlsDisabled || followBlocksPanelProcesses;
+  const controlsDisabledPanel = controlsDisabled || followBlocksPanelProcesses || readOnly;
   const conexionLabel = device?.estado_conexion === 'online' ? 'Conexión: En línea' : device?.estado_conexion === 'wait' ? 'Conexión: Espera' : 'Conexión: Desconectado';
   const equipoLabel = isPoweredOn ? 'Equipo: ON' : 'Equipo: OFF';
 
@@ -443,7 +457,7 @@ const ManualControl = ({
                 {isPoweredOn ? t('turn_off') : t('turn_on')}
             </span>
             <Switch 
-                disabled={powerLoading || status.disabled}
+                disabled={powerLoading || status.disabled || readOnly}
                 checked={isPoweredOn}
                 onCheckedChange={handlePowerToggleRequest}
                 className={cn(

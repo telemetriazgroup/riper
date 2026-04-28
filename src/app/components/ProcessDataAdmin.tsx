@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Eye, Loader2, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { getStoredUser } from '@/app/lib/auth';
+import { canHardDeleteRipeningRow } from '@/app/lib/permissions';
 import { deleteRipeningProcess } from '@/app/lib/ripeningProcessesApi';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
@@ -19,7 +19,7 @@ type Props = {
 
 export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, onView }) => {
   const { t, language } = useSettings();
-  const canDelete = ['operator', 'admin', 'superadmin'].includes(getStoredUser()?.role || '');
+  const canDelete = canHardDeleteRipeningRow();
   const [deleting, setDeleting] = useState<string | null>(null);
   const delLabel = t('action_delete') || (language === 'en' ? 'Delete' : 'Eliminar');
   const viewLabel = t('view_details') || (language === 'en' ? 'View' : 'Ver');

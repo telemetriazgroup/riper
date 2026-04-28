@@ -134,6 +134,24 @@ ${el.innerHTML}
                 <span className="text-gray-500">{t('status')}: </span>
                 {statusLabel(processStatus, t)}
               </p>
+              {processStatus === 'cancelled' && view.cancelledMeta?.at && (
+                <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2.5 text-amber-950">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/90 mb-1">
+                    {t('report_cancel_section')}
+                  </p>
+                  <p>
+                    <span className="text-amber-800/90">{t('report_cancel_by')}: </span>
+                    {(view.cancelledMeta.byName && String(view.cancelledMeta.byName).trim()) ||
+                      view.cancelledMeta.byEmail ||
+                      view.cancelledMeta.byUserId ||
+                      '—'}
+                  </p>
+                  <p className="mt-0.5">
+                    <span className="text-amber-800/90">{t('report_cancel_at')}: </span>
+                    {new Date(String(view.cancelledMeta.at)).toLocaleString()}
+                  </p>
+                </div>
+              )}
               {view.display_name && (
                 <p className="sm:col-span-2">
                   <span className="text-gray-500">{t('process_name_col')}: </span>

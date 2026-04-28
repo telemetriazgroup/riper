@@ -5,6 +5,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { cancelControlProcess, controlSessionProgressPct, type DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import { cn } from '@/app/lib/utils';
+import { canOperateDeviceControl } from '@/app/lib/permissions';
 import { toast } from 'sonner';
 
 function ParamsList({ params }: { params: Record<string, unknown> }) {
@@ -81,17 +82,19 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
             {session.display_label || session.process_type} · {session.process_type}
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0 text-red-600 border-red-200 hover:bg-red-50"
-          disabled={cancelling}
-          onClick={() => onCancel(session)}
-        >
-          {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-          <span className="ml-1">{t('cancel_process') || 'Cancelar'}</span>
-        </Button>
+        {canOperateDeviceControl() && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 text-red-600 border-red-200 hover:bg-red-50"
+            disabled={cancelling}
+            onClick={() => onCancel(session)}
+          >
+            {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+            <span className="ml-1">{t('cancel_process') || 'Cancelar'}</span>
+          </Button>
+        )}
       </div>
 
       <div className="mt-3">

@@ -3,7 +3,11 @@ import { pool } from '../db.js';
 
 export const maduradorRouter = express.Router();
 
-const ULTRAORGANICS_EMAIL = 'ultraorganics@riper.local';
+/** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
+function isUltraorganicsFleetEmail(email) {
+  return String(email || '').toLowerCase().endsWith('ultraorganics@riper.local');
+}
+
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
 
 /** Listado upstream sin filtrar IMEI; por defecto el mismo endpoint que empresa 2001. */
@@ -69,7 +73,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       return res.json({ data: json });
     }
 
-    if (email === ULTRAORGANICS_EMAIL) {
+    if (isUltraorganicsFleetEmail(email)) {
       const idents = ['1001', '2001', '3001'];
       const fetches = idents.map((id) => {
         const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(id)}`;

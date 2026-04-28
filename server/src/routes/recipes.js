@@ -1,6 +1,6 @@
 import express from 'express';
 import { pool } from '../db.js';
-import { requireStaff } from '../authMiddleware.js';
+import { requireAdmin } from '../authMiddleware.js';
 
 export const recipesRouter = express.Router();
 
@@ -53,7 +53,7 @@ function newRecipeId() {
   return `rec-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-recipesRouter.post('/', requireStaff, async (req, res) => {
+recipesRouter.post('/', requireAdmin, async (req, res) => {
   const { name, fruit, description = '', phases } = req.body || {};
   const n = String(name || '').trim();
   const f = String(fruit || '').trim();
@@ -78,7 +78,7 @@ recipesRouter.post('/', requireStaff, async (req, res) => {
   }
 });
 
-recipesRouter.patch('/:id', requireStaff, async (req, res) => {
+recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, fruit, description, phases } = req.body || {};
   const updates = [];
@@ -138,7 +138,7 @@ recipesRouter.patch('/:id', requireStaff, async (req, res) => {
   }
 });
 
-recipesRouter.delete('/:id', requireStaff, async (req, res) => {
+recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const { rows: chk } = await pool.query(

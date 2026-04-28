@@ -47,6 +47,7 @@ import {
 } from '@/app/lib/deviceMonitoringMetrics';
 import { inferCurrentNextPhase, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { getStoredUser } from '@/app/lib/auth';
+import { canRegisterRipeningSampling } from '@/app/lib/permissions';
 import { postRipeningSampling, fetchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
 import { RipeningSamplingModal, type SamplingType, type SamplingParameter } from '@/app/components/RipeningSamplingModal';
 import { toast } from 'sonner';
@@ -85,8 +86,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
   const [samplingSaving, setSamplingSaving] = useState(false);
 
   const canRegisterSampling =
-    activeTracking?.process?.status === 'active' &&
-    ['operator', 'admin', 'superadmin'].includes(getStoredUser()?.role || '');
+    activeTracking?.process?.status === 'active' && canRegisterRipeningSampling();
 
   const startedAtIso = useMemo(() => {
     const sum = activeTracking?.summary;

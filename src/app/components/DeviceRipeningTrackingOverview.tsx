@@ -14,7 +14,8 @@ import { formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
-import { deleteRipeningProcess } from '@/app/lib/ripeningProcessesApi';
+import { patchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
+import { canCancelRipeningTracking } from '@/app/lib/permissions';
 import {
   inferCurrentNextPhase,
   mapRowToProcessView,
@@ -139,7 +140,7 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
     if (!pid) return;
     setBusy(true);
     try {
-      await deleteRipeningProcess(pid);
+      await patchRipeningProcess(pid, { status: 'cancelled' });
       await mutate(undefined, { revalidate: true });
       toast.success(t('control_follow_cancelled'));
       setConfirmOpen(false);
@@ -181,17 +182,19 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
               <p className="text-lg font-semibold text-teal-950 mt-0.5 truncate">{sum.display_name}</p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
-            disabled={busy}
-            onClick={() => setConfirmOpen(true)}
-          >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-            <span className={busy ? 'ml-1' : 'ml-1.5'}>{t('control_follow_cancel_tracking')}</span>
-          </Button>
+          {canCancelRipeningTracking() && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
+              disabled={busy}
+              onClick={() => setConfirmOpen(true)}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+              <span className={busy ? 'ml-1' : 'ml-1.5'}>{t('control_follow_cancel_tracking')}</span>
+            </Button>
+          )}
         </div>
 
         <div className="p-4 space-y-4 text-sm text-teal-950">

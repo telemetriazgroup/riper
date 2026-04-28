@@ -41,6 +41,10 @@ export type DeviceControlSessionRow = {
   updated_at: string;
   user_name?: string;
   user_email?: string;
+  cancelled_at?: string | null;
+  cancelled_by_user_id?: string | null;
+  cancelled_by_name?: string | null;
+  cancelled_by_email?: string | null;
 };
 
 export function controlSessionProgressPct(session: DeviceControlSessionRow | null | undefined): number {

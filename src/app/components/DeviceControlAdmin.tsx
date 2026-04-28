@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Activity, Loader2, RefreshCw, Ban, Pencil, Trash2 } from 'lucide-react';
+import { Activity, Loader2, RefreshCw, Ban, Pencil, Trash2, Eye } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
+import { canDeleteDeviceControlRecord } from '@/app/lib/permissions';
 import { useControlSessionsList, revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import {
   cancelControlProcess,
@@ -43,18 +44,18 @@ export const DeviceControlAdmin: React.FC = () => {
   const [editDuration, setEditDuration] = useState('');
   const [editParamsText, setEditParamsText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+  const [detailRow, setDetailRow] = useState<DeviceControlSessionRow | null>(null);
   const role = getStoredUser()?.role;
-  const canCancelAny = role === 'admin' || role === 'superadmin';
+  const uid = getStoredUser()?.id;
+  const canModerateSessions = role === 'operator' || role === 'admin' || role === 'superadmin';
+  const canHardDeleteDb = canDeleteDeviceControlRecord();
 
   const load = useCallback(() => revalidateControlSessionsList(), []);
 
   const onCancel = async (r: DeviceControlSessionRow) => {
     if (r.status !== 'active') return;
-    if (canCancelAny || r.user_id === getStoredUser()?.id) {
-      if (!window.confirm(t('control_process_cancel_confirm') || '¿Cancelar?')) return;
-    } else {
-      return;
-    }
+    if (!canModerateSessions && r.user_id !== uid) return;
+    if (!window.confirm(t('control_process_cancel_confirm') || '¿Cancelar?')) return;
     setBusy(r.id);
     try {
       await cancelControlProcess(r.id);
@@ -176,7 +177,7 @@ export const DeviceControlAdmin: React.FC = () => {
       </p>
 
       <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-sm">
-        <table className="w-full text-sm text-left min-w-[900px]">
+        <table className="w-full text-sm text-left min-w-[1100px]">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/80">
               <th className="p-3 font-semibold">IMEI / {t('device')}</th>
@@ -185,14 +186,15 @@ export const DeviceControlAdmin: React.FC = () => {
               <th className="p-3 font-semibold whitespace-nowrap">%</th>
               <th className="p-3 font-semibold whitespace-nowrap">{t('start') || 'Inicio'}</th>
               <th className="p-3 font-semibold whitespace-nowrap">{t('control_process_estimated_end') || 'Fin'}</th>
-              {canCancelAny && <th className="p-3 font-semibold">{t('user') || 'Usuario'}</th>}
+              <th className="p-3 font-semibold min-w-[140px]">{t('control_session_cancelled_by_col')}</th>
+              {role !== 'viewer' && <th className="p-3 font-semibold">{t('user') || 'Usuario'}</th>}
               <th className="p-3 font-semibold text-right">{t('actions') || 'Acciones'}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => {
               const pct = r.status === 'active' ? controlSessionProgressPct(r) : r.status === 'completed' ? 100 : 0;
-              const canAct = canCancelAny || r.user_id === getStoredUser()?.id;
+              const canAct = canModerateSessions || r.user_id === uid;
               return (
                 <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/50">
                   <td className="p-3 font-mono text-xs">{r.device_id}</td>
@@ -224,8 +226,33 @@ export const DeviceControlAdmin: React.FC = () => {
                   <td className="p-3 whitespace-nowrap text-xs">
                     {formatDateTime(r.estimated_end_at)}
                   </td>
-                  {canCancelAny && <td className="p-3 text-xs text-gray-600">{r.user_name || r.user_email || '—'}</td>}
+                  <td className="p-3 text-xs align-top">
+                    {r.status === 'cancelled' && r.cancelled_at ? (
+                      <div>
+                        <div className="text-gray-900">
+                          {r.cancelled_by_name || r.cancelled_by_email || '—'}
+                        </div>
+                        <div className="text-gray-500 mt-0.5">{formatDateTime(r.cancelled_at)}</div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  {role !== 'viewer' && (
+                    <td className="p-3 text-xs text-gray-600">{r.user_name || r.user_email || '—'}</td>
+                  )}
                   <td className="p-3 text-right space-x-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="text-slate-700"
+                      onClick={() => setDetailRow(r)}
+                      title={t('control_session_view_detail')}
+                    >
+                      <Eye className="h-3 w-3 sm:mr-1" />
+                      <span className="hidden lg:inline">{t('control_session_view_detail')}</span>
+                    </Button>
                     {r.status === 'active' && canAct && (
                       <>
                         <Button
@@ -252,8 +279,7 @@ export const DeviceControlAdmin: React.FC = () => {
                         </Button>
                       </>
                     )}
-                    {r.status === 'active' && !canAct && <span className="text-gray-400">—</span>}
-                    {r.status !== 'active' && canAct && (
+                    {r.status !== 'active' && canAct && canHardDeleteDb && (
                       <Button
                         type="button"
                         size="sm"
@@ -266,7 +292,6 @@ export const DeviceControlAdmin: React.FC = () => {
                         <span className="ml-1 hidden sm:inline">{t('control_session_delete') || 'Eliminar'}</span>
                       </Button>
                     )}
-                    {r.status !== 'active' && !canAct && <span className="text-gray-300">—</span>}
                   </td>
                 </tr>
               );
@@ -326,6 +351,74 @@ export const DeviceControlAdmin: React.FC = () => {
             </Button>
             <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit} className="bg-blue-600">
               {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save') || 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!detailRow} onOpenChange={(o) => !o && setDetailRow(null)}>
+        <DialogContent className="max-w-lg max-h-[min(90vh,680px)] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{t('control_session_detail_title')}</DialogTitle>
+          </DialogHeader>
+          {detailRow && (
+            <div className="space-y-3 text-sm text-gray-800">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase">IMEI</p>
+                <p className="font-mono text-xs break-all">{detailRow.device_id}</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">{t('process')}</p>
+                  <p>{detailRow.display_label || detailRow.process_type}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">{t('status')}</p>
+                  <p>{STATUS_ES[detailRow.status] || detailRow.status}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500">{t('control_session_detail_started')}</p>
+                <p className="font-mono text-xs">{formatDateTime(detailRow.started_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500">{t('control_process_estimated_end')}</p>
+                <p className="font-mono text-xs">{formatDateTime(detailRow.estimated_end_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500">{t('control_session_detail_duration')}</p>
+                <p>{String(detailRow.duration_hours)}</p>
+              </div>
+              {detailRow.status === 'cancelled' && detailRow.cancelled_at && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
+                  <p className="text-xs font-semibold uppercase mb-1">{t('report_cancel_section')}</p>
+                  <p>
+                    <span className="text-amber-900/85">{t('report_cancel_by')}: </span>
+                    {detailRow.cancelled_by_name || detailRow.cancelled_by_email || '—'}
+                  </p>
+                  <p className="mt-1">
+                    <span className="text-amber-900/85">{t('report_cancel_at')}: </span>
+                    {formatDateTime(detailRow.cancelled_at)}
+                  </p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-1">{t('control_process_params')}</p>
+                <pre className="text-xs bg-slate-50 border rounded-md p-2 overflow-x-auto max-h-52">
+                  {paramsToString((detailRow.params || {}) as Record<string, unknown>)}
+                </pre>
+              </div>
+              {role !== 'viewer' && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500">{t('user')}</p>
+                  <p>{detailRow.user_name || detailRow.user_email || '—'}</p>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDetailRow(null)}>
+              {t('close')}
             </Button>
           </DialogFooter>
         </DialogContent>

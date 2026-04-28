@@ -23,6 +23,7 @@ import { ProductManager } from './ProductManager';
 import { clsx } from 'clsx';
 import { useSettings } from '../../contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
+import { canEditRecipesAndCatalog } from '@/app/lib/permissions';
 import { fetchProducts, type AppProduct } from '@/app/lib/productsApi';
 import { createRecipe, deleteRecipe, fetchRecipes, updateRecipe } from '@/app/lib/recipesApi';
 
@@ -42,7 +43,7 @@ export const RecipeList = () => {
 
   const role = getStoredUser()?.role;
   const canManageProducts = role === 'superadmin' || role === 'admin';
-  const canEditRecipes = role === 'superadmin' || role === 'admin' || role === 'operator';
+  const canEditRecipes = canEditRecipesAndCatalog();
 
   const loadAll = useCallback(async () => {
     setLoadError(null);

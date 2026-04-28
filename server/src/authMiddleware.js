@@ -28,9 +28,16 @@ export function requireAdmin(req, res, next) {
   return res.status(403).json({ error: 'forbidden', message: 'admin required' });
 }
 
-/** Operador, admin o superadmin (p. ej. CRUD recetas) */
+/** Operador, admin o superadmin (uso legacy; nuevas rutas preferir requireOperatorPlus) */
 export function requireStaff(req, res, next) {
   const r = req.user?.role;
   if (r === 'superadmin' || r === 'admin' || r === 'operator') return next();
   return res.status(403).json({ error: 'forbidden', message: 'staff required' });
+}
+
+/** Seguimiento: muestreo, aplicar valores, cancelar proceso — Visualizador excluido */
+export function requireOperatorPlus(req, res, next) {
+  const r = req.user?.role;
+  if (r === 'superadmin' || r === 'admin' || r === 'operator') return next();
+  return res.status(403).json({ error: 'forbidden', message: 'operator or admin required' });
 }
