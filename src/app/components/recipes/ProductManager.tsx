@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Trash2, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
 import {
@@ -10,15 +10,17 @@ import {
   DialogTitle,
 } from '../ui/dialog';
 import type { AppProduct } from '@/app/lib/productsApi';
-import { createProduct, deleteProduct, updateProduct } from '@/app/lib/productsApi';
+import { createProduct, deleteProduct, restoreProduct, updateProduct } from '@/app/lib/productsApi';
 import { useSettings } from '../../contexts/SettingsContext';
 
 interface ProductManagerProps {
   products: AppProduct[];
   onChanged: () => void;
+  /** Mostrar/restaurar filas archivadas — solo uso superadmin desde el padre */
+  isSuperAdmin?: boolean;
 }
 
-export function ProductManager({ products, onChanged }: ProductManagerProps) {
+export function ProductManager({ products, onChanged, isSuperAdmin = false }: ProductManagerProps) {
   const { t } = useSettings();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AppProduct | null>(null);
@@ -56,10 +58,20 @@ export function ProductManager({ products, onChanged }: ProductManagerProps) {
     }
   };
 
-  const handleDelete = async (p: AppProduct) => {
+  const handleArchive = async (p: AppProduct) => {
     if (!window.confirm(t('products_confirm_delete'))) return;
     try {
       await deleteProduct(p.id);
+      onChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error');
+    }
+  };
+
+  const handleRestore = async (p: AppProduct) => {
+    if (!isSuperAdmin) return;
+    try {
+      await restoreProduct(p.id);
       onChanged();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error');
@@ -96,36 +108,65 @@ export function ProductManager({ products, onChanged }: ProductManagerProps) {
             </p>
           ) : (
             <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-              {products.map((p) => (
+              {products.map((p) => {
+                const archived = p.archived === true || Boolean(p.archived_at);
+                return (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between gap-3 px-4 py-3 bg-white hover:bg-gray-50/80"
+                  className={`flex items-center justify-between gap-3 px-4 py-3 ${
+                    archived ? 'bg-slate-50/90 border-l-4 border-l-amber-400' : 'bg-white'
+                  } hover:bg-gray-50/80`}
                 >
-                  <span className="text-sm font-medium text-gray-900">{p.name}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-sm font-medium truncate ${archived ? 'text-slate-600' : 'text-gray-900'}`}>
+                      {p.name}
+                    </span>
+                    {archived && (
+                      <span className="text-[10px] uppercase font-semibold shrink-0 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                        {t('archived_badge')}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => openEdit(p)}
-                      aria-label={t('products_edit')}
-                    >
-                      <Pencil className="w-4 h-4 text-gray-500" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:text-red-600"
-                      onClick={() => handleDelete(p)}
-                      aria-label={t('products_delete')}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {!archived && (
+                      <>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => openEdit(p)}
+                          aria-label={t('products_edit')}
+                        >
+                          <Pencil className="w-4 h-4 text-gray-500" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:text-red-600"
+                          onClick={() => handleArchive(p)}
+                          aria-label={t('products_confirm_delete')}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                    {archived && isSuperAdmin && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-emerald-800 border-emerald-200"
+                        onClick={() => handleRestore(p)}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        {t('restore_from_archive')}
+                      </Button>
+                    )}
                   </div>
                 </li>
-              ))}
+              )})}
             </ul>
           )}
         </CardContent>

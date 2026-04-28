@@ -28,6 +28,12 @@ export function requireAdmin(req, res, next) {
   return res.status(403).json({ error: 'forbidden', message: 'admin required' });
 }
 
+/** Auditoría — solo cuenta con rol superadmin */
+export function requireSuperAdmin(req, res, next) {
+  if (req.user?.role === 'superadmin') return next();
+  return res.status(403).json({ error: 'forbidden', message: 'superadmin only' });
+}
+
 /** Operador, admin o superadmin (uso legacy; nuevas rutas preferir requireOperatorPlus) */
 export function requireStaff(req, res, next) {
   const r = req.user?.role;

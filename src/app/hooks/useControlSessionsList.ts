@@ -1,18 +1,29 @@
 import useSWR, { mutate as swrMutate } from 'swr';
-import { listControlSessions, CONTROL_SESSIONS_LIST_SWR_KEY, type DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
+import {
+  listControlSessions,
+  CONTROL_SESSIONS_LIST_SWR_KEY,
+  type DeviceControlSessionRow,
+} from '@/app/lib/deviceControlProcessApi';
 
-const fetcher = () => listControlSessions();
+function keyFor(includeArchived: boolean) {
+  return [CONTROL_SESSIONS_LIST_SWR_KEY, includeArchived] as const;
+}
 
-export function useControlSessionsList() {
+export function useControlSessionsList(includeArchived = false) {
+  const k = keyFor(includeArchived);
+  const fetcher = () => listControlSessions({ includeArchived });
   const { data, error, isLoading, mutate } = useSWR<DeviceControlSessionRow[]>(
-    CONTROL_SESSIONS_LIST_SWR_KEY,
+    k,
     fetcher,
     { revalidateOnFocus: true }
   );
   return { sessions: data ?? [], isLoading, isError: error, mutate };
 }
 
-/** Llamar tras crear/editar/eliminar una sesión desde el panel. */
+/** Tras crear/editar/archivar/restaurar — revalidar todas las variantes del listado. */
 export function revalidateControlSessionsList() {
-  return swrMutate(CONTROL_SESSIONS_LIST_SWR_KEY, listControlSessions());
+  return swrMutate(
+    (key) =>
+      Array.isArray(key) && key.length >= 2 && key[0] === CONTROL_SESSIONS_LIST_SWR_KEY
+  );
 }

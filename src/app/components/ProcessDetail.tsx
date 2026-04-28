@@ -10,6 +10,7 @@ import {
   Clock,
   FlaskConical,
   FileText,
+  Ban,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
@@ -17,8 +18,8 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { AuthedImage } from './AuthedImage';
 import { clsx } from 'clsx';
 import { getStoredUser } from '@/app/lib/auth';
-import { canRegisterRipeningSampling } from '@/app/lib/permissions';
-import { postRipeningSampling, fetchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
+import { canRegisterRipeningSampling, canCancelRipeningTracking } from '@/app/lib/permissions';
+import { postRipeningSampling, fetchRipeningProcess, patchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
 import { buildPlanningSnapshot, mapRowToProcessView, remainingDays } from '@/app/lib/ripeningProcessMappers';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { ProcessTrackingReportDialog } from '@/app/components/ProcessTrackingReportDialog';
@@ -71,9 +72,12 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   const { t } = useSettings();
   const data = processData || FALLBACK_DATA;
   const processStatus = (data as { status?: string }).status || 'active';
+  const isArchived = (data as ReturnType<typeof mapRowToProcessView>).archived === true;
   const isActiveProcess = processStatus === 'active';
-  const canRegister = isActiveProcess && canRegisterRipeningSampling();
+  const canRegister = isActiveProcess && canRegisterRipeningSampling() && !isArchived;
+  const canCancelHere = isActiveProcess && canCancelRipeningTracking() && !isArchived;
   const [isSamplingModalOpen, setIsSamplingModalOpen] = useState(false);
+  const [cancellingTracking, setCancellingTracking] = useState(false);
   const [samplingSaving, setSamplingSaving] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [events, setEvents] = useState((processData || FALLBACK_DATA).timeline || []);
@@ -138,8 +142,34 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
     }
   };
 
+  const handleCancelTracking = async () => {
+    const pid = (data as { id?: string }).id;
+    if (!pid || !canCancelHere) return;
+    if (!window.confirm(t('process_cancel_tracking_confirm'))) return;
+    setCancellingTracking(true);
+    try {
+      await patchRipeningProcess(pid, { status: 'cancelled' });
+      const row = await fetchRipeningProcess(pid);
+      const view = mapRowToProcessView(row);
+      onProcessUpdated?.(view);
+      setEvents(view.timeline ?? []);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setCancellingTracking(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300 pb-10">
+      {isArchived && (
+        <div
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          {t('tracking_archived_readonly')}
+        </div>
+      )}
       {!isActiveProcess && (
         <div
           className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800 space-y-2"
@@ -230,6 +260,18 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
               >
                 <ClipboardCheck className="w-4 h-4" />
                 {t('sampling_register')}
+              </Button>
+            )}
+            {canCancelHere && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={cancellingTracking}
+                className="gap-2 border-red-300 text-red-700 hover:bg-red-50"
+                onClick={() => void handleCancelTracking()}
+              >
+                <Ban className="w-4 h-4" />
+                {cancellingTracking ? t('loading') : t('process_cancel_tracking')}
               </Button>
             )}
           </div>

@@ -1,5 +1,17 @@
 import React from 'react';
-import { LayoutDashboard, Settings, Thermometer, Wind, BookOpen, Users, HelpCircle, LogOut, Activity } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Settings,
+  Thermometer,
+  Wind,
+  BookOpen,
+  Users,
+  HelpCircle,
+  LogOut,
+  Activity,
+  Shield,
+} from 'lucide-react';
+import { getStoredUser } from '@/app/lib/auth';
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
@@ -16,6 +28,7 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose }) => {
   const { t } = useSettings();
   const restrictedDemo = isGourmetSession() || isFleetDemoSession() || isUltraorganicsSession();
+  const isSuperAdmin = getStoredUser()?.role === 'superadmin';
 
   const menuItems = [
     { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
@@ -24,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
     { id: 'processes', label: t('processes'), icon: Activity },
     { id: 'recipes', label: t('recipes'), icon: BookOpen },
     ...(!restrictedDemo ? [{ id: 'users', label: t('users'), icon: Users }] : []),
+    ...(isSuperAdmin ? [{ id: 'audit', label: t('audit'), icon: Shield }] : []),
     ...(!restrictedDemo ? [{ id: 'settings', label: t('settings'), icon: Settings }] : []),
     { id: 'manual', label: t('help'), icon: HelpCircle },
   ];

@@ -45,6 +45,7 @@ export type DeviceControlSessionRow = {
   cancelled_by_user_id?: string | null;
   cancelled_by_name?: string | null;
   cancelled_by_email?: string | null;
+  archived_at?: string | null;
 };
 
 export function controlSessionProgressPct(session: DeviceControlSessionRow | null | undefined): number {
@@ -109,10 +110,15 @@ export async function completeControlProcess(id: string): Promise<DeviceControlS
   return json.data;
 }
 
-export async function listControlSessions(): Promise<DeviceControlSessionRow[]> {
-  const res = await fetch(`${base()}/sessions`, { headers: authHeaders() });
+export async function listControlSessions(opts?: { includeArchived?: boolean }): Promise<DeviceControlSessionRow[]> {
+  const u = new URL(`${base()}/sessions`);
+  if (opts?.includeArchived) u.searchParams.set('includeArchived', '1');
+  const res = await fetch(u.toString(), { headers: authHeaders() });
   const json = await handle<{ data: DeviceControlSessionRow[] }>(res);
-  return json.data ?? [];
+  return (json.data ?? []).map((r) => ({
+    ...r,
+    archived_at: r.archived_at ?? null,
+  }));
 }
 
 export const CONTROL_SESSIONS_LIST_SWR_KEY = 'device-control-sessions';
@@ -137,10 +143,22 @@ export async function updateControlSession(
   return json.data;
 }
 
+/** Archiva el registro en listado (no borrado físico) */
 export async function deleteControlSessionRecord(id: string): Promise<void> {
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
-  await handle<{ data: { deleted: boolean; id: string } }>(res);
+  await handle<{ data: { archived?: boolean; id: string } }>(res);
+}
+
+export async function restoreControlSession(id: string): Promise<DeviceControlSessionRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: '{}',
+  });
+  const json = await handle<{ data: DeviceControlSessionRow }>(res);
+  if (!json.data) throw new Error('sin respuesta');
+  return json.data;
 }

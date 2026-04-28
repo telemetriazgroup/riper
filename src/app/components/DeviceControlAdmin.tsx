@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Activity, Loader2, RefreshCw, Ban, Pencil, Trash2, Eye } from 'lucide-react';
+import { Activity, Loader2, RefreshCw, Ban, Pencil, Archive, Eye, RotateCcw } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import {
   Dialog,
@@ -16,6 +16,7 @@ import {
   cancelControlProcess,
   updateControlSession,
   deleteControlSessionRecord,
+  restoreControlSession,
   type DeviceControlSessionRow,
 } from '@/app/lib/deviceControlProcessApi';
 import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
@@ -37,7 +38,11 @@ function paramsToString(p: Record<string, unknown>) {
 
 export const DeviceControlAdmin: React.FC = () => {
   const { t, formatDateTime } = useSettings();
-  const { sessions: rows, isLoading, isError } = useControlSessionsList();
+  const role = getStoredUser()?.role;
+  const isSuperAdmin = role === 'superadmin';
+  const [showArchivedSessions, setShowArchivedSessions] = useState(false);
+  const includeArchived = Boolean(isSuperAdmin && showArchivedSessions);
+  const { sessions: rows, isLoading, isError } = useControlSessionsList(includeArchived);
   const [busy, setBusy] = useState<string | null>(null);
   const [editRow, setEditRow] = useState<DeviceControlSessionRow | null>(null);
   const [editLabel, setEditLabel] = useState('');
@@ -45,7 +50,6 @@ export const DeviceControlAdmin: React.FC = () => {
   const [editParamsText, setEditParamsText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [detailRow, setDetailRow] = useState<DeviceControlSessionRow | null>(null);
-  const role = getStoredUser()?.role;
   const uid = getStoredUser()?.id;
   const canModerateSessions = role === 'operator' || role === 'admin' || role === 'superadmin';
   const canHardDeleteDb = canDeleteDeviceControlRecord();
@@ -68,16 +72,31 @@ export const DeviceControlAdmin: React.FC = () => {
     }
   };
 
-  const onDeleteRecord = async (r: DeviceControlSessionRow) => {
+  const onArchiveRecord = async (r: DeviceControlSessionRow) => {
+    if (r.archived_at) return;
     if (r.status === 'active') {
       toast.error(t('control_session_delete_active_hint') || 'Cancele el proceso activo primero.');
       return;
     }
-    if (!window.confirm(t('control_session_delete_confirm') || '¿Eliminar este registro del listado?')) return;
+    if (!window.confirm(t('control_session_delete_confirm') || '¿Archivar este registro?')) return;
     setBusy(r.id);
     try {
       await deleteControlSessionRecord(r.id);
-      toast.success(t('control_session_deleted') || 'Registro eliminado');
+      toast.success(t('control_session_deleted') || 'Registro archivado');
+      await revalidateControlSessionsList();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onRestoreArchived = async (r: DeviceControlSessionRow) => {
+    if (!isSuperAdmin || !r.archived_at) return;
+    setBusy(r.id);
+    try {
+      await restoreControlSession(r.id);
+      toast.success(t('restore_control_session'));
       await revalidateControlSessionsList();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error');
@@ -166,10 +185,23 @@ export const DeviceControlAdmin: React.FC = () => {
             {t('control_sessions_subtitle')}
           </p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
-          <RefreshCw className="h-4 w-4 mr-1" />
-          {t('refresh') || 'Actualizar'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          {isSuperAdmin && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300"
+                checked={showArchivedSessions}
+                onChange={(e) => setShowArchivedSessions(e.target.checked)}
+              />
+              {t('catalog_show_archived_sessions')}
+            </label>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
+            <RefreshCw className="h-4 w-4 mr-1" />
+            {t('refresh') || 'Actualizar'}
+          </Button>
+        </div>
       </div>
 
       <p className="text-sm text-muted-foreground">
@@ -193,13 +225,27 @@ export const DeviceControlAdmin: React.FC = () => {
           </thead>
           <tbody>
             {rows.map((r) => {
+              const isArchivedRow = Boolean(r.archived_at);
               const pct = r.status === 'active' ? controlSessionProgressPct(r) : r.status === 'completed' ? 100 : 0;
               const canAct = canModerateSessions || r.user_id === uid;
               return (
-                <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                <tr
+                  key={r.id}
+                  className={cn(
+                    'border-b border-gray-100 hover:bg-gray-50/50',
+                    isArchivedRow && 'bg-slate-50/80 border-l-4 border-l-amber-400'
+                  )}
+                >
                   <td className="p-3 font-mono text-xs">{r.device_id}</td>
                   <td className="p-3">
-                    <span className="font-medium text-gray-900">{r.display_label || r.process_type}</span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-gray-900">{r.display_label || r.process_type}</span>
+                      {isArchivedRow && (
+                        <span className="text-[10px] font-bold uppercase px-1 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                          {t('archived_badge')}
+                        </span>
+                      )}
+                    </span>
                     <div className="text-xs text-gray-500 mt-0.5 line-clamp-2 max-w-md">
                       {Object.entries((r.params && typeof r.params === 'object' ? r.params : {}) as Record<string, unknown>)
                         .slice(0, 3)
@@ -279,17 +325,34 @@ export const DeviceControlAdmin: React.FC = () => {
                         </Button>
                       </>
                     )}
-                    {r.status !== 'active' && canAct && canHardDeleteDb && (
+                    {!isArchivedRow && r.status !== 'active' && canAct && canHardDeleteDb && (
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="text-red-600"
+                        className="text-red-700 border-red-200"
                         disabled={busy === r.id}
-                        onClick={() => onDeleteRecord(r)}
+                        onClick={() => onArchiveRecord(r)}
                       >
-                        <Trash2 className="h-3 w-3" />
-                        <span className="ml-1 hidden sm:inline">{t('control_session_delete') || 'Eliminar'}</span>
+                        <Archive className="h-3 w-3" />
+                        <span className="ml-1 hidden sm:inline">{t('control_session_archive')}</span>
+                      </Button>
+                    )}
+                    {isArchivedRow && isSuperAdmin && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="text-emerald-800 border-emerald-200"
+                        disabled={busy === r.id}
+                        onClick={() => onRestoreArchived(r)}
+                      >
+                        {busy === r.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" />
+                        )}
+                        <span className="ml-1 hidden sm:inline">{t('restore_control_session')}</span>
                       </Button>
                     )}
                   </td>

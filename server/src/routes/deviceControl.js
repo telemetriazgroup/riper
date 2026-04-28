@@ -1,5 +1,12 @@
 import express from 'express';
 import { pool } from '../db.js';
+import { writeAudit } from '../auditLog.js';
+import { requireSuperAdmin } from '../authMiddleware.js';
+
+function parseIncludeArchived(req) {
+  const v = req.query.includeArchived ?? req.query.include_archived;
+  return v === true || v === 'true' || v === '1';
+}
 
 function isAdminRole(req) {
   const r = req.user?.role;
@@ -35,7 +42,7 @@ deviceControlRouter.get('/active', async (req, res) => {
        FROM app_device_control_sessions s
        JOIN app_users u ON u.id = s.user_id
        LEFT JOIN app_users uc ON uc.id = s.cancelled_by_user_id
-       WHERE s.device_id = $1 AND s.status = 'active'
+       WHERE s.device_id = $1 AND s.status = 'active' AND s.archived_at IS NULL
        ORDER BY s.started_at DESC
        LIMIT 1`,
       [deviceId]
@@ -100,7 +107,7 @@ deviceControlRouter.post('/start', async (req, res) => {
 
     const { rows: otherCtrl } = await client.query(
       `SELECT id FROM app_device_control_sessions
-       WHERE device_id = $1 AND status = 'active' AND user_id <> $2::uuid
+       WHERE device_id = $1 AND status = 'active' AND user_id <> $2::uuid AND archived_at IS NULL
        LIMIT 1`,
       [deviceId, req.user.id]
     );
@@ -118,7 +125,7 @@ deviceControlRouter.post('/start', async (req, res) => {
            cancelled_at = now(),
            cancelled_by_user_id = $3::uuid,
            updated_at = now()
-       WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active'`,
+       WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active' AND archived_at IS NULL`,
       [req.user.id, deviceId, req.user.id]
     );
     const { rows } = await client.query(
@@ -138,7 +145,19 @@ deviceControlRouter.post('/start', async (req, res) => {
       ]
     );
     await client.query('COMMIT');
-    return res.json({ data: rows[0] });
+    const sessionRow = rows[0];
+    await writeAudit(req, {
+      action: 'device_control.session.start',
+      entityType: 'device_control_session',
+      entityId: String(sessionRow.id),
+      meta: {
+        deviceId,
+        processType,
+        durationHours,
+        display_label: sessionRow.display_label,
+      },
+    });
+    return res.json({ data: sessionRow });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(e);
@@ -153,6 +172,10 @@ deviceControlRouter.post('/start', async (req, res) => {
  */
 deviceControlRouter.get('/sessions', async (req, res) => {
   try {
+    const includeArchived = parseIncludeArchived(req);
+    if (includeArchived && req.user?.role !== 'superadmin') {
+      return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
+    }
     const { rows } = await pool.query(
       `SELECT s.*,
               u.name AS user_name,
@@ -162,10 +185,38 @@ deviceControlRouter.get('/sessions', async (req, res) => {
          FROM app_device_control_sessions s
          JOIN app_users u ON u.id = s.user_id
          LEFT JOIN app_users uc ON uc.id = s.cancelled_by_user_id
-         ORDER BY s.created_at DESC
-         LIMIT 500`
+        WHERE ($1::boolean = TRUE OR s.archived_at IS NULL)
+         ORDER BY s.archived_at NULLS FIRST, s.created_at DESC
+         LIMIT 500`,
+      [includeArchived]
     );
     return res.json({ data: rows });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+deviceControlRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'validation' });
+    const { rows } = await pool.query(
+      `UPDATE app_device_control_sessions
+       SET archived_at = NULL, updated_at = now()
+       WHERE id = $1::uuid AND archived_at IS NOT NULL
+       RETURNING *`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    const row = rows[0];
+    await writeAudit(req, {
+      action: 'device_control.session.restore',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: { device_id: row.device_id, process_type: row.process_type },
+    });
+    return res.json({ data: row });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -180,7 +231,7 @@ deviceControlRouter.post('/:id/complete', async (req, res) => {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'validation' });
     const { rows: cur } = await pool.query(
-      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid`,
+      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid AND archived_at IS NULL`,
       [id]
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
@@ -194,10 +245,16 @@ deviceControlRouter.post('/:id/complete', async (req, res) => {
     const { rows: upd } = await pool.query(
       `UPDATE app_device_control_sessions
        SET status = 'completed', updated_at = now()
-       WHERE id = $1::uuid
+       WHERE id = $1::uuid AND archived_at IS NULL
        RETURNING *`,
       [id]
     );
+    await writeAudit(req, {
+      action: 'device_control.session.complete',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: { device_id: upd[0]?.device_id, process_type: upd[0]?.process_type },
+    });
     return res.json({ data: upd[0] });
   } catch (e) {
     console.error(e);
@@ -213,7 +270,7 @@ deviceControlRouter.post('/:id/cancel', async (req, res) => {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'validation' });
     const { rows: cur } = await pool.query(
-      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid`,
+      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid AND archived_at IS NULL`,
       [id]
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
@@ -231,10 +288,16 @@ deviceControlRouter.post('/:id/cancel', async (req, res) => {
            cancelled_at = now(),
            cancelled_by_user_id = $2::uuid,
            updated_at = now()
-       WHERE id = $1::uuid
+       WHERE id = $1::uuid AND archived_at IS NULL
        RETURNING *`,
       [id, uid]
     );
+    await writeAudit(req, {
+      action: 'device_control.session.cancel',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: { device_id: upd[0]?.device_id, process_type: upd[0]?.process_type },
+    });
     return res.json({ data: upd[0] });
   } catch (e) {
     console.error(e);
@@ -250,7 +313,7 @@ deviceControlRouter.patch('/:id', async (req, res) => {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'validation' });
     const { rows: cur } = await pool.query(
-      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid`,
+      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid AND archived_at IS NULL`,
       [id]
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
@@ -290,10 +353,16 @@ deviceControlRouter.patch('/:id', async (req, res) => {
            duration_hours = $4::numeric,
            estimated_end_at = $5::timestamptz,
            updated_at = now()
-       WHERE id = $1::uuid
+       WHERE id = $1::uuid AND archived_at IS NULL
        RETURNING *`,
       [id, displayLabel, JSON.stringify(params), durationHours, estimatedEnd.toISOString()]
     );
+    await writeAudit(req, {
+      action: 'device_control.session.update',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: { device_id: upd[0]?.device_id, process_type: upd[0]?.process_type },
+    });
     return res.json({ data: upd[0] });
   } catch (e) {
     console.error(e);
@@ -302,20 +371,20 @@ deviceControlRouter.patch('/:id', async (req, res) => {
 });
 
 /**
- * Borrar un registro (procesos activos: cancelar antes con POST .../cancel).
+ * Archivar registro (no borrado físico). Procesos activos: cancelar antes con POST .../cancel.
  */
 deviceControlRouter.delete('/:id', async (req, res) => {
   try {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'validation' });
     const { rows: cur } = await pool.query(
-      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid`,
+      `SELECT * FROM app_device_control_sessions WHERE id = $1::uuid AND archived_at IS NULL`,
       [id]
     );
     if (!cur.length) return res.status(404).json({ error: 'not_found' });
     const row = cur[0];
     if (!isAdminRole(req)) {
-      return res.status(403).json({ error: 'forbidden', message: 'only administrators can delete session rows' });
+      return res.status(403).json({ error: 'forbidden', message: 'only administrators can archive session rows' });
     }
     if (row.status === 'active') {
       return res.status(400).json({
@@ -323,8 +392,25 @@ deviceControlRouter.delete('/:id', async (req, res) => {
         message: 'cancel active session first',
       });
     }
-    await pool.query(`DELETE FROM app_device_control_sessions WHERE id = $1::uuid`, [id]);
-    return res.json({ data: { deleted: true, id } });
+    const { rows: upd } = await pool.query(
+      `UPDATE app_device_control_sessions
+       SET archived_at = now(), updated_at = now()
+       WHERE id = $1::uuid AND archived_at IS NULL AND status <> 'active'
+       RETURNING *`,
+      [id]
+    );
+    if (!upd.length) return res.status(404).json({ error: 'not_found' });
+    await writeAudit(req, {
+      action: 'device_control.session.archive',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: {
+        device_id: row.device_id,
+        process_type: row.process_type,
+        prior_status: row.status,
+      },
+    });
+    return res.json({ data: { archived: true, id, row: upd[0] } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });

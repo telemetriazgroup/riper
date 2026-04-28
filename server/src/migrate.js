@@ -132,6 +132,31 @@ ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS cancelled_at TI
 ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS cancelled_by_user_id UUID NULL REFERENCES app_users(id) ON DELETE SET NULL;
 `;
 
+const SQL_DEVICE_CONTROL_ARCHIVE = `
+ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL;
+CREATE INDEX IF NOT EXISTS idx_dctrl_sessions_not_archived ON app_device_control_sessions (created_at DESC) WHERE archived_at IS NULL;
+`;
+
+/** Trazabilidad: solo inserción; no hay DELETE desde la aplicación. */
+const SQL_AUDIT = `
+CREATE TABLE IF NOT EXISTS app_audit_logs (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor_user_id UUID NULL REFERENCES app_users(id) ON DELETE SET NULL,
+  actor_email VARCHAR(255),
+  actor_role VARCHAR(32),
+  action VARCHAR(96) NOT NULL,
+  entity_type VARCHAR(64) NOT NULL,
+  entity_id VARCHAR(128),
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ip_address VARCHAR(128),
+  user_agent TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_app_audit_logs_created ON app_audit_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_app_audit_logs_action ON app_audit_logs (action);
+CREATE INDEX IF NOT EXISTS idx_app_audit_logs_entity ON app_audit_logs (entity_type, entity_id);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -156,6 +181,8 @@ export async function runMigrate() {
     await client.query(SQL_RIPENING_PROCESSES);
     await client.query(SQL_DEVICE_CONTROL);
     await client.query(SQL_DEVICE_CONTROL_CANCEL_META);
+    await client.query(SQL_DEVICE_CONTROL_ARCHIVE);
+    await client.query(SQL_AUDIT);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

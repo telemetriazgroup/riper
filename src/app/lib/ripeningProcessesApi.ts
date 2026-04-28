@@ -48,6 +48,7 @@ export type RipeningProcessRow = {
     };
   };
   timeline: unknown;
+  deleted_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -58,8 +59,12 @@ export function apiFileUrl(path: string | undefined | null): string {
   return `${RIPENER_API_URL.replace(/\/$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
-export async function fetchRipeningProcesses(): Promise<RipeningProcessRow[]> {
-  const res = await fetch(base(), { headers: authHeaders() });
+/** Superadmin puede pasar includeArchived=true para listar también seguimientos archivados. */
+export async function fetchRipeningProcesses(opts?: {
+  includeArchived?: boolean;
+}): Promise<RipeningProcessRow[]> {
+  const q = opts?.includeArchived ? '?includeArchived=true' : '';
+  const res = await fetch(`${base()}${q}`, { headers: authHeaders() });
   const json = await handle<{ data: RipeningProcessRow[] }>(res);
   return json.data ?? [];
 }

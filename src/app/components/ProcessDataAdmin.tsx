@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, Loader2, Trash2 } from 'lucide-react';
+import { Eye, Loader2, Archive } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { canHardDeleteRipeningRow } from '@/app/lib/permissions';
@@ -21,7 +21,7 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
   const { t, language } = useSettings();
   const canDelete = canHardDeleteRipeningRow();
   const [deleting, setDeleting] = useState<string | null>(null);
-  const delLabel = t('action_delete') || (language === 'en' ? 'Delete' : 'Eliminar');
+  const archiveLabel = t('action_archive') || (language === 'en' ? 'Archive' : 'Archivar');
   const viewLabel = t('view_details') || (language === 'en' ? 'View' : 'Ver');
 
   const onDelete = async (id: string) => {
@@ -85,22 +85,29 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
                 <td className="p-3 text-gray-800 max-w-[200px] truncate">{v.client.name}</td>
                 <td className="p-3 text-gray-700 max-w-[160px] truncate">{v.batch.product}</td>
                 <td className="p-3">
-                  <span
-                    className={clsx(
-                      'px-2 py-0.5 rounded text-xs font-medium',
-                      row.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : row.status === 'cancelled'
-                          ? 'bg-slate-200 text-slate-800'
-                          : 'bg-gray-100 text-gray-700'
+                  <div className="flex flex-wrap items-center gap-1">
+                    {row.deleted_at && (
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-900 border border-amber-200">
+                        {t('archived_badge')}
+                      </span>
                     )}
-                  >
-                    {row.status === 'active'
-                      ? t('in_process')
-                      : row.status === 'cancelled'
-                        ? t('status_ripening_cancelled')
-                        : row.status}
-                  </span>
+                    <span
+                      className={clsx(
+                        'px-2 py-0.5 rounded text-xs font-medium',
+                        row.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : row.status === 'cancelled'
+                            ? 'bg-slate-200 text-slate-800'
+                            : 'bg-gray-100 text-gray-700'
+                      )}
+                    >
+                      {row.status === 'active'
+                        ? t('in_process')
+                        : row.status === 'cancelled'
+                          ? t('status_ripening_cancelled')
+                          : row.status}
+                    </span>
+                  </div>
                 </td>
                 <td className="p-3 text-gray-600 whitespace-nowrap text-xs">
                   {new Date(row.created_at).toLocaleString()}
@@ -117,7 +124,7 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
                       <Eye className="w-3.5 h-3.5" />
                       {viewLabel}
                     </Button>
-                    {canDelete && (
+                    {canDelete && !row.deleted_at && (
                       <Button
                         type="button"
                         size="sm"
@@ -126,8 +133,8 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
                         onClick={() => onDelete(row.id)}
                         disabled={deleting === row.id}
                       >
-                        {deleting === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                        <span className="sr-only">{delLabel}</span>
+                        {deleting === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                        <span className="sr-only">{archiveLabel}</span>
                       </Button>
                     )}
                   </div>

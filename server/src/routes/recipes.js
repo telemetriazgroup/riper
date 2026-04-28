@@ -1,11 +1,13 @@
 import express from 'express';
 import { pool } from '../db.js';
-import { requireAdmin } from '../authMiddleware.js';
+import { requireAdmin, requireSuperAdmin } from '../authMiddleware.js';
+import { writeAudit } from '../auditLog.js';
 
 export const recipesRouter = express.Router();
 
 function rowToRecipe(row) {
   const phases = row.phases;
+  const del = row.deleted_at;
   return {
     id: row.id,
     name: row.name,
@@ -15,16 +17,28 @@ function rowToRecipe(row) {
     is_system: row.is_system === true,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    archived_at: del ? new Date(del).toISOString() : null,
+    archived: Boolean(del),
   };
 }
 
-recipesRouter.get('/', async (_req, res) => {
+function parseIncludeArchived(req) {
+  const v = req.query.includeArchived ?? req.query.include_archived;
+  return v === true || v === 'true' || v === '1';
+}
+
+recipesRouter.get('/', async (req, res) => {
   try {
+    const includeArchived = parseIncludeArchived(req);
+    if (includeArchived && req.user?.role !== 'superadmin') {
+      return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
+    }
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, created_at, updated_at
+      `SELECT id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at
        FROM app_recipes
-       WHERE deleted_at IS NULL
-       ORDER BY is_system DESC, name ASC, updated_at DESC`
+       WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
+       ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
+      [includeArchived]
     );
     res.json({ data: rows.map(rowToRecipe) });
   } catch (e) {
@@ -33,13 +47,38 @@ recipesRouter.get('/', async (_req, res) => {
   }
 });
 
-recipesRouter.get('/:id', async (req, res) => {
+recipesRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
+  const { id } = req.params;
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, created_at, updated_at
+      `UPDATE app_recipes
+       SET deleted_at = NULL, updated_at = now()
+       WHERE id = $1 AND deleted_at IS NOT NULL AND (is_system IS NOT TRUE)
+       RETURNING id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    await writeAudit(req, {
+      action: 'recipe.restore',
+      entityType: 'recipe',
+      entityId: String(id),
+      meta: { name: rows[0].name, fruit: rows[0].fruit },
+    });
+    res.json({ data: rowToRecipe(rows[0]) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+recipesRouter.get('/:id', async (req, res) => {
+  try {
+    const superadmin = req.user?.role === 'superadmin';
+    const { rows } = await pool.query(
+      `SELECT id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at
        FROM app_recipes
-       WHERE id = $1 AND deleted_at IS NULL`,
-      [req.params.id]
+       WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
+      [req.params.id, superadmin]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ data: rowToRecipe(rows[0]) });
@@ -71,6 +110,12 @@ recipesRouter.post('/', requireAdmin, async (req, res) => {
        RETURNING id, name, fruit, description, phases, is_system, created_at, updated_at`,
       [id, n, f, String(description), JSON.stringify(phases)]
     );
+    await writeAudit(req, {
+      action: 'recipe.create',
+      entityType: 'recipe',
+      entityId: id,
+      meta: { name: n, fruit: f },
+    });
     res.status(201).json({ data: rowToRecipe(rows[0]) });
   } catch (e) {
     console.error(e);
@@ -131,6 +176,17 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    await writeAudit(req, {
+      action: 'recipe.update',
+      entityType: 'recipe',
+      entityId: id,
+      meta: {
+        updated: {
+          ...(name !== undefined ? { name: rows[0].name } : {}),
+          ...(fruit !== undefined ? { fruit: rows[0].fruit } : {}),
+        },
+      },
+    });
     res.json({ data: rowToRecipe(rows[0]) });
   } catch (e) {
     console.error(e);
@@ -138,11 +194,12 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+/** Archivo lógico (no borrado físico): deleted_at = ahora */
 recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const { rows: chk } = await pool.query(
-      `SELECT is_system FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT is_system, name, fruit FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
       [id]
     );
     if (!chk.length) return res.status(404).json({ error: 'not_found' });
@@ -158,7 +215,13 @@ recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
       [id]
     );
     if (!rowCount) return res.status(404).json({ error: 'not_found' });
-    res.json({ ok: true });
+    await writeAudit(req, {
+      action: 'recipe.archive',
+      entityType: 'recipe',
+      entityId: id,
+      meta: { name: chk[0].name, fruit: chk[0].fruit },
+    });
+    res.json({ ok: true, archived: true });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });

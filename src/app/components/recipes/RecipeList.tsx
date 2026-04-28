@@ -14,6 +14,7 @@ import {
   Wind,
   Droplets,
   Loader2,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card, CardContent } from '../ui/Card';
@@ -25,7 +26,13 @@ import { useSettings } from '../../contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
 import { canEditRecipesAndCatalog } from '@/app/lib/permissions';
 import { fetchProducts, type AppProduct } from '@/app/lib/productsApi';
-import { createRecipe, deleteRecipe, fetchRecipes, updateRecipe } from '@/app/lib/recipesApi';
+import {
+  createRecipe,
+  deleteRecipe,
+  fetchRecipes,
+  restoreRecipe,
+  updateRecipe,
+} from '@/app/lib/recipesApi';
 
 export const RecipeList = () => {
   const { t } = useSettings();
@@ -37,11 +44,14 @@ export const RecipeList = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  /** Solo superadmin: ver recetas y productos archivados en el listado */
+  const [showArchivedCatalog, setShowArchivedCatalog] = useState(false);
   const [duplicateSource, setDuplicateSource] = useState<Recipe | null>(null);
   const [kebabForId, setKebabForId] = useState<string | null>(null);
   const kebabRef = useRef<HTMLDivElement | null>(null);
 
   const role = getStoredUser()?.role;
+  const isSuperAdmin = role === 'superadmin';
   const canManageProducts = role === 'superadmin' || role === 'admin';
   const canEditRecipes = canEditRecipesAndCatalog();
 
@@ -49,7 +59,11 @@ export const RecipeList = () => {
     setLoadError(null);
     setLoading(true);
     try {
-      const [p, r] = await Promise.all([fetchProducts(), fetchRecipes()]);
+      const includeArchived = Boolean(isSuperAdmin && showArchivedCatalog);
+      const [p, r] = await Promise.all([
+        fetchProducts({ includeArchived }),
+        fetchRecipes({ includeArchived }),
+      ]);
       setProducts(p);
       setRecipes(r);
     } catch (e) {
@@ -57,7 +71,7 @@ export const RecipeList = () => {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, isSuperAdmin, showArchivedCatalog]);
 
   useEffect(() => {
     loadAll();
@@ -121,6 +135,10 @@ export const RecipeList = () => {
 
   /** Editar: solo recetas no estándar (las del sistema se editan vía duplicar). */
   const handleEdit = (recipe: Recipe) => {
+    if (recipe.archived) {
+      alert(t('recipe_archived_cannot_edit'));
+      return;
+    }
     setEditingRecipe(recipe);
     setBuilderReadOnly(false);
     setView('builder');
@@ -140,6 +158,10 @@ export const RecipeList = () => {
 
   const handleSave = async (recipe: Recipe) => {
     try {
+      if (recipe.archived && recipe.id !== 'new') {
+        alert(t('recipe_archived_cannot_edit'));
+        return;
+      }
       const isNew = recipe.id === 'new' || !recipes.some((r) => r.id === recipe.id);
       if (isNew) {
         const { id: _id, is_system: _s, ...rest } = recipe;
@@ -160,7 +182,7 @@ export const RecipeList = () => {
     }
   };
 
-  const handleDelete = async (recipe: Recipe) => {
+  const handleArchiveRecipe = async (recipe: Recipe) => {
     if (recipe.is_system) {
       alert(t('recipes_cannot_delete_system'));
       return;
@@ -168,7 +190,17 @@ export const RecipeList = () => {
     if (!window.confirm(t('recipes_confirm_delete'))) return;
     try {
       await deleteRecipe(recipe.id);
-      setRecipes((prev) => prev.filter((r) => r.id !== recipe.id));
+      await loadAll();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Error');
+    }
+  };
+
+  const handleRestoreRecipe = async (recipe: Recipe) => {
+    if (!isSuperAdmin) return;
+    try {
+      await restoreRecipe(recipe.id);
+      await loadAll();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Error');
     }
@@ -261,7 +293,7 @@ export const RecipeList = () => {
           onCancel={goToList}
           readOnly={builderReadOnly}
           onStartEdit={
-            canEditRecipes && editingRecipe && !editingRecipe.is_system
+            canEditRecipes && editingRecipe && !editingRecipe.is_system && !editingRecipe.archived
               ? () => setBuilderReadOnly(false)
               : undefined
           }
@@ -300,10 +332,10 @@ export const RecipeList = () => {
       </div>
 
       {canManageProducts && (
-        <ProductManager products={products} onChanged={loadAll} />
+        <ProductManager products={products} onChanged={loadAll} isSuperAdmin={isSuperAdmin} />
       )}
 
-      <div className="flex gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
@@ -314,6 +346,17 @@ export const RecipeList = () => {
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        {isSuperAdmin && (
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">
+            <input
+              type="checkbox"
+              className="rounded border-gray-300"
+              checked={showArchivedCatalog}
+              onChange={(e) => setShowArchivedCatalog(e.target.checked)}
+            />
+            {t('catalog_show_archived')}
+          </label>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -329,7 +372,10 @@ export const RecipeList = () => {
                 openViewDetails(recipe);
               }
             }}
-            className="hover:shadow-md transition-shadow group border-gray-200 flex flex-col cursor-pointer text-left"
+            className={clsx(
+              'hover:shadow-md transition-shadow group flex flex-col cursor-pointer text-left',
+              recipe.archived ? 'border-2 border-dashed border-amber-300 bg-amber-50/30' : 'border-gray-200'
+            )}
           >
             <CardContent className="p-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start mb-4">
@@ -381,6 +427,20 @@ export const RecipeList = () => {
                           {t('duplicate_recipe')}
                         </button>
                       )}
+                      {recipe.archived && isSuperAdmin && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-emerald-900 hover:bg-emerald-50"
+                          onClick={() => {
+                            setKebabForId(null);
+                            void handleRestoreRecipe(recipe);
+                          }}
+                        >
+                          <RotateCcw className="w-4 h-4 shrink-0" />
+                          {t('restore_from_archive')}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -388,6 +448,11 @@ export const RecipeList = () => {
 
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h3 className="font-bold text-gray-900 text-lg leading-tight">{recipe.name}</h3>
+                {recipe.archived && (
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300">
+                    {t('archived_badge')}
+                  </span>
+                )}
                 {recipe.is_system && (
                   <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                     {t('recipe_standard_badge')}
@@ -425,6 +490,31 @@ export const RecipeList = () => {
                         <Copy className="w-3.5 h-3.5" />
                         {t('duplicate_recipe')}
                       </Button>
+                    ) : recipe.archived ? (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs gap-1"
+                          onClick={() => openDuplicateModal(recipe)}
+                          title={t('duplicate_recipe')}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          {t('duplicate_recipe')}
+                        </Button>
+                        {isSuperAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs gap-1 text-emerald-800 border-emerald-200"
+                            onClick={() => void handleRestoreRecipe(recipe)}
+                            title={t('restore_from_archive')}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            {t('restore_from_archive')}
+                          </Button>
+                        )}
+                      </>
                     ) : (
                       <>
                         <Button
@@ -449,8 +539,8 @@ export const RecipeList = () => {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 hover:text-red-600"
-                          onClick={() => handleDelete(recipe)}
-                          title={t('delete')}
+                          onClick={() => void handleArchiveRecipe(recipe)}
+                          title={t('recipes_confirm_delete')}
                         >
                           <Trash className="w-4 h-4" />
                         </Button>

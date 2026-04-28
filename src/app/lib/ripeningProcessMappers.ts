@@ -126,6 +126,7 @@ export function mapRowToProcessView(row: RipeningProcessRow) {
         : null,
     scheduleSummary: schedule,
     timeline: Array.isArray(row.timeline) ? row.timeline : [],
+    archived: Boolean(row.deleted_at),
     _row: row,
   };
 }

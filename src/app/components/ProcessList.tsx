@@ -38,12 +38,16 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
   const role = getStoredUser()?.role;
   const canCreate = canCreateRipeningProcess();
   const showProcessDataTab = role === 'operator' || role === 'admin' || role === 'superadmin';
+  const isSuperAdmin = role === 'superadmin';
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError('');
     try {
-      const data = await fetchRipeningProcesses();
+      const data = await fetchRipeningProcesses(
+        isSuperAdmin && includeArchived ? { includeArchived: true } : undefined
+      );
       setRawRows(data);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : t('load_processes_error'));
@@ -51,7 +55,7 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, isSuperAdmin, includeArchived]);
 
   useEffect(() => {
     void load();
@@ -119,7 +123,7 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
           <h1 className="text-2xl font-bold text-gray-900">{t('process_tracking')}</h1>
           <p className="text-gray-500 text-sm">{t('process_tracking_desc')}</p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full md:w-auto justify-stretch md:justify-end">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto justify-stretch md:justify-end items-center">
           <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50/80 text-sm">
             <button
               type="button"
@@ -145,6 +149,17 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
               </button>
             )}
           </div>
+          {isSuperAdmin && (
+            <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-700 cursor-pointer whitespace-nowrap max-w-[min(100%,20rem)]">
+              <input
+                type="checkbox"
+                className="rounded border-gray-300 shrink-0"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              {t('tracking_include_archived')}
+            </label>
+          )}
           {canCreate && (
             <Button className="bg-blue-600 hover:bg-blue-700 text-white gap-2" onClick={() => setView('create')}>
               <Plus className="w-4 h-4" />
@@ -169,8 +184,8 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
         </div>
       ) : (
         <>
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-4 mb-6 sm:items-center">
+            <div className="relative flex-1 max-w-md min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
@@ -219,7 +234,12 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                     ) : (
                       <div className="w-full h-full bg-blue-100" aria-hidden />
                     )}
-                    <div className="absolute top-2 right-2">
+                    <div className="absolute top-2 right-2 flex flex-wrap gap-1 justify-end max-w-[calc(100%-1rem)]">
+                      {proc.archived && (
+                        <span className="px-2 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md bg-amber-700/90 text-white">
+                          {t('archived_badge')}
+                        </span>
+                      )}
                       <span
                         className={clsx(
                           'px-2 py-1 rounded-full text-xs font-bold shadow-sm backdrop-blur-md',

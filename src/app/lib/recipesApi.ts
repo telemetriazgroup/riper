@@ -32,6 +32,8 @@ function toRecipe(row: {
   description: string;
   phases: Recipe['phases'];
   is_system?: boolean;
+  archived?: boolean;
+  archived_at?: string | null;
 }): Recipe {
   return {
     id: row.id,
@@ -40,11 +42,15 @@ function toRecipe(row: {
     description: row.description ?? '',
     phases: row.phases ?? [],
     is_system: row.is_system === true,
+    archived: row.archived === true || Boolean(row.archived_at),
+    archived_at: row.archived_at ?? null,
   };
 }
 
-export async function fetchRecipes(): Promise<Recipe[]> {
-  const res = await fetch(base(), { headers: authHeaders() });
+export async function fetchRecipes(opts?: { includeArchived?: boolean }): Promise<Recipe[]> {
+  const u = new URL(base());
+  if (opts?.includeArchived) u.searchParams.set('includeArchived', '1');
+  const res = await fetch(u.toString(), { headers: authHeaders() });
   const json = await handle<{ data: Parameters<typeof toRecipe>[0][] }>(res);
   return (json.data ?? []).map(toRecipe);
 }
@@ -74,10 +80,21 @@ export async function updateRecipe(id: string, payload: Partial<Omit<Recipe, 'id
   return toRecipe(json.data);
 }
 
+/** Archiva la receta (no borra el registro en base de datos) */
 export async function deleteRecipe(id: string): Promise<void> {
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeaders(),
   });
   await handle<{ ok?: boolean }>(res);
+}
+
+export async function restoreRecipe(id: string): Promise<Recipe> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}/restore`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: '{}',
+  });
+  const json = await handle<{ data: Parameters<typeof toRecipe>[0] }>(res);
+  return toRecipe(json.data);
 }

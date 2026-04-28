@@ -44,6 +44,9 @@ export interface Recipe {
   phases: PhaseConfig[]; // Ordered list of configured phases
   /** Receta del sistema (no editable in situ; se duplica) — solo lectura vía API */
   is_system?: boolean;
+  /** Archivo lógico (API); restauración solo superadmin */
+  archived?: boolean;
+  archived_at?: string | null;
 }
 
 export interface ProductOption {
@@ -280,7 +283,12 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in slide-in-from-bottom-4 duration-300">
-      
+      {initialData?.archived && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {t('recipe_open_archived_notice')}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm sticky top-4 z-20 gap-4">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">

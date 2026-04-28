@@ -6,6 +6,7 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
+import { writeAudit } from '../auditLog.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -59,15 +60,23 @@ async function getUserName(userId) {
   return rows[0].name || rows[0].email || 'Usuario';
 }
 
-async function fetchProcessById(rawId, res) {
+function parseIncludeArchived(req) {
+  const v = req.query?.includeArchived ?? req.query?.include_archived;
+  return v === true || v === 'true' || v === '1';
+}
+
+/** Superadmin puede cargar procesos archivados (deleted_at); el resto solo vigentes. */
+async function fetchProcessById(rawId, res, req = null) {
   const id = String(rawId || '').trim();
   if (!id || id === 'files') {
     res.status(400).json({ error: 'validation', message: 'id required' });
     return null;
   }
+  const allowArchived = req?.user?.role === 'superadmin';
+  const delCond = allowArchived ? '' : 'AND deleted_at IS NULL';
   const { rows } = await pool.query(
     `SELECT * FROM app_ripening_processes
-     WHERE id = $1::uuid AND deleted_at IS NULL`,
+     WHERE id = $1::uuid ${delCond}`,
     [id]
   );
   if (!rows.length) {
@@ -79,7 +88,7 @@ async function fetchProcessById(rawId, res) {
 
 async function getProcessRowFromReq(req, res) {
   const { id } = req.params;
-  return fetchProcessById(id, res);
+  return fetchProcessById(id, res, req);
 }
 
 function toParamRows(arr) {
@@ -211,14 +220,19 @@ ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
   }
 });
 
-/** Listar todos los seguimientos (incl. Visualizador) para ver procesos en curso */
+/** Listar seguimientos (incl. Visualizador). Superadmin puede incluir archivados con ?includeArchived=true */
 ripeningProcessesRouter.get('/', async (req, res) => {
   try {
+    const includeArchived = parseIncludeArchived(req);
+    if (includeArchived && req.user?.role !== 'superadmin') {
+      return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
+    }
     const { rows } = await pool.query(
-      `SELECT id, user_id, status, display_name, payload, timeline, created_at, updated_at
+      `SELECT id, user_id, status, display_name, payload, timeline, deleted_at, created_at, updated_at
          FROM app_ripening_processes
-        WHERE deleted_at IS NULL
-        ORDER BY created_at DESC`
+        WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
+        ORDER BY deleted_at NULLS FIRST, created_at DESC`,
+      [includeArchived]
     );
     res.json({ data: rows });
   } catch (e) {
@@ -255,15 +269,9 @@ ripeningProcessesRouter.get('/:id', async (req, res) => {
     if (!id || id === 'files') {
       return res.status(400).json({ error: 'validation' });
     }
-    const { rows } = await pool.query(
-      `SELECT * FROM app_ripening_processes
-       WHERE id = $1::uuid AND deleted_at IS NULL`,
-      [id]
-    );
-    if (!rows.length) {
-      return res.status(404).json({ error: 'not_found' });
-    }
-    res.json({ data: rows[0] });
+    const row = await fetchProcessById(id, res, req);
+    if (!row) return;
+    res.json({ data: row });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -320,6 +328,7 @@ ripeningProcessesRouter.post(
       String(data.initialSample?.personaEscrita || data.supervisor?.name || '')
         .trim() || userLabel;
     const files = req.files || [];
+    let replacedProcessId = null;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -376,6 +385,7 @@ ripeningProcessesRouter.post(
               deviceId,
             ]
           );
+          replacedProcessId = actives[0].id;
         }
       }
 
@@ -430,7 +440,26 @@ ripeningProcessesRouter.post(
         [row.id, JSON.stringify(p), JSON.stringify([ev])]
       );
       await client.query('COMMIT');
-      return res.status(201).json({ data: up[0] });
+      const out = up[0];
+      const pOut = out.payload || {};
+      if (replacedProcessId) {
+        await writeAudit(req, {
+          action: 'ripening.process.cancel',
+          entityType: 'ripening_process',
+          entityId: String(replacedProcessId),
+          meta: { reason: 'replaced_by_new_same_device', deviceId: deviceId || null },
+        });
+      }
+      await writeAudit(req, {
+        action: 'ripening.process.create',
+        entityType: 'ripening_process',
+        entityId: String(out.id),
+        meta: {
+          display_name: out.display_name,
+          deviceId: pOut.deviceId || null,
+        },
+      });
+      return res.status(201).json({ data: out });
     } catch (e) {
       await client.query('ROLLBACK');
       cleanupStaging();
@@ -451,6 +480,22 @@ ripeningProcessesRouter.post(
   async (req, res) => {
     const row = await getProcessRowFromReq(req, res);
     if (!row) return;
+    if (row.deleted_at) {
+      const cleanupStagingErr = () => {
+        const st = req._ripenerStaging;
+        if (!st) return;
+        try {
+          fs.rmSync(st, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+      };
+      cleanupStagingErr();
+      return res.status(403).json({
+        error: 'process_archived',
+        message: 'archived processes are read-only',
+      });
+    }
     if (row.status !== 'active') {
       const cleanupStagingErr = () => {
         const st = req._ripenerStaging;
@@ -534,13 +579,27 @@ ripeningProcessesRouter.post(
     if (!rows.length) {
       return res.status(404).json({ error: 'not_found' });
     }
-    res.json({ data: rows[0] });
+    const updated = rows[0];
+    await writeAudit(req, {
+      action: 'ripening.sampling.add',
+      entityType: 'ripening_process',
+      entityId: String(row.id),
+      meta: {
+        samplingType: type,
+        display_name: row.display_name,
+        title: newEvent.title,
+      },
+    });
+    res.json({ data: updated });
   }
 );
 
 ripeningProcessesRouter.patch('/:id', async (req, res) => {
   const row = await getProcessRowFromReq(req, res);
   if (!row) return;
+  if (row.deleted_at) {
+    return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+  }
   const role = req.user?.role;
   if (role === 'viewer') {
     return res.status(403).json({ error: 'forbidden', message: 'read only' });
@@ -618,7 +677,20 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
     if (!rows.length) {
       return res.status(404).json({ error: 'not_found' });
     }
-    res.json({ data: rows[0] });
+    const updated = rows[0];
+    const st = updated.status;
+    const isCancel = String(st).toLowerCase() === 'cancelled';
+    await writeAudit(req, {
+      action: isCancel ? 'ripening.process.cancel' : 'ripening.process.update',
+      entityType: 'ripening_process',
+      entityId: String(updated.id),
+      meta: {
+        status: updated.status,
+        display_name: updated.display_name,
+        cancelled: isCancel,
+      },
+    });
+    res.json({ data: updated });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -628,11 +700,20 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
 ripeningProcessesRouter.delete('/:id', requireAdmin, async (req, res) => {
   const row = await getProcessRowFromReq(req, res);
   if (!row) return;
+  if (row.deleted_at) {
+    return res.status(400).json({ error: 'already_archived', message: 'process already archived' });
+  }
   try {
     await pool.query(
       `UPDATE app_ripening_processes SET deleted_at = now(), updated_at = now() WHERE id = $1::uuid`,
       [row.id]
     );
+    await writeAudit(req, {
+      action: 'ripening.process.delete',
+      entityType: 'ripening_process',
+      entityId: String(row.id),
+      meta: { display_name: row.display_name, soft: true },
+    });
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
