@@ -56,6 +56,15 @@ type EvidencePhoto = { url?: string; name?: string };
 /**
  * Formato de tarjeta / detalle (compatible con ProcessList y ProcessDetail)
  */
+/** Nombres de fases de la receta habilitadas (pestaña Seguimiento). */
+export function getRipeningRecipePhaseLabels(payload: RipeningProcessRow['payload']): string[] {
+  const raw = (payload.recipe as { phases?: { enabled?: boolean; name?: string }[] } | undefined)?.phases;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((p) => p && p.enabled !== false && String(p.name ?? '').trim())
+    .map((p) => String(p.name));
+}
+
 export function mapRowToProcessView(row: RipeningProcessRow) {
   const p = row.payload;
   const schedule = p.scheduleSummary || {};
@@ -146,4 +155,97 @@ export function remainingDays(estimatedEndAt: string | null | undefined) {
   const d = (Date.now() - new Date(estimatedEndAt).getTime()) / (24 * 3600 * 1000);
   if (d >= 0) return 0;
   return Math.abs(d);
+}
+
+/** Duración en horas de una fase guardada en payload (ventilación en minutos → h). */
+export function phaseDurationHoursFromStored(
+  p: { type?: string; duration?: number; enabled?: boolean }
+): number {
+  if (p.enabled === false) return 0;
+  const d = Number(p.duration);
+  if (!Number.isFinite(d) || d <= 0) return 0;
+  return p.type === 'venting' ? d / 60 : d;
+}
+
+export type CurrentNextPhaseInfo = {
+  currentLabel: string;
+  nextLabel: string | null;
+  /** Índice dentro de fases habilitadas (0-based). */
+  currentIndex: number;
+  /** Metadatos por fase habilitada (nombre + horas). */
+  phasesMeta: { label: string; hours: number; raw: Record<string, unknown> }[];
+};
+
+/**
+ * Etapa actual / siguiente a partir del avance global y duraciones por fase en la receta.
+ * Si no hay duraciones, reparte el avance entre las fases por igual.
+ */
+export function inferCurrentNextPhase(
+  payload: RipeningProcessRow['payload'],
+  progressPct: number
+): CurrentNextPhaseInfo {
+  const raw = (payload.recipe as { phases?: Record<string, unknown>[] } | undefined)?.phases;
+  const phases = Array.isArray(raw)
+    ? raw.filter((p) => p && (p as { enabled?: boolean }).enabled !== false)
+    : [];
+  const labels = getRipeningRecipePhaseLabels(payload);
+
+  if (!phases.length && labels.length) {
+    const n = labels.length;
+    const pSafe = Math.min(100, Math.max(0, progressPct));
+    const idx = n <= 1 ? 0 : Math.min(n - 1, Math.floor((pSafe / 100) * n));
+    return {
+      currentLabel: labels[idx] ?? '—',
+      nextLabel: idx < n - 1 ? labels[idx + 1]! : null,
+      currentIndex: idx,
+      phasesMeta: labels.map((label, i) => ({
+        label,
+        hours: 0,
+        raw: {},
+      })),
+    };
+  }
+
+  const phasesMeta = phases.map((p, idx) => {
+    const pr = p as {
+      type?: string;
+      duration?: number;
+      enabled?: boolean;
+      name?: string;
+    };
+    const label =
+      String(pr.name ?? '').trim() ||
+      labels[idx] ||
+      String(pr.type ?? '—');
+    return {
+      label,
+      hours: phaseDurationHoursFromStored(pr),
+      raw: p as Record<string, unknown>,
+    };
+  });
+
+  const totalH = phasesMeta.reduce((a, x) => a + x.hours, 0);
+  const pSafe = Math.min(100, Math.max(0, progressPct));
+  let currentIndex = 0;
+  if (totalH > 0 && phasesMeta.length) {
+    const elapsed = (pSafe / 100) * totalH;
+    let cum = 0;
+    for (let i = 0; i < phasesMeta.length; i++) {
+      cum += phasesMeta[i].hours;
+      currentIndex = i;
+      if (elapsed <= cum) break;
+    }
+  } else if (phasesMeta.length) {
+    const n = phasesMeta.length;
+    currentIndex = Math.min(n - 1, Math.floor((pSafe / 100) * n));
+  }
+
+  const cur = phasesMeta[currentIndex];
+  const next = phasesMeta[currentIndex + 1];
+  return {
+    currentLabel: cur?.label ?? labels[0] ?? '—',
+    nextLabel: next ? next.label : null,
+    currentIndex,
+    phasesMeta,
+  };
 }

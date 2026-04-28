@@ -16,6 +16,7 @@ import { TunnelDeviceDetail } from '@/app/components/TunnelDeviceDetail';
 import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperativoSummaryPanel';
 import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
 import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
+import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -155,6 +156,8 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
         </div>
       </div>
 
+      <DeviceRipeningTrackingOverview deviceId={deviceId} />
+
       {/* Main Content Area */}
       {activeView === 'operation' ? (
         <div className="space-y-6 h-full animate-in fade-in duration-300">
@@ -164,6 +167,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({ deviceId, onBack, in
             formatTemp={formatTemp}
             tempUnit={tempUnit}
             toggleTempUnit={toggleTempUnit}
+            formatDateTime={formatDateTime}
           />
           <DeviceControlProcessPanel deviceId={deviceId} />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">

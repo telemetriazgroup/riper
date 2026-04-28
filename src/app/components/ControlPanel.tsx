@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button, buttonVariants } from './ui/Button';
 import { Card, CardContent } from './ui/Card';
 import { Switch } from '@/app/components/ui/switch';
@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { cn } from '@/app/lib/utils';
-import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Power, Timer, WifiOff } from 'lucide-react';
+import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Timer, WifiOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
 import { Device } from '@/app/data';
@@ -23,6 +23,21 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes } from 'date-fns';
 import { ControlProcessStartFlow } from '@/app/components/ControlProcessStartFlow';
 import type { StartControlProcessBody } from '@/app/lib/deviceControlProcessApi';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
+import { isManualProcesoLabel } from '@/app/lib/madurador';
+
+/** Objetivos manual en °C / % / ppm (telemetría). */
+const MANUAL_TEMP_MIN_C = 5;
+const MANUAL_TEMP_MAX_C = 30;
+const MANUAL_RH_MIN = 80;
+const MANUAL_RH_MAX = 99;
+const MANUAL_ETH_MIN = 0;
+const MANUAL_ETH_MAX = 250;
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n));
+}
 
 interface ControlPanelProps {
   mode: string;
@@ -37,9 +52,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   const { t, tempUnit } = useSettings();
   const [flowOpen, setFlowOpen] = useState(false);
   const [flowDraft, setFlowDraft] = useState<ControlStartDraft | null>(null);
+  const { activeTracking, isLoading: trackingLoading } = useRipeningActiveForDevice(deviceId);
+
+  /** Proceso activo creado desde la pestaña Seguimiento y enlazado a este equipo. */
+  const followBlocksPanelProcesses = useMemo(() => {
+    if (trackingLoading) return false;
+    return Boolean(activeTracking?.process && activeTracking.summary);
+  }, [activeTracking, trackingLoading]);
 
   const openStartFlow = (partial: ControlStartDraft) => {
     if (!deviceId) return;
+    if (followBlocksPanelProcesses) {
+      toast.error(t('control_follow_blocked_toast'));
+      return;
+    }
     setFlowDraft(partial);
     setFlowOpen(true);
   };
@@ -61,6 +87,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   
   // Processes require device to be ONLINE and POWERED ON
   const areProcessesDisabled = isOffline || isStandby || isPoweredOff;
+  const processModesBlockedByFollow = followBlocksPanelProcesses;
+  const processModesDisabled = areProcessesDisabled || processModesBlockedByFollow;
 
   return (
     <Card className="h-full">
@@ -84,11 +112,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
         </div>
       </div>
       <CardContent className="p-6">
-        {mode === 'manual' && <ManualControl deviceId={deviceId} device={device} />}
+        {mode === 'manual' && (
+          <ManualControl deviceId={deviceId} device={device} followBlocksPanelProcesses={processModesBlockedByFollow} />
+        )}
         {mode === 'homogenization' && (
           <HomogenizationControl
             deviceId={deviceId}
-            disabled={areProcessesDisabled}
+            disabled={processModesDisabled}
             onBeginStart={openStartFlow}
             tempUnitKey={tempUnit}
           />
@@ -96,14 +126,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
         {mode === 'ripening' && (
           <RipeningControl
             deviceId={deviceId}
-            disabled={areProcessesDisabled}
+            disabled={processModesDisabled}
             onBeginStart={openStartFlow}
             tempUnitKey={tempUnit}
           />
         )}
-        {mode === 'ventilation' && <VentilationControl deviceId={deviceId} disabled={areProcessesDisabled} onBeginStart={openStartFlow} />}
+        {mode === 'ventilation' && (
+          <VentilationControl deviceId={deviceId} disabled={processModesDisabled} onBeginStart={openStartFlow} />
+        )}
         {mode === 'cooling' && (
-          <CoolingControl deviceId={deviceId} disabled={areProcessesDisabled} onBeginStart={openStartFlow} tempUnitKey={tempUnit} />
+          <CoolingControl deviceId={deviceId} disabled={processModesDisabled} onBeginStart={openStartFlow} tempUnitKey={tempUnit} />
         )}
       </CardContent>
       <ControlProcessStartFlow
@@ -127,34 +159,100 @@ const ControlGroup = ({ title, children }: { title: string, children: React.Reac
   </div>
 );
 
-const RangeControl = ({ label, value, unit, min, max, onChange, step = 1, originalValue, disabled = false }: any) => {
-  const isChanged = originalValue !== undefined && value !== originalValue;
+type RangeControlProps = {
+  label: string;
+  value: number;
+  unit: string;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  step?: number;
+  originalValue?: number;
+  disabled?: boolean;
+  /** Decimales para mostrar y editar (0 = enteros). */
+  decimals?: number;
+};
+
+const RangeControl = ({
+  label,
+  value,
+  unit,
+  min,
+  max,
+  onChange,
+  step = 1,
+  originalValue,
+  disabled = false,
+  decimals = 1,
+}: RangeControlProps) => {
+  const isChanged = originalValue !== undefined && Math.abs(value - originalValue) > 1e-9;
+
+  const commitNumber = (raw: string) => {
+    const n = parseFloat(raw.replace(',', '.'));
+    if (!Number.isFinite(n)) return;
+    let v = clamp(n, min, max);
+    if (decimals <= 0) v = Math.round(v);
+    else v = Number(v.toFixed(decimals));
+    onChange(v);
+  };
+
+  const displayVal =
+    decimals <= 0 ? String(Math.round(value)) : decimals >= 2 ? value.toFixed(decimals) : value.toFixed(decimals);
 
   return (
-    <div className={cn("mb-4 p-3 rounded-lg transition-colors border", isChanged ? "bg-blue-50 border-blue-200" : "border-transparent", disabled && "opacity-50 pointer-events-none")}>
-      <div className="flex justify-between mb-2">
-        <Label className={cn("text-sm font-medium", isChanged ? "text-blue-700" : "text-gray-600")}>{label}</Label>
-        <div className="flex flex-col items-end">
-          <span className={cn("text-sm font-bold", isChanged ? "text-blue-700" : "text-gray-900")}>{value} {unit}</span>
-          {isChanged && (
+    <div
+      className={cn(
+        'mb-4 p-3 rounded-lg transition-colors border',
+        isChanged ? 'bg-blue-50 border-blue-200' : 'border-transparent',
+        disabled && 'opacity-50 pointer-events-none'
+      )}
+    >
+      <div className="flex justify-between mb-2 gap-2 flex-wrap items-start">
+        <Label className={cn('text-sm font-medium', isChanged ? 'text-blue-700' : 'text-gray-600')}>{label}</Label>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number"
+              disabled={disabled}
+              min={min}
+              max={max}
+              step={step}
+              value={displayVal}
+              onChange={(e) => commitNumber(e.target.value)}
+              className={cn(
+                'w-[5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-sm font-mono text-right shadow-sm',
+                isChanged ? 'border-blue-300 text-blue-800' : 'text-gray-900'
+              )}
+              aria-label={label}
+            />
+            <span className={cn('text-sm font-bold whitespace-nowrap', isChanged ? 'text-blue-700' : 'text-gray-900')}>
+              {unit}
+            </span>
+          </div>
+          {isChanged && originalValue !== undefined && (
             <span className="text-xs text-blue-400 line-through decoration-blue-400/50">
-              {originalValue} {unit}
+              {decimals <= 0 ? Math.round(originalValue) : Number(originalValue.toFixed(decimals))} {unit}
             </span>
           )}
         </div>
       </div>
       <div className="relative flex items-center w-full h-5">
-        <input 
-          type="range" 
-          min={min} 
-          max={max} 
+        <input
+          type="range"
+          min={min}
+          max={max}
           step={step}
-          value={value} 
-          onChange={(e) => onChange(Number(e.target.value))}
+          value={value}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isFinite(v)) return;
+            const c = clamp(v, min, max);
+            onChange(decimals <= 0 ? Math.round(c) : Number(c.toFixed(decimals)));
+          }}
           disabled={disabled}
           className={cn(
-            "w-full h-2 rounded-lg appearance-none cursor-pointer transition-colors",
-            isChanged ? "bg-blue-200 accent-blue-600" : "bg-gray-200 accent-gray-500"
+            'w-full h-2 rounded-lg appearance-none cursor-pointer transition-colors',
+            isChanged ? 'bg-blue-200 accent-blue-600' : 'bg-gray-200 accent-gray-500'
           )}
         />
       </div>
@@ -162,34 +260,68 @@ const RangeControl = ({ label, value, unit, min, max, onChange, step = 1, origin
   );
 };
 
-const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Device }) => {
+const ManualControl = ({
+  deviceId,
+  device,
+  followBlocksPanelProcesses = false,
+}: {
+  deviceId?: string;
+  device?: Device;
+  /** Seguimiento Madurador activo (no Manual): bloquea aplicar cambios manuales hasta cancelar seguimiento. */
+  followBlocksPanelProcesses?: boolean;
+}) => {
   const { t, convertTemp, tempUnit } = useSettings();
+  const { session } = useDeviceControlSession(deviceId);
   const md = device?.madurador;
-  const [temp, setTemp] = useState(device?.telemetry.set_point ?? 19);
-  const [humidity, setHumidity] = useState(
-    md?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90
+  const [temp, setTemp] = useState(() =>
+    clamp(device?.telemetry.set_point ?? 19, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C)
   );
-  const [ethylene, setEthylene] = useState(device?.telemetry.ethylene ?? 0);
+  const [humidity, setHumidity] = useState(() =>
+    clamp(
+      md?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90,
+      MANUAL_RH_MIN,
+      MANUAL_RH_MAX
+    )
+  );
+  const [ethylene, setEthylene] = useState(() =>
+    clamp(device?.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX)
+  );
   const [fan, setFan] = useState(md?.ventilation_fan_reference_pct ?? 100);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [powerLoading, setPowerLoading] = useState(false);
 
   const [isPowerConfirmOpen, setIsPowerConfirmOpen] = useState(false);
+  const [cannotPowerOffOpen, setCannotPowerOffOpen] = useState(false);
+
+  const pendingProcessBlocksPowerOff = useMemo(() => {
+    if (session?.status === 'active') return true;
+    const lbl = device?.procesoApi?.trim();
+    return Boolean(lbl && !isManualProcesoLabel(lbl));
+  }, [session?.status, device?.procesoApi]);
 
   useEffect(() => {
     if (device) {
-      setTemp(device.telemetry.set_point);
-      setHumidity(device.madurador?.humidity_set_point ?? device.telemetry.relative_humidity ?? 90);
-      setEthylene(device.telemetry.ethylene ?? 0);
+      setTemp(clamp(device.telemetry.set_point, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C));
+      setHumidity(
+        clamp(
+          device.madurador?.humidity_set_point ?? device.telemetry.relative_humidity ?? 90,
+          MANUAL_RH_MIN,
+          MANUAL_RH_MAX
+        )
+      );
+      setEthylene(clamp(device.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX));
       setFan(device.madurador?.ventilation_fan_reference_pct ?? 100);
     }
   }, [device]);
 
-  const originalTemp = device?.telemetry.set_point ?? 19;
-  const originalHumidity =
-    device?.madurador?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90;
-  const originalEthylene = device?.telemetry.ethylene ?? 0;
+  const originalTemp = clamp(device?.telemetry.set_point ?? 19, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C);
+  const originalHumidity = clamp(
+    device?.madurador?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90,
+    MANUAL_RH_MIN,
+    MANUAL_RH_MAX
+  );
+  const originalEthylene = clamp(device?.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX);
   const originalFan = device?.madurador?.ventilation_fan_reference_pct ?? 100;
   const isPoweredOn = device?.telemetry.power_state === 1;
 
@@ -231,12 +363,14 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
 
   const handlePowerToggleRequest = (checked: boolean) => {
     if (checked) {
-      // If turning ON, show confirmation
       setIsPowerConfirmOpen(true);
-    } else {
-      // If turning OFF, proceed immediately (or add another confirm if desired, but request specified ON)
-      executePowerToggle(false);
+      return;
     }
+    if (pendingProcessBlocksPowerOff) {
+      setCannotPowerOffOpen(true);
+      return;
+    }
+    executePowerToggle(false);
   };
 
   const executePowerToggle = async (turningOn: boolean) => {
@@ -285,6 +419,7 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
 
   const status = getStatusDisplay();
   const controlsDisabled = status.disabled;
+  const controlsDisabledPanel = controlsDisabled || followBlocksPanelProcesses;
   const conexionLabel = device?.estado_conexion === 'online' ? 'Conexión: En línea' : device?.estado_conexion === 'wait' ? 'Conexión: Espera' : 'Conexión: Desconectado';
   const equipoLabel = isPoweredOn ? 'Equipo: ON' : 'Equipo: OFF';
 
@@ -336,30 +471,48 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className={cn("transition-opacity duration-200", controlsDisabled && "opacity-50 pointer-events-none grayscale-[0.5]")}>
+      <AlertDialog open={cannotPowerOffOpen} onOpenChange={setCannotPowerOffOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('cannot_power_off_pending_title')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('cannot_power_off_pending_desc')}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setCannotPowerOffOpen(false)} className="bg-slate-800 hover:bg-slate-900">
+              {t('close')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className={cn("transition-opacity duration-200", controlsDisabledPanel && "opacity-50 pointer-events-none grayscale-[0.5]")}>
         <ControlGroup title={t('climatization')}>
             <RangeControl 
             label={t('target_temperature')}
             value={convertTemp(temp)} 
             unit={`°${tempUnit}`}
-            min={convertTemp(-30)} 
-            max={convertTemp(30)} 
+            min={convertTemp(MANUAL_TEMP_MIN_C)} 
+            max={convertTemp(MANUAL_TEMP_MAX_C)} 
             onChange={(val: number) => {
                 const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-                setTemp(Number(cVal.toFixed(1)));
+                setTemp(clamp(Number(cVal.toFixed(1)), MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C));
             }} 
             originalValue={convertTemp(originalTemp)}
-            disabled={controlsDisabled}
+            disabled={controlsDisabledPanel}
+            step={0.1}
+            decimals={1}
             />
             <RangeControl 
             label={t('relative_humidity')} 
             value={humidity} 
             unit="%" 
-            min={0} 
-            max={100} 
-            onChange={setHumidity} 
+            min={MANUAL_RH_MIN} 
+            max={MANUAL_RH_MAX} 
+            onChange={(v) => setHumidity(Math.round(clamp(v, MANUAL_RH_MIN, MANUAL_RH_MAX)))} 
             originalValue={originalHumidity}
-            disabled={controlsDisabled}
+            disabled={controlsDisabledPanel}
+            decimals={0}
+            step={1}
             />
         </ControlGroup>
 
@@ -368,11 +521,13 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
             label={t('ethylene_injection')}
             value={ethylene} 
             unit="PPM" 
-            min={0} 
-            max={200} 
-            onChange={setEthylene} 
+            min={MANUAL_ETH_MIN} 
+            max={MANUAL_ETH_MAX} 
+            onChange={(v) => setEthylene(Math.round(clamp(v, MANUAL_ETH_MIN, MANUAL_ETH_MAX)))} 
             originalValue={originalEthylene}
-            disabled={controlsDisabled}
+            disabled={controlsDisabledPanel}
+            decimals={0}
+            step={1}
             />
             <RangeControl 
             label={t('ventilation_speed')}
@@ -382,7 +537,8 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
             max={100} 
             onChange={setFan} 
             originalValue={originalFan}
-            disabled={controlsDisabled}
+            disabled={controlsDisabledPanel}
+            decimals={0}
             />
         </ControlGroup>
 
@@ -390,7 +546,7 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
             <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
             <AlertDialogTrigger
                 className={cn(buttonVariants(), "flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50")}
-                disabled={isSubmitting || !hasChanges || controlsDisabled}
+                disabled={isSubmitting || !hasChanges || controlsDisabledPanel}
             >
                 {isSubmitting ? t('applying') : t('apply_changes')}
             </AlertDialogTrigger>
@@ -431,7 +587,7 @@ const ManualControl = ({ deviceId, device }: { deviceId?: string, device?: Devic
                 setEthylene(originalEthylene);
                 setFan(originalFan);
             }}
-            disabled={controlsDisabled}
+            disabled={controlsDisabledPanel}
             >
             {t('cancel')}
             </Button>
@@ -485,24 +641,28 @@ const HomogenizationControl = ({
           label={t('final_temperature')} 
           value={convertTemp(temp)} 
           unit={`°${tempUnit}`} 
-          min={convertTemp(10)} 
-          max={convertTemp(25)} 
+          min={convertTemp(15)} 
+          max={convertTemp(30)} 
           onChange={(val: number) => {
              const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-             setTemp(Number(cVal.toFixed(1)));
+             setTemp(clamp(Number(cVal.toFixed(1)), 15, 30));
           }} 
           disabled={disabled}
+          step={0.1}
+          decimals={1}
         />
         <RangeControl 
           label={t('relative_humidity')} 
           value={humidity} 
           unit="%" 
           min={80} 
-          max={98} 
-          onChange={setHumidity} 
+          max={99} 
+          onChange={(v) => setHumidity(Math.round(clamp(v, 80, 99)))} 
           disabled={disabled}
+          decimals={0}
+          step={1}
         />
-        <RangeControl label={t('estimated_duration')} value={duration} unit="Horas" min={1} max={24} onChange={setDuration} disabled={disabled} />
+        <RangeControl label={t('estimated_duration')} value={duration} unit="Horas" min={1} max={24} onChange={setDuration} disabled={disabled} decimals={0} />
       </ControlGroup>
 
       <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
@@ -560,24 +720,26 @@ const RipeningControl = ({
           label={t('target_temperature')} 
           value={convertTemp(temp)} 
           unit={`°${tempUnit}`} 
-          min={convertTemp(15)} 
-          max={convertTemp(25)} 
+          min={convertTemp(10)} 
+          max={convertTemp(30)} 
           onChange={(val: number) => {
              const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-             setTemp(Number(cVal.toFixed(1)));
+             setTemp(clamp(Number(cVal.toFixed(1)), 10, 30));
           }}
           disabled={disabled}
+          step={0.1}
+          decimals={1}
         />
-        <RangeControl label={t('relative_humidity')} value={humidity} unit="%" min={80} max={100} onChange={setHumidity} disabled={disabled} />
+        <RangeControl label={t('relative_humidity')} value={humidity} unit="%" min={80} max={99} onChange={(v) => setHumidity(Math.round(clamp(v, 80, 99)))} disabled={disabled} decimals={0} step={1} />
       </ControlGroup>
 
       <ControlGroup title="Gases">
-        <RangeControl label={t('ethylene_injection')} value={ethylene} unit="PPM" min={10} max={150} onChange={setEthylene} disabled={disabled} />
-        <RangeControl label={t('co2_limit')} value={co2} unit="%" min={1} max={10} step={0.1} onChange={setCo2} disabled={disabled} />
+        <RangeControl label={t('ethylene_injection')} value={ethylene} unit="PPM" min={0} max={250} onChange={(v) => setEthylene(Math.round(clamp(v, 0, 250)))} disabled={disabled} decimals={0} step={1} />
+        <RangeControl label={t('co2_limit')} value={co2} unit="%" min={1} max={10} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
       </ControlGroup>
 
       <ControlGroup title={t('duration')}>
-        <RangeControl label={t('process_time')} value={duration} unit="Horas" min={24} max={120} onChange={setDuration} disabled={disabled} />
+        <RangeControl label={t('process_time')} value={duration} unit="Horas" min={24} max={120} onChange={setDuration} disabled={disabled} decimals={0} />
       </ControlGroup>
 
       <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleStart} disabled={disabled}>
@@ -621,8 +783,8 @@ const VentilationControl = ({
       <p>Evacuación rápida de gases (Etileno/CO2) post-maduración.</p>
     </div>
     <ControlGroup title="Parámetros">
-       <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} />
-       <RangeControl label={t('max_duration')} value={durationMin} unit="min" min={10} max={180} onChange={setDurationMin} disabled={disabled} />
+       <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
+       <RangeControl label={t('max_duration')} value={durationMin} unit="min" min={10} max={180} onChange={setDurationMin} disabled={disabled} decimals={0} />
     </ControlGroup>
     <Button className="w-full" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>
   </div>
@@ -669,15 +831,17 @@ const CoolingControl = ({
         label={t('final_temperature')} 
         value={convertTemp(target)} 
         unit={`°${tempUnit}`} 
-        min={convertTemp(5)} 
-        max={convertTemp(15)} 
+        min={convertTemp(0)} 
+        max={convertTemp(20)} 
         onChange={(val: number) => {
              const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-             setTarget(Number(cVal.toFixed(1)));
+             setTarget(clamp(Number(cVal.toFixed(1)), 0, 20));
           }} 
         disabled={disabled}
+        step={0.1}
+        decimals={1}
       />
-      <RangeControl label={t('cooling_ramp')} value={rampHours} unit="Horas" min={2} max={24} onChange={setRampHours} disabled={disabled} />
+      <RangeControl label={t('cooling_ramp')} value={rampHours} unit="Horas" min={2} max={24} onChange={setRampHours} disabled={disabled} decimals={0} />
     </ControlGroup>
     <Button className="w-full bg-blue-600" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>
   </div>

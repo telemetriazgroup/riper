@@ -1,11 +1,29 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { KeyedMutator } from 'swr';
 import { Device } from '@/app/data';
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
+import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getFleetProcesoMaduradorLabel, getPanelControlProcessTitle } from '@/app/lib/fleetProcessLabels';
+import { getRipeningRecipePhaseLabels, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
-import { Thermometer, Droplets, Wind, Activity, Clock, Edit2, Check, X, Loader2, Power, WifiOff, Timer, Layers } from 'lucide-react';
+import {
+  Thermometer,
+  Droplets,
+  Wind,
+  Activity,
+  Clock,
+  Edit2,
+  Check,
+  X,
+  Loader2,
+  Power,
+  WifiOff,
+  Timer,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { updateDeviceName } from '@/app/lib/api';
@@ -22,18 +40,48 @@ interface DeviceCardProps {
   onRefresh?: KeyedMutator<Device[]>;
   /** Sesión activa iniciada desde el panel (prioridad sobre proceso API Madurador). */
   panelActiveSession?: DeviceControlSessionRow | null;
+  /** Proceso activo de la pestaña Seguimiento enlazado a este equipo (`payload.deviceId`). */
+  trackingProcess?: RipeningProcessRow | null;
 }
 
-export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefresh, panelActiveSession }) => {
+export const DeviceCard: React.FC<DeviceCardProps> = ({
+  device,
+  onClick,
+  onRefresh,
+  panelActiveSession,
+  trackingProcess,
+}) => {
   const { convertTemp, tempUnit, t, language, formatDateTime } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(() => resolveDeviceDisplayName(device));
   const [isSaving, setIsSaving] = useState(false);
+  const [trackingDetailsOpen, setTrackingDetailsOpen] = useState(false);
   const displayName = resolveDeviceDisplayName(device);
 
   useEffect(() => {
     setNewName(displayName);
   }, [device.id, displayName]);
+
+  useEffect(() => {
+    setTrackingDetailsOpen(false);
+  }, [device.id]);
+
+  const hasTrackingProcess = Boolean(trackingProcess);
+
+  const trackingView = useMemo(
+    () => (trackingProcess ? mapRowToProcessView(trackingProcess) : null),
+    [trackingProcess]
+  );
+
+  const plannedRecipeSteps = useMemo(
+    () => (trackingProcess ? getRipeningRecipePhaseLabels(trackingProcess.payload) : []),
+    [trackingProcess]
+  );
+
+  const trackingProgressPct =
+    trackingView != null && Number.isFinite(trackingView.progress)
+      ? Math.min(100, Math.max(0, trackingView.progress))
+      : null;
 
   const handleSaveName = async (e: React.MouseEvent | React.FormEvent) => {
     e.stopPropagation();
@@ -129,6 +177,172 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
     } catch (error) {
       return '-';
     }
+  };
+
+  const renderFleetProcessStrip = (variant: 'online' | 'offline') => {
+    const wrap =
+      variant === 'online'
+        ? 'col-span-2 mt-2 pt-2 border-t border-gray-100'
+        : 'mt-3 pt-3 border-t border-gray-100';
+
+    if (!hasTrackingProcess && !panelActiveSession && !device.process) return null;
+
+    const sch = trackingProcess?.payload?.scheduleSummary;
+
+    return (
+      <div className={wrap}>
+        {hasTrackingProcess && trackingProcess && trackingView ? (
+          <div className="rounded-md border border-teal-200 bg-teal-50/80 px-2 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-teal-800">
+              {t('fleet_tracking_block_title')}
+            </div>
+            <p className="text-sm font-semibold text-teal-950 mt-0.5">
+              {trackingProcess.display_name || trackingView.display_name || '—'}
+            </p>
+            <p className="text-[11px] text-teal-900/90 mt-1">
+              {trackingView.client?.name ?? '—'} · {trackingView.batch?.product ?? '—'}
+            </p>
+            <p className="text-[11px] text-teal-800 mt-0.5">
+              <span className="font-medium">{t('phase')}: </span>
+              {trackingView.phase}
+            </p>
+            {trackingProgressPct != null && (
+              <>
+                <div className="flex justify-between items-center mt-2 gap-2">
+                  <span className="text-[11px] font-mono font-semibold text-teal-900">{trackingProgressPct}%</span>
+                </div>
+                <div className="w-full bg-teal-200/80 rounded-full h-1.5 mt-1">
+                  <div
+                    className="bg-teal-600 h-1.5 rounded-full transition-all"
+                    style={{ width: `${trackingProgressPct}%` }}
+                  />
+                </div>
+              </>
+            )}
+            {plannedRecipeSteps.length > 0 && (
+              <div className="mt-2">
+                <p className="text-[10px] font-semibold text-teal-900 uppercase tracking-wide">
+                  {t('fleet_tracking_planned_phases')}
+                </p>
+                <ol className="mt-1 text-[11px] text-teal-900/95 list-decimal list-inside space-y-0.5">
+                  {plannedRecipeSteps.map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            <button
+              type="button"
+              className="mt-2 flex w-full items-center justify-center gap-1 rounded-md py-1.5 text-[11px] font-medium text-teal-900 hover:bg-teal-100/80"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTrackingDetailsOpen((o) => !o);
+              }}
+            >
+              {trackingDetailsOpen ? (
+                <>
+                  {t('fleet_tracking_hide_details')} <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                </>
+              ) : (
+                <>
+                  {t('fleet_tracking_more_details')} <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                </>
+              )}
+            </button>
+            {trackingDetailsOpen && (
+              <div className="mt-2 border-t border-teal-200/70 pt-2 text-[11px] text-teal-950 space-y-1.5">
+                <div className="font-mono text-[10px] break-all">
+                  <span className="text-teal-700">UUID: </span>
+                  {trackingProcess.id}
+                </div>
+                {trackingView.recipe?.name && (
+                  <div>
+                    <span className="text-teal-700">{t('recipe')}: </span>
+                    {trackingView.recipe.name}
+                  </div>
+                )}
+                {sch?.startedAt && (
+                  <div>
+                    <span className="text-teal-700">{t('start')}: </span>
+                    {formatDateTime(sch.startedAt)}
+                  </div>
+                )}
+                {(sch?.estimatedEndAt || sch?.totalDurationHours != null) && (
+                  <div>
+                    <span className="text-teal-700">{t('estimated_end')}: </span>
+                    {sch?.estimatedEndAt
+                      ? formatDateTime(sch.estimatedEndAt)
+                      : sch?.totalDurationHours != null
+                        ? `${sch.totalDurationHours} h`
+                        : '—'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {panelActiveSession ? (
+              <div className="rounded-md border border-indigo-200/80 bg-indigo-50/60 px-2 py-2">
+                <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                  {t('fleet_process_panel')}
+                </div>
+                <p className="text-sm font-semibold text-indigo-950 mt-0.5">
+                  {getPanelControlProcessTitle(
+                    panelActiveSession.process_type,
+                    panelActiveSession.display_label,
+                    t
+                  )}
+                </p>
+                <div className="text-[11px] text-indigo-900/90 mt-1 space-y-0.5">
+                  <div>
+                    <span className="text-indigo-700/80">{t('start')}: </span>
+                    {formatDateTime(panelActiveSession.started_at)}
+                  </div>
+                  <div>
+                    <span className="text-indigo-700/80">{t('control_process_estimated_end')}: </span>
+                    {formatDateTime(panelActiveSession.estimated_end_at)}
+                  </div>
+                </div>
+                <div className="w-full bg-indigo-200/80 rounded-full h-1.5 mt-2">
+                  <div
+                    className="bg-indigo-600 h-1.5 rounded-full transition-all"
+                    style={{ width: `${controlSessionProgressPct(panelActiveSession)}%` }}
+                  />
+                </div>
+              </div>
+            ) : device.process ? (
+              <div>
+                <div className="flex justify-between items-center mb-1 gap-2">
+                  <span className="text-xs font-medium text-blue-600">
+                    {getFleetProcesoMaduradorLabel(device.procesoApi, t)}
+                  </span>
+                  <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                    <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
+                  </span>
+                </div>
+                <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
+                  <div>
+                    {t('start')}: {formatDateTime(device.process.startTime)}
+                  </div>
+                  <div>
+                    {t('end')}: {formatDateTime(device.process.endTime)}
+                  </div>
+                </div>
+                {device.process.showProgressBar !== false && (
+                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                    <div
+                      className="bg-blue-600 h-1.5 rounded-full transition-all"
+                      style={{ width: `${device.process.progress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -240,9 +454,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
                  </div>
                </div>
              </div>
+             {renderFleetProcessStrip('offline')}
            </div>
         ) : (
-          <div className={cn("grid grid-cols-2 gap-4", isPoweredOff && "opacity-60 grayscale")}>
+          <div className={cn('relative grid grid-cols-2 gap-4', isPoweredOff && 'opacity-60 grayscale')}>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Thermometer className="h-4 w-4 text-red-500" />
@@ -282,67 +497,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
               </div>
             </div>
 
-            {(panelActiveSession || device.process) && (
-              <div className="col-span-2 mt-2 pt-2 border-t border-gray-100">
-                {panelActiveSession ? (
-                  <div className="rounded-md border border-indigo-200/80 bg-indigo-50/60 px-2 py-2">
-                    <div className="text-[10px] font-bold uppercase tracking-wide text-indigo-700">
-                      {t('fleet_process_panel')}
-                    </div>
-                    <p className="text-sm font-semibold text-indigo-950 mt-0.5">
-                      {getPanelControlProcessTitle(
-                        panelActiveSession.process_type,
-                        panelActiveSession.display_label,
-                        t
-                      )}
-                    </p>
-                    <div className="text-[11px] text-indigo-900/90 mt-1 space-y-0.5">
-                      <div>
-                        <span className="text-indigo-700/80">{t('start')}: </span>
-                        {formatDateTime(panelActiveSession.started_at)}
-                      </div>
-                      <div>
-                        <span className="text-indigo-700/80">{t('control_process_estimated_end')}: </span>
-                        {formatDateTime(panelActiveSession.estimated_end_at)}
-                      </div>
-                    </div>
-                    <div className="w-full bg-indigo-200/80 rounded-full h-1.5 mt-2">
-                      <div
-                        className="bg-indigo-600 h-1.5 rounded-full transition-all"
-                        style={{ width: `${controlSessionProgressPct(panelActiveSession)}%` }}
-                      />
-                    </div>
-                  </div>
-                ) : device.process ? (
-                  <div>
-                    <div className="flex justify-between items-center mb-1 gap-2">
-                      <span className="text-xs font-medium text-blue-600">
-                        {getFleetProcesoMaduradorLabel(device.procesoApi, t)}
-                      </span>
-                      <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
-                        <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
-                      <div>
-                        {t('start')}: {formatDateTime(device.process.startTime)}
-                      </div>
-                      <div>
-                        {t('end')}: {formatDateTime(device.process.endTime)}
-                      </div>
-                    </div>
-                    {device.process.showProgressBar !== false && (
-                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                          className="bg-blue-600 h-1.5 rounded-full transition-all"
-                          style={{ width: `${device.process.progress}%` }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            )}
+            {renderFleetProcessStrip('online')}
             
             {isPoweredOff && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -354,7 +509,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({ device, onClick, onRefre
         )}
         
         <div className="mt-4 flex justify-end">
-          <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-800 p-0 h-auto hover:bg-transparent">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-blue-600 hover:text-blue-800 p-0 h-auto hover:bg-transparent"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClick(device.id);
+            }}
+          >
             {t('view_details')} →
           </Button>
         </div>

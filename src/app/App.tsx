@@ -105,6 +105,7 @@ function AppContent() {
       case 'device-detail':
         return selectedDeviceId ? (
           <DeviceDetail
+            key={selectedDeviceId}
             deviceId={selectedDeviceId}
             onBack={() => {
               setActiveView('dashboard');
@@ -194,7 +195,7 @@ function AppContent() {
 
         <main className="flex-1 p-4 md:p-6 overflow-y-auto">
           <div className="max-w-7xl mx-auto w-full">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="sync">
               <motion.div
                 key={activeView + (selectedDeviceId || '')}
                 initial={{ opacity: 0, y: 10 }}

@@ -44,3 +44,4 @@ export function getPanelControlProcessTitle(
   if (d) return d;
   return getControlProcessTypeLabel(processType, t);
 }
+

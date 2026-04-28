@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Device } from '@/app/data';
 import { useDevices } from '@/app/hooks/useDevices';
 import { useFleetActiveControlMap } from '@/app/hooks/useFleetActiveControlMap';
+import { useFleetRipeningTrackingMap } from '@/app/hooks/useFleetRipeningTrackingMap';
 import { DeviceCard } from './DeviceCard';
 import { Card, CardContent } from './ui/Card';
 import { Activity, AlertTriangle, CheckCircle, Zap, Loader2, Download, Search } from 'lucide-react';
@@ -18,6 +19,7 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const { devices, isLoading, isError, mutate } = useDevices();
   const { byDeviceId: panelSessionsByDevice } = useFleetActiveControlMap();
+  const { byDeviceId: ripeningTrackingByDevice } = useFleetRipeningTrackingMap();
   const { t, convertTemp, tempUnit, formatDateTime, formatDateShort, formatFileTimestamp } = useSettings();
   const [downloading, setDownloading] = useState(false);
   const [deviceSearch, setDeviceSearch] = useState('');
@@ -362,6 +364,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
                 onClick={onSelectDevice}
                 onRefresh={mutate}
                 panelActiveSession={panelSessionsByDevice.get(device.id) ?? null}
+                trackingProcess={ripeningTrackingByDevice.get(device.id) ?? null}
               />
             ))}
           </div>

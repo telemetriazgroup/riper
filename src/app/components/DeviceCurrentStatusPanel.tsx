@@ -33,6 +33,8 @@ export interface DeviceCurrentStatusPanelProps {
   formatTemp: (celsius: number) => string;
   tempUnit: 'C' | 'F';
   toggleTempUnit: () => void;
+  /** Fecha/hora del último dato telemetría (junto al título «Estatus actual»). */
+  formatDateTime?: (d: Date) => string;
 }
 
 function toNum(x: unknown): number | null {
@@ -104,11 +106,19 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   formatTemp,
   tempUnit,
   toggleTempUnit,
+  formatDateTime,
 }) => {
   const [open, setOpen] = useState(false);
   const m = device.madurador;
   const tel = device.telemetry;
   const op = device.operational;
+
+  const lastSampleText = useMemo(() => {
+    if (!formatDateTime || !device.last_seen) return null;
+    const d = new Date(device.last_seen);
+    if (isNaN(d.getTime())) return null;
+    return formatDateTime(d);
+  }, [device.last_seen, formatDateTime]);
 
   const primary = useMemo(
     () => [
@@ -178,7 +188,15 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   return (
     <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 sm:p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-lg font-bold text-slate-900">{t('status_current_title')}</h3>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <h3 className="text-lg font-bold text-slate-900">{t('status_current_title')}</h3>
+          {lastSampleText && (
+            <span className="text-sm font-normal text-slate-500 tabular-nums">
+              <span className="text-slate-400 font-medium">{t('status_last_data_time')}</span>{' '}
+              {lastSampleText}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-500">{t('temp_unit_hint')}</span>
           <Button

@@ -12,6 +12,75 @@ function normalizeDeviceId(raw) {
   return s;
 }
 
+/**
+ * GET /list — todos los seguimientos del usuario (para validar flota / tarjetas).
+ */
+deviceProcessFollowRouter.get('/list', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+    const r = await pool.query(
+      `SELECT device_id, proceso, id_proceso, fecha_inicio, hasta, progress, numero_alarma, updated_at
+       FROM app_user_device_process_follow
+       WHERE user_id = $1::uuid
+       ORDER BY updated_at DESC`,
+      [userId]
+    );
+    res.json({ data: r.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/**
+ * GET /device/:deviceId — seguimiento guardado (snapshot sincronizado) para el usuario actual y ese IMEI/dispositivo.
+ */
+deviceProcessFollowRouter.get('/device/:deviceId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+    const deviceId = normalizeDeviceId(req.params.deviceId);
+    if (!deviceId) return res.status(400).json({ error: 'invalid_device_id' });
+
+    const r = await pool.query(
+      `SELECT device_id, proceso, id_proceso, fecha_inicio, hasta, progress, numero_alarma, updated_at
+       FROM app_user_device_process_follow
+       WHERE user_id = $1::uuid AND device_id = $2`,
+      [userId, deviceId]
+    );
+    if (!r.rows.length) return res.json({ data: null });
+    return res.json({ data: r.rows[0] });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/**
+ * DELETE /device/:deviceId — elimina el seguimiento para poder iniciar otros procesos desde el panel.
+ */
+deviceProcessFollowRouter.delete('/device/:deviceId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'unauthorized' });
+
+    const deviceId = normalizeDeviceId(req.params.deviceId);
+    if (!deviceId) return res.status(400).json({ error: 'invalid_device_id' });
+
+    await pool.query(
+      `DELETE FROM app_user_device_process_follow WHERE user_id = $1::uuid AND device_id = $2`,
+      [userId, deviceId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
 function toTs(iso) {
   if (iso == null || iso === '') return null;
   const d = new Date(String(iso));
