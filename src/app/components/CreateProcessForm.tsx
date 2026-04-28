@@ -58,6 +58,19 @@ export function filterRecipesByProduct(recipes: Recipe[], productName: string): 
   });
 }
 
+/** Seguimiento requiere dispositivo conectado (no figurar como Fuera de línea). */
+function isDeviceOfflineForTracking(d: Device | undefined): boolean {
+  if (!d) return false;
+  return d.status === 'offline' || d.estado_conexion === 'offline';
+}
+
+function isValidRequiredQuantityKg(s: string): boolean {
+  const raw = s.trim().replace(',', '.');
+  if (!raw) return false;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0;
+}
+
 function deviceSnapshot(d: Device, t: (k: string) => string) {
   const m = d.madurador;
   const on = d.telemetry?.power_state === 1;
@@ -117,6 +130,8 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   const [initialSampleNotes, setInitialSampleNotes] = useState('');
   const [samplingFiles, setSamplingFiles] = useState<{ file: File; previewUrl: string }[]>([]);
   const [notesError, setNotesError] = useState('');
+  const [originError, setOriginError] = useState('');
+  const [quantityKgError, setQuantityKgError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const initUser = getStoredUser();
@@ -204,6 +219,15 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
 
   const selectedDevice = useMemo(() => devices.find((d) => d.id === deviceId), [devices, deviceId]);
 
+  const deviceOfflineBlocked = useMemo(
+    () => isDeviceOfflineForTracking(selectedDevice),
+    [selectedDevice]
+  );
+
+  useEffect(() => {
+    if (!deviceOfflineBlocked) setSaveError('');
+  }, [deviceOfflineBlocked]);
+
   const totalRecipeHours = useMemo(() => sumRecipeTotalHours(activeRecipe), [activeRecipe]);
 
   const startAsDate = useMemo(() => {
@@ -279,6 +303,20 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!recipeOk) return;
+    if (deviceOfflineBlocked) {
+      setSaveError(t('tracking_offline_device_body'));
+      return;
+    }
+    if (!origin.trim()) {
+      setOriginError(t('origin_required_error'));
+      return;
+    }
+    setOriginError('');
+    if (!isValidRequiredQuantityKg(quantityKg)) {
+      setQuantityKgError(t('quantity_kg_required_error'));
+      return;
+    }
+    setQuantityKgError('');
     if (!initialSampleNotes.trim()) {
       setNotesError(t('sampling_observations_required'));
       return;
@@ -389,9 +427,12 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
       </div>
       <Card className="border-gray-200 shadow-lg">
         <CardContent className="p-8">
-          <div className="mb-6 border-b border-gray-100 pb-4">
+          <div className="mb-6 border-b border-gray-100 pb-4 space-y-3">
             <h2 className="text-2xl font-bold text-gray-900">{t('new_maturation_process')}</h2>
             <p className="text-gray-500 mt-1">{t('new_process_desc')}</p>
+            <p className="text-sm text-blue-950 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-snug">
+              {t('create_tracking_required_banner')}
+            </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
@@ -459,7 +500,9 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('client_name')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('client_name')} <span className="text-red-600">*</span>
+                  </label>
                   <input
                     type="text"
                     value={clientName}
@@ -503,27 +546,49 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('lot_origin')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('lot_origin')} <span className="text-red-600">*</span>
+                </label>
                 <input
                   type="text"
                   value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                  onChange={(e) => {
+                    setOrigin(e.target.value);
+                    if (originError) setOriginError('');
+                  }}
+                  className={clsx(
+                    'w-full rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500',
+                    originError ? 'border-red-400 border-2' : 'border-gray-300 border'
+                  )}
                   placeholder={t('lot_origin_ph')}
+                  required
+                  aria-invalid={Boolean(originError)}
                 />
+                {originError && <p className="text-xs text-red-600 mt-1">{originError}</p>}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('quantity_kg')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('quantity_kg')} <span className="text-red-600">*</span>
+                  </label>
                   <input
                     type="number"
                     min={0}
                     step="0.01"
                     value={quantityKg}
-                    onChange={(e) => setQuantityKg(e.target.value)}
-                    className="w-full border-gray-300 rounded-lg shadow-sm"
+                    onChange={(e) => {
+                      setQuantityKg(e.target.value);
+                      if (quantityKgError) setQuantityKgError('');
+                    }}
+                    className={clsx(
+                      'w-full rounded-lg shadow-sm',
+                      quantityKgError ? 'border-red-400 border-2' : 'border-gray-300 border'
+                    )}
                     placeholder="0.00"
+                    required
+                    aria-invalid={Boolean(quantityKgError)}
                   />
+                  {quantityKgError && <p className="text-xs text-red-600 mt-1">{quantityKgError}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -568,11 +633,20 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                       {devices.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name} — {d.id}
-                          {d.status === 'offline' ? ` (${t('status_offline')})` : ''}
+                          {isDeviceOfflineForTracking(d) ? ` (${t('status_offline')})` : ''}
                         </option>
                       ))}
                     </select>
                   </div>
+                  {deviceOfflineBlocked && (
+                    <div
+                      className="rounded-lg border-2 border-red-200 bg-red-50 p-4 text-sm text-red-900 space-y-1"
+                      role="alert"
+                    >
+                      <p className="font-semibold">{t('tracking_offline_device_title')}</p>
+                      <p>{t('tracking_offline_device_body')}</p>
+                    </div>
+                  )}
                 </>
               )}
               {activeOnDeviceLoading && deviceId && (
@@ -997,11 +1071,14 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   !recipeOk ||
                   !deviceId ||
                   !clientName.trim() ||
+                  !origin.trim() ||
+                  !isValidRequiredQuantityKg(quantityKg) ||
                   !productName.trim() ||
                   !initialSampleNotes.trim() ||
                   !supervisorName.trim() ||
                   !initialPersona.trim() ||
-                  mustAckReplace
+                  mustAckReplace ||
+                  deviceOfflineBlocked
                 }
               >
                 <Save className="w-4 h-4" />

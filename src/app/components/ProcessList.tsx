@@ -239,8 +239,22 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                     </div>
                   </div>
                   <CardContent className="p-5">
-                    <div className="mb-4">
-                      <h3 className="font-bold text-gray-900 text-lg truncate">{proc.client.name}</h3>
+                    <div className="mb-4 space-y-1">
+                      {proc.display_name ? (
+                        <>
+                          <p
+                            className="font-bold text-gray-900 text-lg leading-tight truncate"
+                            title={proc.display_name}
+                          >
+                            {proc.display_name}
+                          </p>
+                          <p className="text-sm font-medium text-gray-700 truncate" title={proc.client.name}>
+                            {proc.client.name}
+                          </p>
+                        </>
+                      ) : (
+                        <h3 className="font-bold text-gray-900 text-lg truncate">{proc.client.name}</h3>
+                      )}
                       <p className="text-sm text-gray-500">
                         {proc.batch.product} • {proc.id.slice(0, 8)}…
                       </p>

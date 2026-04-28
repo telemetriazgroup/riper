@@ -353,6 +353,10 @@ const translations: Record<Language, Record<string, string>> = {
     // Create Process Form
     'new_maturation_process': 'Nuevo Proceso de Maduración',
     'new_process_desc': 'Ingrese los datos del lote y configure los parámetros iniciales.',
+    'create_tracking_required_banner':
+      'Son obligatorios: Nombre del Cliente / Empresa, Cantidad (kg), Procedencia / lote y Observaciones del muestreo (además del resto de campos marcados con *).',
+    'origin_required_error': 'Indique procedencia / lote.',
+    'quantity_kg_required_error': 'Indique cantidad en kg (mayor que cero).',
     'client_info': 'Información del Cliente',
     'client_type': 'Tipo de Cliente',
     'client_name': 'Nombre del Cliente / Empresa',
@@ -381,6 +385,9 @@ const translations: Record<Language, Record<string, string>> = {
     'set_point_co2_label': 'Set CO₂',
     'set_temp_label': 'Set temperatura',
     'control_device_off_note': 'Si el equipo está apagado, se entenderá que se encenderá al iniciar el proceso.',
+    'tracking_offline_device_title': 'Dispositivo fuera de línea',
+    'tracking_offline_device_body':
+      'No puede crear un seguimiento de maduración mientras el dispositivo de control esté desconectado. Elija un equipo en línea o espere a restablecer la conexión.',
     'select_product_first_for_recipes': 'Elija primero un producto del catálogo; las recetas se filtrarán por ese producto (como en la biblioteca de recetas).',
     'no_recipes_for_product': 'No hay recetas en catálogo para este producto. Puede crear una receta personalizada.',
     'select_recipe_option': '— Elegir receta —',
@@ -1096,6 +1103,10 @@ const translations: Record<Language, Record<string, string>> = {
     // Create Process Form
     'new_maturation_process': 'New Maturation Process',
     'new_process_desc': 'Enter batch data and configure initial parameters.',
+    'create_tracking_required_banner':
+      'Required fields: Client / company name, quantity (kg), origin / lot, and sampling notes (along with other fields marked with *).',
+    'origin_required_error': 'Enter origin / lot.',
+    'quantity_kg_required_error': 'Enter quantity in kg (greater than zero).',
     'client_info': 'Client Information',
     'client_type': 'Client Type',
     'client_name': 'Client Name / Company',
@@ -1124,6 +1135,9 @@ const translations: Record<Language, Record<string, string>> = {
     'set_point_co2_label': 'CO₂ setpoint',
     'set_temp_label': 'Temperature setpoint',
     'control_device_off_note': 'If the unit is off, it is assumed it will be turned on when the process starts.',
+    'tracking_offline_device_title': 'Device offline',
+    'tracking_offline_device_body':
+      'You cannot create a ripening tracking while the control device is disconnected. Choose an online unit or wait until the connection is restored.',
     'select_product_first_for_recipes': 'Select a product from the catalog first; recipes are filtered for that product (as in the recipe library).',
     'no_recipes_for_product': 'No recipes in the catalog for this product. You can create a custom recipe.',
     'select_recipe_option': '— Select recipe —',
