@@ -87,7 +87,7 @@ export function useDeviceHistory(id: string | null, options: FetchHistoryOptions
   );
 
   return {
-    history: data,
+    history: Array.isArray(data) ? data : [],
     isLoading,
     isError: error,
     mutate,

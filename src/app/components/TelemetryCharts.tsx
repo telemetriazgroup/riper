@@ -607,7 +607,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
           </p>
         )}
         <ul className="space-y-1">
-          {payload.map((entry) => (
+          {(Array.isArray(payload) ? payload : []).map((entry) => (
             <li key={entry.dataKey} className="flex justify-between gap-4 text-sm">
               <span style={{ color: entry.color }}>{CHART_METRIC_LABELS[String(entry.dataKey)] ?? entry.dataKey}</span>
               <span className="font-mono font-medium">{entry.value != null ? Number(entry.value).toFixed(2) : '—'}</span>

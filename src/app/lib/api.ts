@@ -202,7 +202,7 @@ export async function fetchDeviceHistory(
 ): Promise<HistoryPoint[]> {
   if (shouldUseMaduradorRangoHistory()) {
     const { points } = await fetchMaduradorRangoHistoryForImei(id, options ?? {});
-    return points;
+    return Array.isArray(points) ? points : [];
   }
   if (isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());

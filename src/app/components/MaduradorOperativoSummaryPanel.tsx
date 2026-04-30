@@ -2,6 +2,10 @@ import React from 'react';
 import type { MaduradorHistorialTramo, MaduradorOperativoSummary } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
 
+function asTramoRows(rows: MaduradorHistorialTramo[] | undefined): MaduradorHistorialTramo[] {
+  return Array.isArray(rows) ? rows : [];
+}
+
 function TramosTable({
   title,
   rows,
@@ -11,7 +15,8 @@ function TramosTable({
   rows?: MaduradorHistorialTramo[];
   fmtDate: (iso: string | undefined) => string;
 }) {
-  if (!rows?.length) return null;
+  const safe = asTramoRows(rows);
+  if (!safe.length) return null;
   return (
     <div className="mt-4">
       <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">{title}</h4>
@@ -26,7 +31,7 @@ function TramosTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {safe.map((r, i) => (
               <tr key={i} className="border-t border-gray-100">
                 <td className="p-2 font-mono">{r.valor ?? '—'}</td>
                 <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.desde)}</td>
@@ -41,8 +46,14 @@ function TramosTable({
   );
 }
 
-function formatUltimaAlarmas(entries: unknown[], fmtDate: (iso: string | undefined) => string): React.ReactNode {
-  return entries.map((entry, i) => {
+/** La API a veces envía `ultima_alarmas` como objeto único en lugar de arreglo. */
+function formatUltimaAlarmas(entries: unknown, fmtDate: (iso: string | undefined) => string): React.ReactNode {
+  const list: unknown[] = Array.isArray(entries)
+    ? entries
+    : entries != null && typeof entries === 'object'
+      ? [entries]
+      : [];
+  return list.map((entry, i) => {
     if (!entry || typeof entry !== 'object') return <li key={i}>{String(entry)}</li>;
     const parts: string[] = [];
     for (const [k, v] of Object.entries(entry as Record<string, unknown>)) {
@@ -77,8 +88,10 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
   const alarmas = s.alarmas as {
     numero_alarma?: number;
     activas?: unknown[];
-    ultima_alarmas?: unknown[];
+    ultima_alarmas?: unknown;
   } | undefined;
+
+  const activasCount = Array.isArray(alarmas?.activas) ? alarmas!.activas!.length : 0;
 
   const cc = s.compressCoilHealth;
 
@@ -122,17 +135,15 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
           <p className="text-xs text-gray-600 mb-2">
             Número alarma (API): <span className="font-mono">{alarmas.numero_alarma ?? '—'}</span>
           </p>
-          <p className="text-xs font-medium text-red-800 mb-1">
-            Activas: {alarmas.activas?.length ?? 0}
-          </p>
-          {alarmas.activas && alarmas.activas.length > 0 ? (
+          <p className="text-xs font-medium text-red-800 mb-1">Activas: {activasCount}</p>
+          {activasCount > 0 ? (
             <pre className="text-xs bg-red-50/80 border border-red-100 p-2 rounded overflow-x-auto max-h-28 mb-3">
               {JSON.stringify(alarmas.activas, null, 2)}
             </pre>
           ) : null}
           <p className="text-xs font-medium text-gray-800 mb-1">Últimas alarmas</p>
           <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
-            {formatUltimaAlarmas(alarmas.ultima_alarmas ?? [], fmtDate)}
+            {formatUltimaAlarmas(alarmas.ultima_alarmas, fmtDate)}
           </ul>
         </div>
       ) : null}
