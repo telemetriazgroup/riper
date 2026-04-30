@@ -5,6 +5,7 @@ import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi'
 import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getFleetProcesoMaduradorLabel, getPanelControlProcessTitle } from '@/app/lib/fleetProcessLabels';
+import { getFleetCardTemperatureDisplay } from '@/app/lib/fleetTemperatureDisplay';
 import { getRipeningRecipePhaseLabels, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import {
@@ -82,6 +83,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     trackingView != null && Number.isFinite(trackingView.progress)
       ? Math.min(100, Math.max(0, trackingView.progress))
       : null;
+
+  const fleetTemps = useMemo(
+    () =>
+      getFleetCardTemperatureDisplay(
+        device,
+        panelActiveSession,
+        trackingProcess,
+        trackingProgressPct
+      ),
+    [device, panelActiveSession, trackingProcess, trackingProgressPct]
+  );
 
   const handleSaveName = async (e: React.MouseEvent | React.FormEvent) => {
     e.stopPropagation();
@@ -424,8 +436,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                    <div>
                      <div className="text-xs text-gray-500">{t('temperature')}</div>
                      <div className="font-bold text-gray-900">
-                       {convertTemp(device.telemetry.temp_supply_1).toFixed(1)}°{tempUnit}
-                       <span className="text-gray-400 font-normal ml-1">/ {convertTemp(device.telemetry.set_point)}°{tempUnit}</span>
+                       {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
+                       <span className="text-gray-400 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
                      </div>
                    </div>
                  </div>
@@ -464,8 +476,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <div>
                   <div className="text-xs text-gray-500">{t('temperature')}</div>
                   <div className="font-bold text-gray-900">
-                    {convertTemp(device.telemetry.temp_supply_1).toFixed(1)}°{tempUnit}
-                    <span className="text-gray-400 font-normal ml-1">/ {convertTemp(device.telemetry.set_point)}°{tempUnit}</span>
+                    {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
+                    <span className="text-gray-400 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
                   </div>
                 </div>
               </div>

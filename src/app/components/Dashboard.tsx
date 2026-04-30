@@ -11,6 +11,7 @@ import { Button } from './ui/Button';
 import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { totalNumeroAlarmaFleet, countProcesosEnCurso } from '@/app/lib/fleetKpi';
+import { getFleetCardTemperatureDisplay } from '@/app/lib/fleetTemperatureDisplay';
 
 interface DashboardProps {
   onSelectDevice: (deviceId: string) => void;
@@ -217,7 +218,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         const status = d.status === 'active' ? t('status_active') : d.status === 'alarm' ? t('status_alarm') : d.status === 'warning' ? t('status_warning') : t('status_offline');
         const conn = d.estado_conexion === 'online' ? t('online') : d.estado_conexion === 'wait' ? t('wait') : t('offline');
         const power = d.telemetry?.power_state === 1 ? 'ON' : 'OFF';
-        const temp = d.telemetry?.temp_supply_1 != null ? convertTemp(d.telemetry.temp_supply_1).toFixed(1) : '—';
+        const panel = panelSessionsByDevice.get(d.id) ?? null;
+        const track = ripeningTrackingByDevice.get(d.id) ?? null;
+        const { primaryC } = getFleetCardTemperatureDisplay(d, panel, track, null);
+        const temp = d.telemetry?.temp_supply_1 != null || d.telemetry?.return_air != null
+          ? convertTemp(primaryC).toFixed(1)
+          : '—';
         const hr = d.telemetry?.relative_humidity ?? '—';
         const eth = d.telemetry?.ethylene != null ? (d.telemetry.ethylene === 0 ? 'NA' : d.telemetry.ethylene.toFixed(2)) : '—';
         const co2 = d.telemetry?.co2_reading != null ? Number(d.telemetry.co2_reading).toFixed(2) : '—';
