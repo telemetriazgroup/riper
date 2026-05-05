@@ -34,6 +34,10 @@ function toRecipe(row: {
   is_system?: boolean;
   archived?: boolean;
   archived_at?: string | null;
+  iconKey?: string | null;
+  customImageUrl?: string | null;
+  icon_key?: string | null;
+  custom_image_url?: string | null;
 }): Recipe {
   return {
     id: row.id,
@@ -44,6 +48,8 @@ function toRecipe(row: {
     is_system: row.is_system === true,
     archived: row.archived === true || Boolean(row.archived_at),
     archived_at: row.archived_at ?? null,
+    iconKey: row.iconKey ?? row.icon_key ?? null,
+    customImageUrl: row.customImageUrl ?? row.custom_image_url ?? null,
   };
 }
 
@@ -64,6 +70,8 @@ export async function createRecipe(payload: Omit<Recipe, 'id' | 'is_system'>): P
       fruit: payload.fruit,
       description: payload.description ?? '',
       phases: payload.phases,
+      iconKey: payload.iconKey ?? null,
+      customImageUrl: payload.customImageUrl?.trim() ? payload.customImageUrl.trim() : null,
     }),
   });
   const json = await handle<{ data: Parameters<typeof toRecipe>[0] }>(res);

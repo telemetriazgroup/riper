@@ -10,6 +10,7 @@ import {
   LogOut,
   Activity,
   Shield,
+  Building2,
 } from 'lucide-react';
 import { getStoredUser } from '@/app/lib/auth';
 import { cn } from '@/app/lib/utils';
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
     { id: 'monitoring', label: t('monitoring'), icon: Wind },
     { id: 'processes', label: t('processes'), icon: Activity },
     { id: 'recipes', label: t('recipes'), icon: BookOpen },
+    ...(!restrictedDemo ? [{ id: 'companies', label: t('nav_companies'), icon: Building2 }] : []),
     ...(!restrictedDemo ? [{ id: 'users', label: t('users'), icon: Users }] : []),
     ...(isSuperAdmin ? [{ id: 'audit', label: t('audit'), icon: Shield }] : []),
     ...(!restrictedDemo ? [{ id: 'settings', label: t('settings'), icon: Settings }] : []),

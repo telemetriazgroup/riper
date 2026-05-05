@@ -7,6 +7,7 @@ import { Recipe } from '../components/recipes/RecipeBuilder';
 export const PERUVIAN_RECIPES: Recipe[] = [
   {
     id: 'std-aguacate',
+    iconKey: 'palta',
     name: 'Aguacate — Maduración estándar (tipo Hass)',
     fruit: 'Aguacate',
     description:
@@ -30,6 +31,7 @@ export const PERUVIAN_RECIPES: Recipe[] = [
   },
   {
     id: 'std-mango',
+    iconKey: 'mango',
     name: 'Mango — Maduración estándar',
     fruit: 'Mango',
     description:
@@ -53,6 +55,7 @@ export const PERUVIAN_RECIPES: Recipe[] = [
   },
   {
     id: 'std-banano',
+    iconKey: 'banana',
     name: 'Banano / Plátano — Maduración estándar',
     fruit: 'Banano',
     description:

@@ -60,6 +60,11 @@ const SQL_RECIPE_SYSTEM = `
 ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT false;
 `;
 
+const SQL_RECIPE_VISUAL = `
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS icon_key VARCHAR(64) NULL;
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS custom_image_url VARCHAR(2048) NULL;
+`;
+
 const SQL_DEVICE_NAMES = `
 CREATE TABLE IF NOT EXISTS app_user_device_names (
   user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -157,6 +162,23 @@ CREATE INDEX IF NOT EXISTS idx_app_audit_logs_action ON app_audit_logs (action);
 CREATE INDEX IF NOT EXISTS idx_app_audit_logs_entity ON app_audit_logs (entity_type, entity_id);
 `;
 
+const SQL_COMPANIES = `
+CREATE TABLE IF NOT EXISTS app_companies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(500) NOT NULL,
+  ruc_id VARCHAR(64) NULL,
+  address TEXT NULL,
+  email VARCHAR(255) NULL,
+  contact_name VARCHAR(255) NULL,
+  phone VARCHAR(64) NULL,
+  deleted_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_app_companies_active_name ON app_companies (lower(name)) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_app_companies_created ON app_companies (created_at DESC) WHERE deleted_at IS NULL;
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -176,6 +198,7 @@ export async function runMigrate() {
     await client.query(SQL_ALTER);
     await client.query(SQL_CATALOG);
     await client.query(SQL_RECIPE_SYSTEM);
+    await client.query(SQL_RECIPE_VISUAL);
     await client.query(SQL_DEVICE_NAMES);
     await client.query(SQL_PROCESS_FOLLOW);
     await client.query(SQL_RIPENING_PROCESSES);
@@ -183,6 +206,7 @@ export async function runMigrate() {
     await client.query(SQL_DEVICE_CONTROL_CANCEL_META);
     await client.query(SQL_DEVICE_CONTROL_ARCHIVE);
     await client.query(SQL_AUDIT);
+    await client.query(SQL_COMPANIES);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

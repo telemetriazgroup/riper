@@ -20,34 +20,9 @@ import {
   inferCurrentNextPhase,
   mapRowToProcessView,
   phaseDurationHoursFromStored,
+  formatRecipePhaseParamLines,
 } from '@/app/lib/ripeningProcessMappers';
 import { toast } from 'sonner';
-
-function formatPhaseParams(raw: Record<string, unknown>, t: (k: string) => string): string[] {
-  const type = String(raw.type ?? '');
-  const dur = raw.duration != null ? Number(raw.duration) : NaN;
-  const lines: string[] = [];
-  if (raw.temp != null && Number.isFinite(Number(raw.temp))) {
-    lines.push(`${t('temperature')}: ${Number(raw.temp).toFixed(1)} °C`);
-  }
-  if (raw.humidity != null && Number.isFinite(Number(raw.humidity))) {
-    lines.push(`${t('humidity')}: ${Number(raw.humidity)}%`);
-  }
-  if (raw.ethylene != null && Number.isFinite(Number(raw.ethylene))) {
-    lines.push(`${t('ethylene')}: ${Number(raw.ethylene)} ppm`);
-  }
-  if (raw.co2Limit != null && Number.isFinite(Number(raw.co2Limit))) {
-    lines.push(`${t('detail_tracking_co2_limit')}: ${Number(raw.co2Limit)}`);
-  }
-  if (Number.isFinite(dur) && dur > 0) {
-    if (type === 'venting') {
-      lines.push(`${t('detail_tracking_phase_duration')}: ${Math.round(dur)} min`);
-    } else {
-      lines.push(`${t('detail_tracking_phase_duration')}: ${dur} h`);
-    }
-  }
-  return lines;
-}
 
 interface DeviceRipeningTrackingOverviewProps {
   deviceId: string;
@@ -132,7 +107,7 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
     if (!phaseInfo?.phasesMeta?.length) return [];
     const raw = phaseInfo.phasesMeta[phaseInfo.currentIndex]?.raw;
     if (!raw || Object.keys(raw).length === 0) return [];
-    return formatPhaseParams(raw, t);
+    return formatRecipePhaseParamLines(raw, t);
   }, [phaseInfo, t]);
 
   const onConfirmCancel = async () => {

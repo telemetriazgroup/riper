@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Search,
-  ChefHat,
   Clock,
   MoreVertical,
   Edit,
@@ -33,6 +32,7 @@ import {
   restoreRecipe,
   updateRecipe,
 } from '@/app/lib/recipesApi';
+import { RecipeFruitAvatar } from '@/app/lib/recipeFruitPresets';
 
 export const RecipeList = () => {
   const { t } = useSettings();
@@ -379,9 +379,7 @@ export const RecipeList = () => {
           >
             <CardContent className="p-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start mb-4">
-                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-                  <ChefHat className="w-6 h-6" />
-                </div>
+                <RecipeFruitAvatar recipe={recipe} sizeClass="w-14 h-14" className="ring-1 ring-gray-200" title={recipe.fruit} />
                 <div
                   ref={kebabForId === recipe.id ? kebabRef : undefined}
                   className="relative z-20"

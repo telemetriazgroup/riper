@@ -6,7 +6,6 @@ import {
   Droplets, 
   Wind, 
   FlaskConical,
-  ChefHat,
   ToggleLeft,
   ToggleRight,
   ArrowDown,
@@ -18,6 +17,12 @@ import { clsx } from 'clsx';
 import { useSettings } from '../../contexts/SettingsContext';
 import { ProductCombobox, type ProductRow } from './ProductCombobox';
 import type { AppProduct } from '@/app/lib/productsApi';
+import {
+  RECIPE_FRUIT_SUGGESTIONS,
+  RECIPE_ICON_PRESETS,
+  RecipeFruitAvatar,
+  iconKeyFromFruitName,
+} from '@/app/lib/recipeFruitPresets';
 
 // --- Types ---
 export type PhaseType = 'homogenization' | 'ripening' | 'venting' | 'cooling';
@@ -42,6 +47,10 @@ export interface Recipe {
   fruit: string;
   description: string;
   phases: PhaseConfig[]; // Ordered list of configured phases
+  /** Icono predeterminado (clave de preset); la imagen personalizada tiene prioridad. */
+  iconKey?: string | null;
+  /** Imagen propia (URL https); si está definida, sustituye al icono preset. */
+  customImageUrl?: string | null;
   /** Receta del sistema (no editable in situ; se duplica) — solo lectura vía API */
   is_system?: boolean;
   /** Archivo lógico (API); restauración solo superadmin */
@@ -170,6 +179,8 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
   const [name, setName] = useState(initialData?.name || '');
   const [fruit, setFruit] = useState(initialData?.fruit || '');
   const [description, setDescription] = useState(initialData?.description || '');
+  const [iconKey, setIconKey] = useState<string | null>(initialData?.iconKey ?? null);
+  const [customImageUrl, setCustomImageUrl] = useState(initialData?.customImageUrl ?? '');
 
   React.useEffect(() => {
     if (initialData) return;
@@ -194,6 +205,8 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
     if (!initialData) {
       setName('');
       setDescription('');
+      setIconKey(null);
+      setCustomImageUrl('');
       setPhases({
         homogenization: getPhaseConfig([], 'homogenization'),
         ripening: getPhaseConfig([], 'ripening'),
@@ -205,6 +218,8 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
     setName(initialData.name);
     setFruit(initialData.fruit);
     setDescription(initialData.description);
+    setIconKey(initialData.iconKey ?? null);
+    setCustomImageUrl(initialData.customImageUrl ?? '');
     setPhases({
       homogenization: getPhaseConfig(initialData.phases, 'homogenization'),
       ripening: getPhaseConfig(initialData.phases, 'ripening'),
@@ -241,19 +256,26 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
       description,
       phases: orderedPhases,
       is_system: initialData?.is_system,
+      iconKey,
+      customImageUrl: customImageUrl.trim() || null,
     });
   };
 
   const fruitOptions = React.useMemo(() => {
-    const names = products.map((p) => p.name);
-    const set = new Set(names);
-    if (initialData?.fruit && !set.has(initialData.fruit)) {
-      return [...names, initialData.fruit];
-    }
-    if (fruit && !set.has(fruit)) {
-      return [...names, fruit];
-    }
-    return names;
+    const fromCatalog = products.map((p) => p.name);
+    const merged: string[] = [];
+    const seen = new Set<string>();
+    const push = (n: string) => {
+      const t = n.trim();
+      if (!t || seen.has(t)) return;
+      seen.add(t);
+      merged.push(t);
+    };
+    for (const n of RECIPE_FRUIT_SUGGESTIONS) push(n);
+    for (const n of fromCatalog) push(n);
+    if (initialData?.fruit) push(initialData.fruit);
+    if (fruit) push(fruit);
+    return merged;
   }, [products, initialData?.fruit, fruit]);
 
   const fruitOptionRows: ProductRow[] = React.useMemo(
@@ -271,6 +293,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
       setFruit(fruitOptions[0]);
     }
   }, [fruitOptions, fruit]);
+
+  /** Receta nueva: al estabilizar el producto, sugerir icono si aún no hay uno guardado. */
+  React.useEffect(() => {
+    if (initialData) return;
+    if (iconKey != null) return;
+    const k = iconKeyFromFruitName(fruit);
+    if (k) setIconKey(k);
+  }, [fruit, initialData, iconKey]);
 
   const getTotalDuration = () => {
     let totalHours = 0;
@@ -301,9 +331,16 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-lg shrink-0">
-            <ChefHat className="w-6 h-6" />
-          </div>
+          <RecipeFruitAvatar
+            recipe={{
+              fruit,
+              iconKey,
+              customImageUrl: customImageUrl.trim() || null,
+            }}
+            sizeClass="w-12 h-12"
+            className="shrink-0 ring-2 ring-white shadow"
+            title={fruit}
+          />
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900">
               {readOnly
@@ -408,6 +445,53 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                placeholder={t('description_placeholder')}
                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50"
              />
+          </div>
+
+          <div className="col-span-full border-t border-gray-100 pt-4 mt-2">
+            <p className="text-sm font-medium text-gray-800 mb-1">{t('recipe_icon_section_title')}</p>
+            <p className="text-xs text-gray-500 mb-3">{t('recipe_icon_presets_hint')}</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {RECIPE_ICON_PRESETS.map((p) => {
+                const selected = iconKey === p.key && !(customImageUrl.trim());
+                return (
+                  <button
+                    key={p.key}
+                    type="button"
+                    disabled={readOnly}
+                    title={t(`recipe_preset_${p.key}`)}
+                    onClick={() => {
+                      setIconKey(p.key);
+                      setCustomImageUrl('');
+                    }}
+                    className={clsx(
+                      'flex h-11 min-w-[2.75rem] items-center justify-center rounded-lg border-2 text-xl transition-colors',
+                      selected
+                        ? 'border-blue-500 bg-blue-50 shadow-sm'
+                        : 'border-gray-200 bg-white hover:border-gray-300',
+                      readOnly && 'cursor-default opacity-80'
+                    )}
+                  >
+                    {p.emoji}
+                  </button>
+                );
+              })}
+            </div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipe_icon_custom_url')}</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="url"
+                value={customImageUrl}
+                disabled={readOnly}
+                onChange={(e) => setCustomImageUrl(e.target.value)}
+                placeholder={t('recipe_icon_custom_url_placeholder')}
+                className="flex-1 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50"
+              />
+              {!readOnly && customImageUrl.trim() && (
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setCustomImageUrl('')}>
+                  {t('recipe_icon_clear_image')}
+                </Button>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

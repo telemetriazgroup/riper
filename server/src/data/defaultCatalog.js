@@ -16,6 +16,7 @@ export const DEFAULT_PRODUCT_NAMES = ['Aguacate', 'Mango', 'Banano', 'Cítricos'
 export const STANDARD_RECIPES = [
   {
     id: 'std-aguacate',
+    icon_key: 'palta',
     name: 'Aguacate — Maduración estándar (tipo Hass)',
     fruit: 'Aguacate',
     description:
@@ -38,6 +39,7 @@ export const STANDARD_RECIPES = [
   },
   {
     id: 'std-mango',
+    icon_key: 'mango',
     name: 'Mango — Maduración estándar',
     fruit: 'Mango',
     description:
@@ -60,6 +62,7 @@ export const STANDARD_RECIPES = [
   },
   {
     id: 'std-banano',
+    icon_key: 'banana',
     name: 'Banano / Plátano — Maduración estándar',
     fruit: 'Banano',
     description:

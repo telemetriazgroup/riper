@@ -508,7 +508,10 @@ ripeningProcessesRouter.post(
         message: 'archived processes are read-only',
       });
     }
-    if (row.status !== 'active') {
+    const samplingAllowed = ['active', 'cancelled', 'completed'].includes(
+      String(row.status || '').toLowerCase()
+    );
+    if (!samplingAllowed) {
       const cleanupStagingErr = () => {
         const st = req._ripenerStaging;
         if (!st) return;
@@ -521,7 +524,7 @@ ripeningProcessesRouter.post(
       cleanupStagingErr();
       return res.status(403).json({
         error: 'process_not_active',
-        message: 'only active processes accept new samplings',
+        message: 'this process state does not accept new samplings',
       });
     }
     const staging = req._ripenerStaging;

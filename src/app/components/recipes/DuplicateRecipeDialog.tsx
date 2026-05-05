@@ -102,6 +102,8 @@ export const DuplicateRecipeDialog: React.FC<DuplicateRecipeDialogProps> = ({
       description: description.trim(),
       phases: clonePhasesForDuplicate(source.phases),
       is_system: undefined,
+      iconKey: source.iconKey ?? null,
+      customImageUrl: source.customImageUrl?.trim() ? source.customImageUrl.trim() : null,
     });
   };
 

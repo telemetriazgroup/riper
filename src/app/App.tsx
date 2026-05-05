@@ -9,6 +9,7 @@ import { ProcessList } from '@/app/components/ProcessList';
 import { DeviceControlAdmin } from '@/app/components/DeviceControlAdmin';
 import { UserProfile } from '@/app/components/UserProfile';
 import { DetailedUserManual } from '@/app/components/DetailedUserManual';
+import { CompaniesPage } from '@/app/components/CompaniesPage';
 import { AuditLog } from '@/app/components/AuditLog';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
@@ -65,7 +66,7 @@ function AppContent() {
 
   useEffect(() => {
     if (!isRestrictedDemoUser) return;
-    if (activeView === 'users' || activeView === 'settings') {
+    if (activeView === 'users' || activeView === 'settings' || activeView === 'companies') {
       setActiveView('dashboard');
     }
   }, [isRestrictedDemoUser, activeView]);
@@ -132,6 +133,8 @@ function AppContent() {
         );
       case 'recipes':
         return <Recipes />;
+      case 'companies':
+        return <CompaniesPage />;
       case 'processes':
         return <ProcessList />;
       case 'control-sessions':

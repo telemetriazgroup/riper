@@ -29,6 +29,11 @@ export function canEditRecipesAndCatalog(): boolean {
   return r === 'admin' || r === 'superadmin';
 }
 
+/** CRUD catálogo de empresas (mismo criterio que recetas/productos). */
+export function canManageCompanies(): boolean {
+  return canEditRecipesAndCatalog();
+}
+
 /** Panel Homogenización / manual: Visualizador no ejecuta ni inicia procesos del panel. */
 export function canOperateDeviceControl(): boolean {
   return !isViewer();

@@ -8,6 +8,9 @@ import { ProductCombobox, type ProductRow } from './recipes/ProductCombobox';
 import { PERUVIAN_RECIPES } from '@/app/data/recipes';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { fetchProducts, type AppProduct } from '@/app/lib/productsApi';
+import { fetchCompanies } from '@/app/lib/companiesApi';
+import { canManageCompanies } from '@/app/lib/permissions';
+import { CompanyCombobox, type CompanyListRow } from '@/app/components/CompanyCombobox';
 import { fetchRecipes } from '@/app/lib/recipesApi';
 import { getStoredUser } from '@/app/lib/auth';
 import { createRipeningProcess, fetchActiveProcessForDevice } from '@/app/lib/ripeningProcessesApi';
@@ -100,6 +103,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   const { devices, isLoading: devicesLoading } = useDevices();
   const role = getStoredUser()?.role;
   const canManageProducts = role === 'superadmin' || role === 'admin';
+  const canManageCo = canManageCompanies();
 
   const [step, setStep] = useState<'form' | 'custom-recipe'>('form');
   const [productRows, setProductRows] = useState<AppProduct[]>([]);
@@ -109,6 +113,8 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   const [processName, setProcessName] = useState('');
   const [clientType, setClientType] = useState<'external' | 'internal'>('external');
   const [clientName, setClientName] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
+  const [companyRows, setCompanyRows] = useState<CompanyListRow[]>([]);
   const [origin, setOrigin] = useState('');
   const [productName, setProductName] = useState('');
   const [quantityKg, setQuantityKg] = useState<string>('');
@@ -164,8 +170,22 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
 
   const loadCatalog = useCallback(async () => {
     try {
-      const [p, r] = await Promise.all([fetchProducts(), fetchRecipes().catch(() => [] as Recipe[])]);
+      const [p, r, co] = await Promise.all([
+        fetchProducts(),
+        fetchRecipes().catch(() => [] as Recipe[]),
+        fetchCompanies().catch(() => []),
+      ]);
       setProductRows(p);
+      setCompanyRows(
+        co
+          .filter((c) => !c.archived && !c.archived_at)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            ruc_id: c.ruc_id,
+            email: c.email,
+          }))
+      );
       if (r.length) setRecipesCatalog(r);
       else setRecipesCatalog(PERUVIAN_RECIPES);
     } catch {
@@ -307,6 +327,10 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
       setSaveError(t('tracking_offline_device_body'));
       return;
     }
+    if (!clientName.trim()) {
+      setSaveError(t('client_name_required'));
+      return;
+    }
     if (!origin.trim()) {
       setOriginError(t('origin_required_error'));
       return;
@@ -339,7 +363,11 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
         name: supervisorName.trim(),
         email: supervisorEmail.trim() || undefined,
       },
-      client: { type: clientType, name: clientName },
+      client: {
+        type: clientType,
+        name: clientName.trim(),
+        ...(selectedCompanyId ? { companyId: selectedCompanyId } : {}),
+      },
       batch: {
         product: productName,
         origin,
@@ -503,14 +531,18 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {t('client_name')} <span className="text-red-600">*</span>
                   </label>
-                  <input
-                    type="text"
+                  <CompanyCombobox
                     value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Ej. Empresa o cliente"
-                    required
+                    companyId={selectedCompanyId}
+                    items={companyRows}
+                    onChange={(name, id) => {
+                      setClientName(name);
+                      setSelectedCompanyId(id);
+                    }}
+                    canCreate={canManageCo}
+                    onCompanyCreated={() => void loadCatalog()}
                   />
+                  <p className="text-xs text-gray-500 mt-1">{t('client_company_combobox_hint')}</p>
                 </div>
               </div>
             </div>

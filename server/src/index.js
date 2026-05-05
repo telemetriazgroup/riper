@@ -24,6 +24,7 @@ import { deviceProcessFollowRouter } from './routes/deviceProcessFollow.js';
 import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripeningProcesses.js';
 import { deviceControlRouter } from './routes/deviceControl.js';
 import { auditRouter } from './routes/audit.js';
+import { companiesRouter } from './routes/companies.js';
 import {
   finalizeDueRipeningProcesses,
   finalizeDueDeviceControlSessions,
@@ -74,6 +75,7 @@ async function main() {
   app.use('/api/v1/ripening-processes', authMiddleware, ripeningProcessesRouter);
   app.use('/api/v1/device-control', authMiddleware, deviceControlRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
+  app.use('/api/v1/companies', authMiddleware, companiesRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

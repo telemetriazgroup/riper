@@ -19,6 +19,8 @@ export type RipeningSamplingModalProps = {
   onClose: () => void;
   saving: boolean;
   defaultPersonaName: string;
+  /** Proceso cancelado o finalizado: solo seguimiento / final, con aviso. */
+  closedProcess?: boolean;
   onSave: (payload: {
     type: SamplingType;
     parameters: SamplingParameter[];
@@ -35,6 +37,7 @@ export function RipeningSamplingModal({
   onSave,
   saving,
   defaultPersonaName,
+  closedProcess = false,
 }: RipeningSamplingModalProps) {
   const { t, language } = useSettings();
   const [type, setType] = useState<SamplingType>('monitoring');
@@ -62,7 +65,7 @@ export function RipeningSamplingModal({
       evidenceRef.current.forEach((e) => URL.revokeObjectURL(e.preview));
       setEvidence([]);
     }
-  }, [isOpen, defaultPersonaName]);
+  }, [isOpen, defaultPersonaName, closedProcess]);
 
   useEffect(() => {
     return () => {
@@ -138,6 +141,11 @@ export function RipeningSamplingModal({
         </div>
 
         <div className="p-6 space-y-6">
+          {closedProcess && (
+            <p className="text-sm rounded-lg border border-amber-200 bg-amber-50 text-amber-950 px-3 py-2">
+              {t('sampling_closed_process_hint')}
+            </p>
+          )}
           <div className="space-y-2">
             <label className="text-sm font-medium text-gray-700">
               {t('sampling_person_field')} <span className="text-red-600">*</span>
@@ -156,13 +164,20 @@ export function RipeningSamplingModal({
             <label className="text-sm font-medium text-gray-700">
               {language === 'es' ? 'Tipo de muestreo' : 'Sampling type'}
             </label>
-            <div className="grid grid-cols-3 gap-3">
+            <div
+              className={clsx('grid gap-3', closedProcess ? 'grid-cols-2' : 'grid-cols-3')}
+            >
               {(
-                [
-                  { id: 'initial' as const, labelEs: 'Inicial / Recepción', labelEn: 'Initial / Reception' },
-                  { id: 'monitoring' as const, labelEs: 'Seguimiento', labelEn: 'Monitoring' },
-                  { id: 'final' as const, labelEs: 'Final / Liberación', labelEn: 'Final / Release' },
-                ] as const
+                closedProcess
+                  ? ([
+                      { id: 'monitoring' as const, labelEs: 'Seguimiento', labelEn: 'Monitoring' },
+                      { id: 'final' as const, labelEs: 'Final / Liberación', labelEn: 'Final / Release' },
+                    ] as const)
+                  : ([
+                      { id: 'initial' as const, labelEs: 'Inicial / Recepción', labelEn: 'Initial / Reception' },
+                      { id: 'monitoring' as const, labelEs: 'Seguimiento', labelEn: 'Monitoring' },
+                      { id: 'final' as const, labelEs: 'Final / Liberación', labelEn: 'Final / Release' },
+                    ] as const)
               ).map((opt) => (
                 <button
                   key={opt.id}

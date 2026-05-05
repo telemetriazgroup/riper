@@ -98,6 +98,17 @@ export function mapRowToProcessView(row: RipeningProcessRow) {
       name: p.recipe?.name || '—',
       duration_hours: schedule.totalDurationHours ?? 0,
       targets: targetsFromPayload(p),
+      fruit:
+        p.recipe != null && typeof (p.recipe as { fruit?: unknown }).fruit === 'string'
+          ? String((p.recipe as { fruit: string }).fruit)
+          : undefined,
+      description:
+        p.recipe != null && typeof (p.recipe as { description?: unknown }).description === 'string'
+          ? String((p.recipe as { description: string }).description)
+          : undefined,
+      phases: Array.isArray((p.recipe as { phases?: unknown } | undefined)?.phases)
+        ? ((p.recipe as { phases: unknown[] }).phases as Record<string, unknown>[])
+        : [],
     },
     /** Sin URL ficticia; la UI muestra fondo cuando no hay `firstEvidenceApiPath`. */
     image: '',
@@ -268,4 +279,134 @@ export function inferCurrentNextPhase(
     currentIndex,
     phasesMeta,
   };
+}
+
+/** Líneas de texto para parámetros de una fase (temperatura, HR, etileno, etc.). */
+export function formatRecipePhaseParamLines(
+  raw: Record<string, unknown>,
+  t: (key: string, replacements?: Record<string, string> | string) => string
+): string[] {
+  const type = String(raw.type ?? '');
+  const dur = raw.duration != null ? Number(raw.duration) : NaN;
+  const lines: string[] = [];
+  if (raw.temp != null && Number.isFinite(Number(raw.temp))) {
+    lines.push(`${t('temperature')}: ${Number(raw.temp).toFixed(1)} °C`);
+  }
+  if (raw.humidity != null && Number.isFinite(Number(raw.humidity))) {
+    lines.push(`${t('humidity')}: ${Number(raw.humidity)}%`);
+  }
+  if (raw.ethylene != null && Number.isFinite(Number(raw.ethylene))) {
+    lines.push(`${t('ethylene')}: ${Number(raw.ethylene)} ppm`);
+  }
+  if (raw.co2Limit != null && Number.isFinite(Number(raw.co2Limit))) {
+    lines.push(`${t('detail_tracking_co2_limit')}: ${Number(raw.co2Limit)}`);
+  }
+  if (Number.isFinite(dur) && dur > 0) {
+    if (type === 'venting') {
+      lines.push(`${t('detail_tracking_phase_duration')}: ${Math.round(dur)} ${t('unit_minutes')}`);
+    } else {
+      lines.push(`${t('detail_tracking_phase_duration')}: ${dur} ${t('hours')}`);
+    }
+  }
+  if (raw.tempType != null && String(raw.tempType).trim()) {
+    lines.push(`${t('recipe_modal_temp_type')}: ${String(raw.tempType)}`);
+  }
+  return lines;
+}
+
+function phaseRowLabel(
+  pr: Record<string, unknown>,
+  idx: number,
+  t: (key: string, replacements?: Record<string, string> | string) => string
+): string {
+  const name = String(pr.name ?? '').trim();
+  if (name) return name;
+  const type = String(pr.type ?? '');
+  const key =
+    type === 'homogenization'
+      ? 'phase_homogenization'
+      : type === 'ripening'
+        ? 'phase_ripening'
+        : type === 'venting'
+          ? 'phase_venting'
+          : type === 'cooling'
+            ? 'phase_cooling'
+            : null;
+  return key ? t(key) : t('tracking_recipe_phase_n', { n: String(idx + 1) });
+}
+
+export type RecipeModalPhaseRow = {
+  order: number;
+  label: string;
+  type: string;
+  plannedEndAt: string | null;
+  paramLines: string[];
+};
+
+/** Horarios por fase (fin programado acumulado desde scheduleSummary.startedAt). */
+export function buildPhaseScheduleForModal(
+  payload: RipeningProcessRow['payload'],
+  t: (key: string, replacements?: Record<string, string> | string) => string
+): {
+  startedAt: string | null;
+  estimatedFullEndAt: string | null;
+  phases: RecipeModalPhaseRow[];
+} {
+  const schedule = payload.scheduleSummary || {};
+  const startedAt = schedule.startedAt ? String(schedule.startedAt) : null;
+  const startMs = startedAt ? new Date(startedAt).getTime() : NaN;
+  let estimatedFullEndAt: string | null = null;
+  if (schedule.estimatedEndAt != null && String(schedule.estimatedEndAt).trim()) {
+    const e = new Date(String(schedule.estimatedEndAt)).getTime();
+    estimatedFullEndAt = Number.isFinite(e) ? new Date(e).toISOString() : null;
+  } else if (Number.isFinite(startMs) && Number(schedule.totalDurationHours) > 0) {
+    estimatedFullEndAt = new Date(
+      startMs + Number(schedule.totalDurationHours) * 3600 * 1000
+    ).toISOString();
+  }
+
+  const raw = (payload.recipe as { phases?: Record<string, unknown>[] } | undefined)?.phases;
+  const phaseList = Array.isArray(raw)
+    ? raw.filter((p) => p && (p as { enabled?: boolean }).enabled !== false)
+    : [];
+
+  let accH = 0;
+  const phases: RecipeModalPhaseRow[] = phaseList.map((p, idx) => {
+    const pr = p as Record<string, unknown>;
+    const hours = phaseDurationHoursFromStored(pr as { type?: string; duration?: number; enabled?: boolean });
+    accH += hours;
+    const plannedEndAt =
+      Number.isFinite(startMs) ? new Date(startMs + accH * 3600 * 1000).toISOString() : null;
+    return {
+      order: idx + 1,
+      label: phaseRowLabel(pr, idx, t),
+      type: String(pr.type ?? ''),
+      plannedEndAt,
+      paramLines: formatRecipePhaseParamLines(pr, t),
+    };
+  });
+
+  return { startedAt, estimatedFullEndAt, phases };
+}
+
+export function payloadForRecipeModal(view: ReturnType<typeof mapRowToProcessView>): RipeningProcessRow['payload'] {
+  const row = view._row as RipeningProcessRow | undefined;
+  if (row?.payload && typeof row.payload === 'object') return row.payload;
+  const r = view.recipe as {
+    name?: string;
+    phases?: Record<string, unknown>[];
+    targets?: { brix?: string; firmness?: string; color?: string };
+    fruit?: string;
+    description?: string;
+  };
+  return {
+    scheduleSummary: view.scheduleSummary,
+    recipe: {
+      name: r.name,
+      phases: Array.isArray(r.phases) ? r.phases : [],
+      targets: r.targets,
+      fruit: r.fruit,
+      description: r.description,
+    },
+  } as RipeningProcessRow['payload'];
 }

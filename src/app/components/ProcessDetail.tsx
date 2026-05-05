@@ -11,11 +11,18 @@ import {
   FlaskConical,
   FileText,
   Ban,
+  FileBarChart2,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { AuthedImage } from './AuthedImage';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import { clsx } from 'clsx';
 import { getStoredUser } from '@/app/lib/auth';
 import { canRegisterRipeningSampling, canCancelRipeningTracking } from '@/app/lib/permissions';
@@ -23,6 +30,8 @@ import { postRipeningSampling, fetchRipeningProcess, patchRipeningProcess } from
 import { buildPlanningSnapshot, mapRowToProcessView, remainingDays } from '@/app/lib/ripeningProcessMappers';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { ProcessTrackingReportDialog } from '@/app/components/ProcessTrackingReportDialog';
+import { ProcessRecipeDetailModal } from '@/app/components/ProcessRecipeDetailModal';
+import { ProcessIntegralReportDialog } from '@/app/components/ProcessIntegralReportDialog';
 import {
   RipeningSamplingModal,
   type SamplingType,
@@ -42,7 +51,12 @@ const FALLBACK_DATA = {
   status: "active",
   client: { name: "Mango Aérea de Colombia S.A.", type: "external" },
   batch: { product: "Mango Tommy Atkins", origin: "Tolima", quantity_kg: 4500, quantity_m3: 12.5, box_count: 320, entry_date: "2024-02-02T08:30:00" },
-  recipe: { name: "Maduración Exportación", duration_hours: 72, targets: { brix: "14-16", firmness: "10-12", color: "4.5" } },
+  recipe: {
+    name: 'Maduración Exportación',
+    duration_hours: 72,
+    targets: { brix: '14-16', firmness: '10-12', color: '4.5' },
+    phases: [],
+  },
   scheduleSummary: { estimatedEndAt: null, startedAt: "2024-02-02T08:30:00.000Z" },
   progress: 35,
   timeline: [],
@@ -63,6 +77,32 @@ function barPct(kind: 'brix' | 'firm' | 'color', value: string) {
   return Math.min(100, Math.round((n / 30) * 100));
 }
 
+/** Evidencia en bitácora: ruta API con token o URL pública. */
+function resolveEvidencePhoto(img: { url?: string; desc?: string }): {
+  alt: string;
+  apiPath: string | null;
+  directSrc: string | null;
+} {
+  const alt = (img.desc && String(img.desc).trim()) || 'evidencia';
+  const raw = img.url != null ? String(img.url) : '';
+  if (!raw) return { alt, apiPath: null, directSrc: null };
+  if (raw.includes('/ripening-processes/')) {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      try {
+        return { alt, apiPath: new URL(raw).pathname, directSrc: null };
+      } catch {
+        return { alt, apiPath: raw, directSrc: null };
+      }
+    }
+    return { alt, apiPath: raw, directSrc: null };
+  }
+  return { alt, apiPath: null, directSrc: raw };
+}
+
+type PhotoViewerState =
+  | { alt: string; apiPath: string }
+  | { alt: string; directSrc: string };
+
 export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   processId,
   processData,
@@ -74,12 +114,21 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   const processStatus = (data as { status?: string }).status || 'active';
   const isArchived = (data as ReturnType<typeof mapRowToProcessView>).archived === true;
   const isActiveProcess = processStatus === 'active';
-  const canRegister = isActiveProcess && canRegisterRipeningSampling() && !isArchived;
+  const allowSamplingWhenClosed =
+    processStatus === 'cancelled' || processStatus === 'completed';
+  const canRegister =
+    !isArchived &&
+    canRegisterRipeningSampling() &&
+    (isActiveProcess || allowSamplingWhenClosed);
+  const closedSamplingModal = !isActiveProcess && allowSamplingWhenClosed;
   const canCancelHere = isActiveProcess && canCancelRipeningTracking() && !isArchived;
+  const [photoViewer, setPhotoViewer] = useState<PhotoViewerState | null>(null);
   const [isSamplingModalOpen, setIsSamplingModalOpen] = useState(false);
   const [cancellingTracking, setCancellingTracking] = useState(false);
   const [samplingSaving, setSamplingSaving] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [integralReportOpen, setIntegralReportOpen] = useState(false);
   const [events, setEvents] = useState((processData || FALLBACK_DATA).timeline || []);
 
   useEffect(() => {
@@ -103,6 +152,11 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
     () => ({ ...data, timeline: events } as ReturnType<typeof mapRowToProcessView>),
     [data, events]
   );
+
+  const linkedDeviceId = useMemo(() => {
+    const p = reportView._row?.payload as { deviceId?: string } | undefined;
+    return String(p?.deviceId ?? '').trim();
+  }, [reportView]);
 
   const extLabel = t('client_type_external');
   const inLabel = t('client_type_internal');
@@ -182,6 +236,11 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
                 ? t('process_completed_info')
                 : t('process_not_active_generic')}
           </p>
+          {processStatus === 'completed' &&
+            canRegisterRipeningSampling() &&
+            !isArchived && (
+              <p className="text-sm text-slate-700 mt-2">{t('process_completed_sampling_note')}</p>
+            )}
           {processStatus === 'cancelled' &&
             (data as ReturnType<typeof mapRowToProcessView>).cancelledMeta?.at && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950 text-xs space-y-0.5">
@@ -257,6 +316,17 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
             >
               <FileText className="w-4 h-4" />
               {isActiveProcess ? t('report_open_interim') : t('report_open_final')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 border-violet-200 text-violet-900 hover:bg-violet-50 disabled:opacity-60"
+              disabled={!linkedDeviceId}
+              title={!linkedDeviceId ? t('integral_report_no_device') : t('integral_report_title')}
+              onClick={() => setIntegralReportOpen(true)}
+            >
+              <FileBarChart2 className="w-4 h-4" />
+              {t('integral_report_open')}
             </Button>
             {canRegister && (
               <Button
@@ -335,11 +405,18 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
              <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
                <FlaskConical className="w-5 h-5" />
              </div>
-             <div>
-               <p className="text-sm font-medium text-gray-500">Receta Activa</p>
+             <button
+               type="button"
+               onClick={() => setRecipeModalOpen(true)}
+               className="text-left rounded-lg -m-2 p-2 hover:bg-blue-50/80 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 transition-colors w-full min-w-0"
+               aria-label={t('recipe_modal_click_hint')}
+             >
+               <p className="text-sm font-medium text-gray-500">{t('process_detail_active_recipe')}</p>
                <p className="font-semibold text-gray-900">{data.recipe.name}</p>
-               <p className="text-xs text-gray-500">Target Brix: {data.recipe.targets.brix}</p>
-             </div>
+               <p className="text-xs text-gray-500">
+                 {t('recipe_modal_click_hint')} · {t('report_param_brix')}: {data.recipe.targets.brix}
+               </p>
+             </button>
            </div>
 
            <div className="flex items-start gap-3">
@@ -426,39 +503,41 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
                        {/* Images Rendering */}
                        {event.images && event.images.length > 0 && (
                          <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-                           {event.images.map((img: { url?: string; desc?: string }, i: number) => (
-                             <div
-                               key={img.url ? `${img.url}-${i}` : i}
-                               className="relative group min-w-[100px] w-[120px] h-[120px] rounded-lg overflow-hidden border border-gray-200"
-                             >
-                               {img.url && String(img.url).includes('/ripening-processes/') ? (
-                                 <AuthedImage
-                                   apiPath={
-                                     String(img.url).startsWith('http')
-                                       ? (() => {
-                                           try {
-                                             return new URL(String(img.url)).pathname;
-                                           } catch {
-                                             return String(img.url);
-                                           }
-                                         })()
-                                       : String(img.url)
+                           {event.images.map((img: { url?: string; desc?: string }, i: number) => {
+                             const ev = resolveEvidencePhoto(img);
+                             return (
+                               <button
+                                 key={img.url ? `${img.url}-${i}` : i}
+                                 type="button"
+                                 className="relative group min-w-[100px] w-[120px] h-[120px] rounded-lg overflow-hidden border border-gray-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shrink-0 cursor-zoom-in"
+                                 aria-label={t('evidence_photo_zoom_aria')}
+                                 onClick={() => {
+                                   if (ev.apiPath) {
+                                     setPhotoViewer({ alt: ev.alt, apiPath: ev.apiPath });
+                                   } else if (ev.directSrc) {
+                                     setPhotoViewer({ alt: ev.alt, directSrc: ev.directSrc });
                                    }
-                                   alt={img.desc || 'evidencia'}
-                                   className="w-full h-full object-cover"
-                                 />
-                               ) : (
-                                 <ImageWithFallback
-                                   src={img.url}
-                                   alt={img.desc}
-                                   className="w-full h-full object-cover"
-                                 />
-                               )}
-                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2">
-                                 <p className="text-white text-[10px] truncate">{img.desc}</p>
-                               </div>
-                             </div>
-                           ))}
+                                 }}
+                               >
+                                 {ev.apiPath ? (
+                                   <AuthedImage
+                                     apiPath={ev.apiPath}
+                                     alt={ev.alt}
+                                     className="w-full h-full object-cover pointer-events-none"
+                                   />
+                                 ) : ev.directSrc ? (
+                                   <ImageWithFallback
+                                     src={ev.directSrc}
+                                     alt={ev.alt}
+                                     className="w-full h-full object-cover pointer-events-none"
+                                   />
+                                 ) : null}
+                                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2 pointer-events-none">
+                                   <p className="text-white text-[10px] truncate">{img.desc}</p>
+                                 </div>
+                               </button>
+                             );
+                           })}
                          </div>
                        )}
                      </div>
@@ -565,6 +644,30 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
         </div>
       </div>
 
+      <Dialog open={photoViewer != null} onOpenChange={(open) => !open && setPhotoViewer(null)}>
+        <DialogContent className="max-w-[min(96vw,56rem)] w-full p-3 sm:p-4 gap-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>{t('evidence_photo_zoom_title')}</DialogTitle>
+          </DialogHeader>
+          <div className="flex max-h-[85vh] items-center justify-center overflow-auto rounded-md bg-black/5">
+            {photoViewer && 'apiPath' in photoViewer ? (
+              <AuthedImage
+                key={photoViewer.apiPath}
+                apiPath={photoViewer.apiPath}
+                alt={photoViewer.alt}
+                className="max-h-[85vh] w-auto max-w-full object-contain"
+              />
+            ) : photoViewer && 'directSrc' in photoViewer ? (
+              <ImageWithFallback
+                src={photoViewer.directSrc}
+                alt={photoViewer.alt}
+                className="max-h-[85vh] w-auto max-w-full object-contain"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sampling Modal */}
       {isSamplingModalOpen && (
         <RipeningSamplingModal
@@ -573,8 +676,21 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
           onSave={handleSaveSampling}
           saving={samplingSaving}
           defaultPersonaName={getStoredUser()?.name || ''}
+          closedProcess={closedSamplingModal}
         />
       )}
+
+      <ProcessRecipeDetailModal
+        open={recipeModalOpen}
+        onOpenChange={setRecipeModalOpen}
+        view={reportView}
+      />
+
+      <ProcessIntegralReportDialog
+        open={integralReportOpen}
+        onOpenChange={setIntegralReportOpen}
+        view={reportView}
+      />
 
       <ProcessTrackingReportDialog
         open={reportOpen}

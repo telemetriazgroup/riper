@@ -15,11 +15,30 @@ function rowToRecipe(row) {
     description: row.description ?? '',
     phases: Array.isArray(phases) ? phases : [],
     is_system: row.is_system === true,
+    iconKey: row.icon_key != null && String(row.icon_key).trim() ? String(row.icon_key).trim() : null,
+    customImageUrl:
+      row.custom_image_url != null && String(row.custom_image_url).trim()
+        ? String(row.custom_image_url).trim()
+        : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
     archived_at: del ? new Date(del).toISOString() : null,
     archived: Boolean(del),
   };
+}
+
+function parseIconKey(body) {
+  const v = body?.iconKey ?? body?.icon_key;
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  return String(v).trim().slice(0, 64) || null;
+}
+
+function parseCustomImageUrl(body) {
+  const v = body?.customImageUrl ?? body?.custom_image_url;
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  return String(v).trim().slice(0, 2048) || null;
 }
 
 function parseIncludeArchived(req) {
@@ -34,7 +53,7 @@ recipesRouter.get('/', async (req, res) => {
       return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
     }
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at
+      `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at
        FROM app_recipes
        WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
        ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
@@ -54,7 +73,7 @@ recipesRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
       `UPDATE app_recipes
        SET deleted_at = NULL, updated_at = now()
        WHERE id = $1 AND deleted_at IS NOT NULL AND (is_system IS NOT TRUE)
-       RETURNING id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at`,
+       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at`,
       [id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -75,7 +94,7 @@ recipesRouter.get('/:id', async (req, res) => {
   try {
     const superadmin = req.user?.role === 'superadmin';
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, deleted_at, created_at, updated_at
+      `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at
        FROM app_recipes
        WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
       [req.params.id, superadmin]
@@ -94,6 +113,8 @@ function newRecipeId() {
 
 recipesRouter.post('/', requireAdmin, async (req, res) => {
   const { name, fruit, description = '', phases } = req.body || {};
+  const ik = parseIconKey(req.body);
+  const img = parseCustomImageUrl(req.body);
   const n = String(name || '').trim();
   const f = String(fruit || '').trim();
   if (!n || !f) {
@@ -105,10 +126,10 @@ recipesRouter.post('/', requireAdmin, async (req, res) => {
   const id = newRecipeId();
   try {
     const { rows } = await pool.query(
-      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system)
-       VALUES ($1, $2, $3, $4, $5::jsonb, false)
-       RETURNING id, name, fruit, description, phases, is_system, created_at, updated_at`,
-      [id, n, f, String(description), JSON.stringify(phases)]
+      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system, icon_key, custom_image_url)
+       VALUES ($1, $2, $3, $4, $5::jsonb, false, $6, $7)
+       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at`,
+      [id, n, f, String(description), JSON.stringify(phases), ik === undefined ? null : ik, img === undefined ? null : img]
     );
     await writeAudit(req, {
       action: 'recipe.create',
@@ -126,6 +147,8 @@ recipesRouter.post('/', requireAdmin, async (req, res) => {
 recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { name, fruit, description, phases } = req.body || {};
+  const iconKeyIn = parseIconKey(req.body);
+  const customImgIn = parseCustomImageUrl(req.body);
   const updates = [];
   const vals = [];
   let i = 1;
@@ -152,6 +175,14 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
     updates.push(`phases = $${i++}::jsonb`);
     vals.push(JSON.stringify(phases));
   }
+  if (iconKeyIn !== undefined) {
+    updates.push(`icon_key = $${i++}`);
+    vals.push(iconKeyIn);
+  }
+  if (customImgIn !== undefined) {
+    updates.push(`custom_image_url = $${i++}`);
+    vals.push(customImgIn);
+  }
   if (!updates.length) {
     return res.status(400).json({ error: 'validation', message: 'no fields' });
   }
@@ -172,7 +203,7 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE app_recipes SET ${updates.join(', ')}
        WHERE id = $${i} AND deleted_at IS NULL AND (is_system IS NOT TRUE)
-       RETURNING id, name, fruit, description, phases, is_system, created_at, updated_at`,
+       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -184,6 +215,8 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
         updated: {
           ...(name !== undefined ? { name: rows[0].name } : {}),
           ...(fruit !== undefined ? { fruit: rows[0].fruit } : {}),
+          ...(iconKeyIn !== undefined ? { iconKey: rows[0].icon_key } : {}),
+          ...(customImgIn !== undefined ? { customImageUrl: rows[0].custom_image_url } : {}),
         },
       },
     });
