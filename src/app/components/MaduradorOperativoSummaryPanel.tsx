@@ -6,6 +6,29 @@ function asTramoRows(rows: MaduradorHistorialTramo[] | undefined): MaduradorHist
   return Array.isArray(rows) ? rows : [];
 }
 
+function tramoValorNumber(r: MaduradorHistorialTramo): number | null {
+  const v = r.valor;
+  if (v == null) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Resumen operativo: solo tramos con SP humedad en [50, 99] (%). */
+function historialHumiditySetPointVisible(rows: MaduradorHistorialTramo[] | undefined): MaduradorHistorialTramo[] {
+  return asTramoRows(rows).filter((r) => {
+    const n = tramoValorNumber(r);
+    return n != null && n >= 50 && n <= 99;
+  });
+}
+
+/** Resumen operativo: solo tramos con SP CO₂ en [0, 20]. */
+function historialSetPointCo2Visible(rows: MaduradorHistorialTramo[] | undefined): MaduradorHistorialTramo[] {
+  return asTramoRows(rows).filter((r) => {
+    const n = tramoValorNumber(r);
+    return n != null && n >= 0 && n <= 20;
+  });
+}
+
 function TramosTable({
   title,
   rows,
@@ -150,8 +173,8 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
 
       <TramosTable title="Historial SP etileno" rows={s.historial_sp_etileno} fmtDate={fmtDate} />
       <TramosTable title="Histórico set point (temperatura)" rows={s.historico_set_point} fmtDate={fmtDate} />
-      <TramosTable title="Historial humidity set point" rows={s.historial_humidity_set_point} fmtDate={fmtDate} />
-      <TramosTable title="Historial set point CO₂" rows={s.historial_set_point_co2} fmtDate={fmtDate} />
+      <TramosTable title="Historial humidity set point" rows={historialHumiditySetPointVisible(s.historial_humidity_set_point)} fmtDate={fmtDate} />
+      <TramosTable title="Historial set point CO₂" rows={historialSetPointCo2Visible(s.historial_set_point_co2)} fmtDate={fmtDate} />
       <TramosTable title="Historial power state" rows={s.historial_power_state} fmtDate={fmtDate} />
     </div>
   );

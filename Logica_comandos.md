@@ -1,3 +1,7 @@
+Crear un modulo de supervision automatica , que evalue si los paremetros de los procesos y los seguimientos activos en los dispositivos
+
+
+
 
 Estructura para los comandos 
 
@@ -24,7 +28,7 @@ http://161.132.53.51:9050/TermoKing/comando/
 
 Logica si equipo esta emitiendo , consulatar si existe comando pendiente de ejecutar
 
-
+funcion -> ingresa unidad , tipo , dato 
 
 {
   "imei": "MEX1001",
@@ -39,10 +43,11 @@ Logica si equipo esta emitiendo , consulatar si existe comando pendiente de ejec
 UNIT111_GET_ETILENO # obtener datos del etileno 
 Tipo 0 -> consulta de etileno 
 
+
 {
-  "imei": "MEX1002",
-  "comando": "UNIT222_GET_ETILENO",
-  "dispositivo": "UNIT222",
+  "imei": "MEX1001",
+  "comando": "UNIT111_Trama_Write(0,7.0,100)",
+  "dispositivo": "UNIT111",
   "evento": "Cambio de Temperatura",
   "user": "user1",
   "receta": "proceso_1",
@@ -51,6 +56,7 @@ Tipo 0 -> consulta de etileno
 }
 UNIT222_Trama_Write(0,20.1,100)
 Tipo 1 -> cambio de set point de temperatura
+
 
 
 {
@@ -169,9 +175,26 @@ UNIT555_H_REPOSO:240* # CONFIGURAR COMPRESOR PARA QUE DESCANSE 240 SEGUNDOS
 Tipo 7 -> CONFIGURAR COMPRESOR
 
 
-
 # no funciona :)
-Tipo 8 -> Apagar -> defenitivo 
+Tipo 8 -> Apagar -> definitivo
+
+
+Supuestos y escenarios de Control
+
+
+Control Homogenizacion
+
+  Temperatura_final
+  Humedad_relativa
+  Duracion 
+
+  Durante el periodo de control Homogenizacion se revisa constantemente los paraemtros del dispositivo  , ejemplo si de control Temperatura_final:20 ,Humedad_relativa :90 , durancion :24 horas
+  durante ese periodo se hace un seguimiento de los datos . y se guarda los datos por cada  30 minutos salvo , si ocurre evento de control asignado .
+  Inicia el proceso y se toman los datos actuales del sistema . set_point=18 , temp_supply_1:17.8 , return_air:14.5 , humidity_control:0 ,humidity_set_point :85
+  en este caso se toma como prioridad la temperatura  
+
+
+
 
 
 

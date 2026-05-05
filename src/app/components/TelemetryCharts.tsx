@@ -51,6 +51,76 @@ export const CHART_METRIC_LABELS: Record<string, string> = {
 
 const CHART_METRIC_KEYS = Object.keys(CHART_METRIC_LABELS);
 
+/** Modal Datos históricos: ejes Y1–Y4 y orden de variables en panel. */
+const HISTORICAL_Y1_TEMP_KEYS = [
+  'temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1',
+  'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point',
+] as const;
+const HISTORICAL_Y2_PCT_KEYS = [
+  'avl_pct', 'line_frequency', 'relative_humidity', 'capacity_load', 'humidity_set_point',
+] as const;
+const HISTORICAL_Y3_GAS_KEYS = ['set_point_o2', 'set_point_co2', 'o2_reading', 'co2_reading'] as const;
+const HISTORICAL_Y4_AUX_KEYS = ['line_voltage', 'sp_ethyleno', 'ethylene'] as const;
+
+const HISTORICAL_PRESET_COOLING = [
+  'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'return_air',
+] as const;
+const HISTORICAL_PRESET_RIPENING = [
+  'set_point_co2', 'co2_reading', 'ethylene', 'relative_humidity', 'temp_supply_1',
+] as const;
+const HISTORICAL_PRESET_STANDARD = [
+  'temp_supply_1', 'return_air', 'evaporation_coil', 'relative_humidity', 'capacity_load', 'set_point',
+] as const;
+/** CO₂, etileno y ventilación (avl_pct). */
+const HISTORICAL_PRESET_GASES = ['co2_reading', 'ethylene', 'avl_pct'] as const;
+
+const HISTORICAL_SIDEBAR_METRIC_ORDER: string[] = [
+  ...HISTORICAL_Y1_TEMP_KEYS,
+  ...HISTORICAL_Y2_PCT_KEYS,
+  ...HISTORICAL_Y3_GAS_KEYS,
+  ...HISTORICAL_Y4_AUX_KEYS,
+];
+
+type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases';
+
+function historicalYAxisIdForMetric(key: string): 'left' | 'pct' | 'gas' | 'aux' {
+  if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) return 'left';
+  if ((HISTORICAL_Y2_PCT_KEYS as readonly string[]).includes(key)) return 'pct';
+  if ((HISTORICAL_Y3_GAS_KEYS as readonly string[]).includes(key)) return 'gas';
+  if ((HISTORICAL_Y4_AUX_KEYS as readonly string[]).includes(key)) return 'aux';
+  return 'aux';
+}
+
+function sortHistoricalSelectedMetrics(keys: string[]): string[] {
+  const rank = (k: string) => {
+    const a = (HISTORICAL_Y1_TEMP_KEYS as readonly string[]).indexOf(k);
+    if (a >= 0) return a;
+    const b = (HISTORICAL_Y2_PCT_KEYS as readonly string[]).indexOf(k);
+    if (b >= 0) return 100 + b;
+    const c = (HISTORICAL_Y3_GAS_KEYS as readonly string[]).indexOf(k);
+    if (c >= 0) return 200 + c;
+    const d = (HISTORICAL_Y4_AUX_KEYS as readonly string[]).indexOf(k);
+    if (d >= 0) return 300 + d;
+    return 999;
+  };
+  return [...keys].sort((x, y) => rank(x) - rank(y));
+}
+
+/** Parte `yyyy-MM-ddTHH:mm` en fecha + hora para inputs nativos (un solo bloque de período). */
+function splitDateTimeLocal(iso: string): { d: string; t: string } {
+  if (!iso) return { d: '', t: '00:00' };
+  const d = iso.slice(0, 10);
+  const rest = iso.includes('T') ? iso.slice(11) : '';
+  const t = rest.length >= 5 ? rest.slice(0, 5) : '00:00';
+  return { d, t };
+}
+
+function joinDateTimeLocal(date: string, time: string): string {
+  if (!date) return '';
+  const t = time && time.length >= 4 ? time.slice(0, 5) : '00:00';
+  return `${date}T${t}`;
+}
+
 /** Segmentos contiguos donde value === 1 para sombreado (power_state / iCtrlRip). Incluye índices para recortar al rango visible. */
 function computeOnSegments(
   data: { timeStr: string }[],
@@ -328,49 +398,101 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         {noHistory ? (
           <div className="h-[300px] w-full flex flex-col items-center justify-center text-center px-4 text-muted-foreground border border-dashed border-border rounded-lg bg-muted/20">
             <p className="text-sm font-medium text-foreground">{t('last_12h_no_data_title')}</p>
-            <p className="text-xs mt-2 max-w-md">{t('last_12h_no_data_madurador')}</p>
           </div>
         ) : (
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={data}
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-              <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis 
-                yAxisId="left" 
-                stroke="#ef4444" 
-                fontSize={12} 
-                tickLine={false} 
-                axisLine={false} 
-                tickFormatter={(val) => val.toFixed(2)}
-                label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444' }} 
-              />
-              <YAxis 
-                yAxisId="right" 
-                orientation="right" 
-                stroke="#10b981" 
-                fontSize={12} 
-                tickLine={false} 
-                axisLine={false}
-                tickFormatter={(val) => val.toFixed(2)}
-                label={{ value: 'PPM / %', angle: 90, position: 'insideRight', fill: '#10b981' }} 
-              />
-              <Tooltip 
-                formatter={(value: number) => [value.toFixed(2), ""]}
-                contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                itemStyle={{ fontSize: '12px' }}
-                labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
-              />
-              <Legend wrapperStyle={{ paddingTop: '20px' }} />
-              <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} />
-              <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (PPM)`} stroke="#10b981" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="w-full space-y-6">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">{t('integral_report_ripening_env')}</p>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={data}
+                  margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis
+                    yAxisId="left"
+                    domain={[0, 30]}
+                    stroke="#ef4444"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => Number(val).toFixed(1)}
+                    width={44}
+                    label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[30, 100]}
+                    stroke="#3b82f6"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => Number(val).toFixed(0)}
+                    width={40}
+                    label={{ value: `${t('humidity')} (%)`, angle: 90, position: 'insideRight', fill: '#3b82f6', style: { fontSize: 11 } }}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name) => [typeof value === 'number' ? value.toFixed(2) : String(value), name]}
+                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ fontSize: '12px' }}
+                    labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                  <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                  <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_chart_ethylene_co2')}</p>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={data}
+                  margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis
+                    yAxisId="left"
+                    domain={[0, 250]}
+                    stroke="#10b981"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => Number(val).toFixed(0)}
+                    width={44}
+                    label={{ value: `${t('ethylene')} (ppm)`, angle: -90, position: 'insideLeft', fill: '#10b981', style: { fontSize: 11 } }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    domain={[0, 6]}
+                    stroke="#6b7280"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(val) => Number(val).toFixed(1)}
+                    width={40}
+                    label={{ value: `${t('co2')} (%)`, angle: 90, position: 'insideRight', fill: '#6b7280', style: { fontSize: 11 } }}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name) => [typeof value === 'number' ? value.toFixed(2) : String(value), name]}
+                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    itemStyle={{ fontSize: '12px' }}
+                    labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                  />
+                  <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                  <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                  <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
         )}
       </CardContent>
@@ -392,7 +514,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 // --- Historical Data Modal Component ---
 
 const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, onClose: () => void, deviceId?: string }) => {
-  const { t, convertTemp, tempUnit, displayTimeZone, language } = useSettings();
+  const { t, tempUnit, displayTimeZone, language } = useSettings();
   
   // Initialize range to last 12 hours
   const [dateRange, setDateRange] = useState({ 
@@ -400,25 +522,23 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     end: format(new Date(), "yyyy-MM-dd'T'HH:mm") 
   });
   
-  const defaultMetrics = ['temp_supply_1', 'return_air', 'relative_humidity', 'ethylene', 'co2_reading', 'set_point'];
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(defaultMetrics);
+  const [historicalPreset, setHistoricalPreset] = useState<HistoricalChartPreset | null>('standard');
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(() => [...HISTORICAL_PRESET_STANDARD]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [metricColors, setMetricColors] = useState<Record<string, string>>({});
   const [zoomRange, setZoomRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
-  const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>(() => {
-    const o: Record<string, boolean> = {};
-    defaultMetrics.forEach((k) => { o[k] = true; });
-    return o;
-  });
-  const [showPowerShading, setShowPowerShading] = useState(true);
+  const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>({});
+  const [showPowerShading, setShowPowerShading] = useState(false);
   const [showInjectionShading, setShowInjectionShading] = useState(false);
+  const [historicalTempUnit, setHistoricalTempUnit] = useState<'C' | 'F'>('C');
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const pinchStartRef = useRef<{ distance: number; startIndex: number; endIndex: number } | null>(null);
   const dragStartRef = useRef<{ clientX: number; startIndex: number; endIndex: number } | null>(null);
   const touchPanRef = useRef<{ clientX: number; startIndex: number; endIndex: number } | null>(null);
   const getLineColor = (key: string) => metricColors[key] ?? METRIC_COLORS[key] ?? '#64748b';
-  const toggleLabels = (key: string) => setShowLabelsByMetric((prev) => ({ ...prev, [key]: !(prev[key] !== false) }));
+  const toggleLabels = (key: string) =>
+    setShowLabelsByMetric((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const chartDataLabeled = useMemo(() => {
     if (!chartData.length) return chartData;
@@ -430,11 +550,28 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     });
   }, [chartData, displayTimeZone, language]);
 
-  const tempKeys = ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'compress_coil_1', 'ambient_air', 'cargo_1_temp', 'cargo_2_temp', 'cargo_3_temp', 'cargo_4_temp', 'set_point'];
-  /** Eje Y2: porcentaje 0–100 (sombreados y humedad, ventilación, capacidad) */
-  const percentKeys = ['relative_humidity', 'avl_pct', 'capacity_load', 'humidity_set_point'];
-  /** Eje Y3: escala dinámica 0–200+ para etileno, voltaje, frecuencia, CO2, O2 */
-  const dynamicKeys = ['ethylene', 'line_voltage', 'line_frequency', 'co2_reading', 'o2_reading', 'set_point_co2', 'sp_ethyleno', 'set_point_o2'];
+  const chartDataWithDisplayTemps = useMemo(() => {
+    if (!chartDataLabeled.length) return chartDataLabeled;
+    const toDisp = (c: number) => (historicalTempUnit === 'C' ? c : (c * 9) / 5 + 32);
+    return chartDataLabeled.map((row: any) => {
+      const next = { ...row };
+      (HISTORICAL_Y1_TEMP_KEYS as readonly string[]).forEach((k) => {
+        const v = row[k];
+        if (typeof v === 'number' && !Number.isNaN(v)) next[k] = Number(toDisp(v).toFixed(2));
+      });
+      return next;
+    });
+  }, [chartDataLabeled, historicalTempUnit]);
+
+  const sortedSelectedMetrics = useMemo(
+    () => sortHistoricalSelectedMetrics(selectedMetrics),
+    [selectedMetrics]
+  );
+
+  const sidebarMetricKeys = useMemo(() => {
+    const allowed = new Set(CHART_METRIC_KEYS);
+    return HISTORICAL_SIDEBAR_METRIC_ORDER.filter((k) => allowed.has(k));
+  }, []);
 
   const generateData = async () => {
     if (!deviceId) return;
@@ -460,7 +597,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
             return;
           }
           v = Number(v ?? 0);
-          if (tempKeys.includes(key)) row[key] = Number(convertTemp(v).toFixed(2));
+          if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
           else row[key] = Number(v.toFixed(2));
         });
         return row;
@@ -512,26 +649,32 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     [chartDataLabeled]
   );
 
-  /** Dominio eje temperatura (Y1) a partir de las métricas de temp seleccionadas */
-  const leftDomain = useMemo(() => {
-    if (!chartData.length) return undefined;
-    const keys = selectedMetrics.filter((k) => tempKeys.includes(k));
+  /** Y1 temperatura: datos en °C en memoria; dominio según historicalTempUnit (0–30 °C / 32–86 °F por defecto). */
+  const leftDomain = useMemo((): [number, number] => {
+    const u = historicalTempUnit;
+    const defMin = u === 'C' ? 0 : 32;
+    const defMax = u === 'C' ? 30 : 86;
+    if (!chartDataWithDisplayTemps.length) return [defMin, defMax];
+    const keys = selectedMetrics.filter((k) => (HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(k));
+    if (!keys.length) return [defMin, defMax];
     let lo = Infinity, hi = -Infinity;
-    chartData.forEach((row) => {
+    chartDataWithDisplayTemps.forEach((row: any) => {
       keys.forEach((key) => {
         const v = row[key];
         if (typeof v === 'number' && !Number.isNaN(v)) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
       });
     });
-    if (lo === Infinity) return undefined;
-    const pad = Math.max((hi - lo) * 0.1, 1);
-    return [Math.floor(lo - pad), Math.ceil(hi + pad)];
-  }, [chartData, selectedMetrics]);
+    if (lo === Infinity) return [defMin, defMax];
+    const pad = Math.max((hi - lo) * 0.08, u === 'C' ? 0.5 : 1);
+    const low = Math.min(defMin, lo - pad);
+    const high = Math.max(defMax, hi + pad);
+    return [Number(low.toFixed(1)), Number(high.toFixed(1))];
+  }, [chartDataWithDisplayTemps, selectedMetrics, historicalTempUnit]);
 
-  /** Dominio eje dinámico (Y3): al menos 0–200, crece si los datos son mayores */
-  const y3Domain = useMemo(() => {
-    if (!chartData.length) return [0, 200];
-    const keys = selectedMetrics.filter((k) => dynamicKeys.includes(k));
+  /** Y3 CO₂/O₂ (%): base 0–5, hasta ~25 salvo que los datos superen 25. */
+  const gasDomain = useMemo((): [number, number] => {
+    const keys = selectedMetrics.filter((k) => (HISTORICAL_Y3_GAS_KEYS as readonly string[]).includes(k));
+    if (!keys.length || !chartData.length) return [0, 5];
     let maxVal = 0;
     chartData.forEach((row) => {
       keys.forEach((key) => {
@@ -539,24 +682,57 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         if (typeof v === 'number' && !Number.isNaN(v)) maxVal = Math.max(maxVal, v);
       });
     });
-    const top = Math.max(200, Math.ceil(maxVal * 1.1));
+    if (maxVal <= 0) return [0, 5];
+    const padded = Math.max(5, Math.ceil(maxVal * 1.08));
+    if (maxVal <= 25) return [0, Math.min(25, padded)];
+    return [0, Math.ceil(maxVal * 1.08)];
+  }, [chartData, selectedMetrics]);
+
+  /** Y4 voltaje / etileno: base 0–300, crece con los datos. */
+  const auxDomain = useMemo((): [number, number] => {
+    const keys = selectedMetrics.filter((k) => (HISTORICAL_Y4_AUX_KEYS as readonly string[]).includes(k));
+    if (!keys.length || !chartData.length) return [0, 300];
+    let maxVal = 0;
+    chartData.forEach((row) => {
+      keys.forEach((key) => {
+        const v = row[key];
+        if (typeof v === 'number' && !Number.isNaN(v)) maxVal = Math.max(maxVal, v);
+      });
+    });
+    const top = Math.max(300, Math.ceil(maxVal * 1.1));
     return [0, top];
   }, [chartData, selectedMetrics]);
 
-  const getYAxisId = (key: string) => {
-    if (tempKeys.includes(key)) return 'left';
-    if (percentKeys.includes(key)) return 'percent';
-    return 'right';
-  };
+  const applyHistoricalPreset = useCallback((preset: HistoricalChartPreset) => {
+    setHistoricalPreset(preset);
+    if (preset === 'cooling') setSelectedMetrics([...HISTORICAL_PRESET_COOLING]);
+    else if (preset === 'ripening') setSelectedMetrics([...HISTORICAL_PRESET_RIPENING]);
+    else if (preset === 'gases') setSelectedMetrics([...HISTORICAL_PRESET_GASES]);
+    else setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+  }, []);
+
+  const clearAllHistoricalMetrics = useCallback(() => {
+    setHistoricalPreset(null);
+    setSelectedMetrics([]);
+  }, []);
+
+  const soloHistoricalMetric = useCallback((key: string) => {
+    setHistoricalPreset(null);
+    setSelectedMetrics([key]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
       setDateRange({
         start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
-        end: format(new Date(), "yyyy-MM-dd'T'HH:mm")
+        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
       });
       setChartData([]);
       setZoomRange(null);
+      setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+      setHistoricalPreset('standard');
+      setShowLabelsByMetric({});
+      setHistoricalTempUnit(tempUnit === 'F' ? 'F' : 'C');
     }
   }, [isOpen]);
 
@@ -571,7 +747,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   }, [chartData.length]);
 
   const toggleMetric = (metric: string) => {
-    setSelectedMetrics(prev => prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]);
+    setHistoricalPreset(null);
+    setSelectedMetrics((prev) => (prev.includes(metric) ? prev.filter((m) => m !== metric) : [...prev, metric]));
   };
 
   const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
@@ -581,11 +758,11 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     const injOn = row && row.iCtrlRip === 1;
     const shadingReason =
       powerOn && injOn
-        ? 'Encendido + Inyección gas'
+        ? 'Encendido + Inyección'
         : powerOn
           ? 'Encendido'
           : injOn
-            ? 'Inyección gas'
+            ? 'Inyección'
             : null;
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[180px]">
@@ -596,7 +773,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
               className="inline-block w-2.5 h-2.5 rounded shrink-0"
               style={{
                 backgroundColor:
-                  shadingReason === 'Encendido + Inyección gas'
+                  shadingReason === 'Encendido + Inyección'
                     ? '#7c3aed'
                     : shadingReason === 'Encendido'
                       ? '#86efac'
@@ -734,6 +911,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     setZoomRange({ startIndex: newStart, endIndex: newEnd });
   }, [chartData.length]);
 
+  const histRangeStart = splitDateTimeLocal(dateRange.start);
+  const histRangeEnd = splitDateTimeLocal(dateRange.end);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
@@ -745,18 +925,88 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         <div className="flex flex-1 min-h-0 gap-4 pt-2">
           {/* Sidebar: rango y métricas + color por línea */}
           <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
-            <div>
-              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
-                <CalendarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {t('date_range')}
+            <div className="rounded-lg border border-gray-200 bg-muted/20 p-3 space-y-3">
+              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2">
+                <CalendarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                {t('historical_period_search')}
               </h4>
-              <div className="space-y-1.5 sm:space-y-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5">
+              <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-gray-500">Inicio</label>
-                  <input type="datetime-local" value={dateRange.start} onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))} className="w-full border rounded px-2 py-1 sm:py-1.5 text-xs sm:text-sm" />
+                  <label className="text-[11px] text-gray-500 block mb-0.5">{t('historical_start')}</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="date"
+                      value={histRangeStart.d}
+                      onChange={(e) =>
+                        setDateRange((prev) => ({
+                          ...prev,
+                          start: joinDateTimeLocal(e.target.value, splitDateTimeLocal(prev.start).t),
+                        }))
+                      }
+                      className="flex-1 min-w-0 border rounded px-2 py-1.5 text-xs sm:text-sm"
+                    />
+                    <input
+                      type="time"
+                      value={histRangeStart.t}
+                      onChange={(e) =>
+                        setDateRange((prev) => ({
+                          ...prev,
+                          start: joinDateTimeLocal(splitDateTimeLocal(prev.start).d, e.target.value),
+                        }))
+                      }
+                      className="w-[5.5rem] shrink-0 border rounded px-2 py-1.5 text-xs sm:text-sm"
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Fin</label>
-                  <input type="datetime-local" value={dateRange.end} onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))} className="w-full border rounded px-2 py-1 sm:py-1.5 text-xs sm:text-sm" />
+                  <label className="text-[11px] text-gray-500 block mb-0.5">{t('historical_end')}</label>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="date"
+                      value={histRangeEnd.d}
+                      onChange={(e) =>
+                        setDateRange((prev) => ({
+                          ...prev,
+                          end: joinDateTimeLocal(e.target.value, splitDateTimeLocal(prev.end).t),
+                        }))
+                      }
+                      className="flex-1 min-w-0 border rounded px-2 py-1.5 text-xs sm:text-sm"
+                    />
+                    <input
+                      type="time"
+                      value={histRangeEnd.t}
+                      onChange={(e) =>
+                        setDateRange((prev) => ({
+                          ...prev,
+                          end: joinDateTimeLocal(splitDateTimeLocal(prev.end).d, e.target.value),
+                        }))
+                      }
+                      className="w-[5.5rem] shrink-0 border rounded px-2 py-1.5 text-xs sm:text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="pt-1 border-t border-gray-200/80">
+                <p className="text-[11px] text-gray-500 mb-1.5">{t('historical_temp_scale')}</p>
+                <div className="flex rounded-md border border-gray-200 bg-white p-0.5 gap-0.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={historicalTempUnit === 'C' ? 'default' : 'ghost'}
+                    className="h-7 flex-1 text-xs px-2"
+                    onClick={() => setHistoricalTempUnit('C')}
+                  >
+                    °C
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={historicalTempUnit === 'F' ? 'default' : 'ghost'}
+                    className="h-7 flex-1 text-xs px-2"
+                    onClick={() => setHistoricalTempUnit('F')}
+                  >
+                    °F
+                  </Button>
                 </div>
               </div>
             </div>
@@ -764,6 +1014,56 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {t('generate_chart')}
             </Button>
+            <div>
+              <h4 className="font-medium text-xs sm:text-sm text-gray-900 mb-1.5 sm:mb-2">{t('historical_view_presets')}</h4>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={historicalPreset === 'cooling' ? 'default' : 'outline'}
+                  className="w-full justify-center text-xs"
+                  onClick={() => applyHistoricalPreset('cooling')}
+                >
+                  {t('historical_preset_cooling')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={historicalPreset === 'ripening' ? 'default' : 'outline'}
+                  className="w-full justify-center text-xs"
+                  onClick={() => applyHistoricalPreset('ripening')}
+                >
+                  {t('historical_preset_ripening')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={historicalPreset === 'standard' ? 'default' : 'outline'}
+                  className="w-full justify-center text-xs"
+                  onClick={() => applyHistoricalPreset('standard')}
+                >
+                  {t('historical_preset_standard')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={historicalPreset === 'gases' ? 'default' : 'outline'}
+                  className="w-full justify-center text-xs"
+                  onClick={() => applyHistoricalPreset('gases')}
+                >
+                  {t('historical_preset_gases')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-center text-xs text-muted-foreground border-dashed"
+                  onClick={clearAllHistoricalMetrics}
+                >
+                  {t('historical_clear_all')}
+                </Button>
+              </div>
+            </div>
             <div className="rounded bg-gray-50 border border-gray-100 p-1.5 sm:p-2 text-xs text-gray-600">
               <p className="font-medium text-gray-700 mb-0.5 sm:mb-1">Sombreados</p>
               <label className="flex items-center gap-2 cursor-pointer py-0.5">
@@ -774,7 +1074,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                   className="rounded border-gray-300 text-green-600"
                 />
                 <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-green-300/60 shrink-0" />
-                <span>Encendido (power_state = 1)</span>
+                <span>Encendido</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer py-0.5">
                 <input
@@ -784,7 +1084,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                   className="rounded border-gray-300 text-blue-600"
                 />
                 <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-blue-300/60 shrink-0" />
-                <span>Inyección gas (iCtrlRip = 1)</span>
+                <span>Inyección</span>
               </label>
               {showPowerShading && showInjectionShading && (
                 <>
@@ -800,16 +1100,32 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                 <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Variables y color
               </h4>
               <div className="space-y-1 max-h-[20vh] sm:max-h-[45vh] overflow-y-auto">
-                {CHART_METRIC_KEYS.map((key) => (
+                {sidebarMetricKeys.map((key) => (
                   <div key={key} className="flex flex-wrap items-center gap-1.5 text-xs hover:bg-gray-50 p-1.5 rounded group">
-                    <input type="checkbox" id={`m-${key}`} checked={selectedMetrics.includes(key)} onChange={() => toggleMetric(key)} className="rounded border-gray-300 text-blue-600 shrink-0" />
-                    <label htmlFor={`m-${key}`} className="truncate flex-1 cursor-pointer min-w-0" style={{ color: getLineColor(key) }} title={CHART_METRIC_LABELS[key]}>
+                    <input
+                      type="checkbox"
+                      id={`m-${key}`}
+                      checked={selectedMetrics.includes(key)}
+                      onChange={() => toggleMetric(key)}
+                      className="rounded border-gray-300 text-blue-600 shrink-0"
+                      aria-label={CHART_METRIC_LABELS[key]}
+                    />
+                    <span
+                      className="truncate flex-1 cursor-pointer min-w-0 select-none"
+                      style={{ color: getLineColor(key) }}
+                      title={`${CHART_METRIC_LABELS[key]} — ${t('historical_solo_doubleclick')}`}
+                      onDoubleClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        soloHistoricalMetric(key);
+                      }}
+                    >
                       {CHART_METRIC_LABELS[key]}
-                    </label>
+                    </span>
                     <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Mostrar/ocultar valores en la línea">
                       <input
                         type="checkbox"
-                        checked={showLabelsByMetric[key] !== false}
+                        checked={!!showLabelsByMetric[key]}
                         onChange={() => toggleLabels(key)}
                         className="rounded border-gray-300 text-blue-600"
                       />
@@ -859,8 +1175,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                 >
                   <ResponsiveContainer width="100%" height="100%" key={`chart-${chartDataLabeled.length}`}>
                     <ComposedChart
-                      data={chartDataLabeled.slice(brushStart, brushEnd + 1)}
-                      margin={{ top: 12, right: 72, bottom: 24, left: 40 }}
+                      data={chartDataWithDisplayTemps.slice(brushStart, brushEnd + 1)}
+                      margin={{ top: 14, right: 112, bottom: 28, left: 44 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                       <XAxis
@@ -870,11 +1186,74 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                         tickLine={false}
                         tick={{ fontSize: 9 }}
                         interval="preserveStartEnd"
-                        tickFormatter={(_, index) => chartDataLabeled.slice(brushStart, brushEnd + 1)[index]?.timeAxisLabel ?? ''}
+                        tickFormatter={(_, index) => chartDataWithDisplayTemps.slice(brushStart, brushEnd + 1)[index]?.timeAxisLabel ?? ''}
                       />
-                      <YAxis yAxisId="left" stroke="#64748b" fontSize={9} tickLine={false} tickFormatter={(v) => Number(v).toFixed(1)} domain={leftDomain} width={32} />
-                      <YAxis yAxisId="percent" orientation="right" domain={[0, 100]} stroke="#6366f1" fontSize={9} tickLine={false} tickFormatter={(v) => String(Number(v))} width={28} />
-                      <YAxis yAxisId="right" orientation="right" domain={y3Domain} stroke="#10b981" fontSize={9} tickLine={false} tickFormatter={(v) => Number(v).toFixed(0)} width={32} />
+                      <YAxis
+                        yAxisId="left"
+                        stroke="#475569"
+                        fontSize={9}
+                        tickLine={false}
+                        tickFormatter={(v) => Number(v).toFixed(1)}
+                        domain={leftDomain}
+                        width={36}
+                        label={{
+                          value: `°${historicalTempUnit}`,
+                          angle: -90,
+                          position: 'insideLeft',
+                          style: { fill: '#475569', fontSize: 10 },
+                        }}
+                      />
+                      <YAxis
+                        yAxisId="pct"
+                        orientation="right"
+                        domain={[0, 100]}
+                        stroke="#6366f1"
+                        fontSize={9}
+                        tickLine={false}
+                        tickFormatter={(v) => String(Number(v))}
+                        width={30}
+                        label={{
+                          value: '%',
+                          angle: 90,
+                          position: 'insideRight',
+                          offset: 6,
+                          style: { fill: '#6366f1', fontSize: 9 },
+                        }}
+                      />
+                      <YAxis
+                        yAxisId="gas"
+                        orientation="right"
+                        domain={gasDomain}
+                        stroke="#7c3aed"
+                        fontSize={9}
+                        tickLine={false}
+                        tickFormatter={(v) => Number(v).toFixed(1)}
+                        width={30}
+                        label={{
+                          value: 'O₂/CO₂',
+                          angle: 90,
+                          position: 'insideRight',
+                          offset: 6,
+                          style: { fill: '#7c3aed', fontSize: 9 },
+                        }}
+                      />
+                      <YAxis
+                        yAxisId="aux"
+                        orientation="right"
+                        domain={auxDomain}
+                        stroke="#059669"
+                        fontSize={9}
+                        tickLine={false}
+                        tickFormatter={(v) => Number(v).toFixed(0)}
+                        width={32}
+                        label={{
+                          value: 'V / ppm',
+                          angle: 90,
+                          position: 'insideRight',
+                          offset: 4,
+                          style: { fill: '#059669', fontSize: 9 },
+                        }}
+                      />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={(value) => CHART_METRIC_LABELS[value] ?? value} iconSize={8} fontSize={10} />
                       {(() => {
@@ -910,18 +1289,18 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                                 x2={seg.x2}
                                 y1={0}
                                 y2={100}
-                                yAxisId="percent"
+                                yAxisId="pct"
                                 fill={fill}
                                 fillOpacity={opacity}
                               />
                             );
                           });
                       })()}
-                      {selectedMetrics.map((key, lineIndex) => {
+                      {sortedSelectedMetrics.map((key, lineIndex) => {
                         const color = getLineColor(key);
-                        const showLabels = showLabelsByMetric[key] === true;
+                        const showLabels = !!showLabelsByMetric[key];
                         const visibleLen = brushEnd - brushStart + 1;
-                        const displayData = chartDataLabeled.slice(brushStart, brushEnd + 1);
+                        const displayData = chartDataWithDisplayTemps.slice(brushStart, brushEnd + 1);
                         const isHighVariation = key === 'ethylene' || key === 'relative_humidity';
                         const maxLabels = key === 'ethylene'
                           ? (visibleLen > 15 ? 15 : 8)
@@ -936,7 +1315,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                         return (
                           <Line
                             key={key}
-                            yAxisId={getYAxisId(key)}
+                            yAxisId={historicalYAxisIdForMetric(key)}
                             type="monotone"
                             dataKey={key}
                             stroke={color}
