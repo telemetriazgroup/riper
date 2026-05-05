@@ -5,13 +5,13 @@
       "recipeName": "Mango Inkapacking",
       "deviceHost": "INK-Piura-M1",
       "ipSuffix": 11,
-      "homogenization": { "tempC": 20, "humidityPct": 90, "hours": 12 },
+      "homogenization": { "tempC": 20, "humidityPct": 88, "hours": 12 },
       "ripening": {
         "hours": 24,
-        "humidityPct": 95,
-        "co2Pct": 1,
-        "ethylenePpm": 100,
-        "tempC": 22
+        "humidityPct": 88,
+        "co2Pct": 0.12,
+        "ethylenePpm": 138,
+        "tempC": 21
       },
       "batch": {
         "product": "Mango",
@@ -24,8 +24,10 @@
       "behavior": {
         "entryCargoTempC": 12,
         "co2ResponseHoursAfterRipeningStart": 8,
-        "reeferCycleMinutes": 24,
-        "temperatureSwingC": 0.52
+        "reeferCycleMinutes": 20,
+        "temperatureSwingC": 0.52,
+        "supplySwingC": 2.35,
+        "returnSwingC": 0.72
       }
     },
     {
@@ -33,12 +35,12 @@
       "recipeName": "Mango GREENBOX",
       "deviceHost": "GBX-Tarma-M1",
       "ipSuffix": 21,
-      "homogenization": { "tempC": 18, "humidityPct": 95, "hours": 10 },
+      "homogenization": { "tempC": 18, "humidityPct": 90, "hours": 10 },
       "ripening": {
         "hours": 36,
-        "humidityPct": 90,
-        "co2Pct": 2,
-        "ethylenePpm": 120,
+        "humidityPct": 87,
+        "co2Pct": 0.11,
+        "ethylenePpm": 142,
         "tempC": 21
       },
       "batch": {
@@ -52,8 +54,10 @@
       "behavior": {
         "entryCargoTempC": 11.5,
         "co2ResponseHoursAfterRipeningStart": 7,
-        "reeferCycleMinutes": 27,
-        "temperatureSwingC": 0.48
+        "reeferCycleMinutes": 22,
+        "temperatureSwingC": 0.48,
+        "supplySwingC": 2.4,
+        "returnSwingC": 0.68
       }
     },
     {
@@ -61,13 +65,13 @@
       "recipeName": "Mango ASEPTIC",
       "deviceHost": "ASE-Chincha-M1",
       "ipSuffix": 31,
-      "homogenization": { "tempC": 19, "humidityPct": 92, "hours": 8 },
+      "homogenization": { "tempC": 19, "humidityPct": 90, "hours": 8 },
       "ripening": {
         "hours": 24,
-        "humidityPct": 90,
-        "co2Pct": 2.5,
-        "ethylenePpm": 130,
-        "tempC": 20
+        "humidityPct": 89,
+        "co2Pct": 0.1,
+        "ethylenePpm": 135,
+        "tempC": 21
       },
       "batch": {
         "product": "Mango",
@@ -80,8 +84,10 @@
       "behavior": {
         "entryCargoTempC": 12.2,
         "co2ResponseHoursAfterRipeningStart": 6,
-        "reeferCycleMinutes": 30,
-        "temperatureSwingC": 0.55
+        "reeferCycleMinutes": 24,
+        "temperatureSwingC": 0.55,
+        "supplySwingC": 2.45,
+        "returnSwingC": 0.74
       }
     }
   ]

@@ -469,15 +469,24 @@ function TempRhDualChart({
   t,
   tempLabel,
   rhLabel,
+  tempDomain: tempDomainFixed,
+  rhDomain: rhDomainFixed,
 }: {
   rows: { tick: string; temp: number; rh: number }[];
   t: (k: string) => string;
   tempLabel: string;
   rhLabel: string;
+  /** Informe integral: eje temperatura fijo (p. ej. 0–30 °C). */
+  tempDomain?: [number, number];
+  /** Informe integral: eje humedad fijo 0–100 %. */
+  rhDomain?: [number, number];
 }) {
   if (!rows.length) return <p className="text-sm text-gray-500 py-4">{t('integral_report_no_series')}</p>;
-  const tDom = yDomainPadded(rows.map((r) => r.temp));
-  const hDom = yDomainPadded(rows.map((r) => r.rh));
+  const tDom: [number, number] =
+    tempDomainFixed ?? ([...yDomainPadded(rows.map((r) => r.temp))] as [number, number]);
+  const hDom: [number, number] =
+    rhDomainFixed ?? ([...yDomainPadded(rows.map((r) => r.rh))] as [number, number]);
+  const dec1 = (v: number) => Number(v).toFixed(1);
   return (
     <div className="h-64 w-full mt-2">
       <ResponsiveContainer width="100%" height="100%">
@@ -488,6 +497,8 @@ function TempRhDualChart({
             yAxisId="temp"
             domain={tDom}
             tick={{ fontSize: 10, fill: '#fca5a5' }}
+            tickFormatter={dec1}
+            width={44}
             label={{ value: tempLabel, angle: -90, position: 'insideLeft', fill: '#fca5a5', fontSize: 10 }}
           />
           <YAxis
@@ -495,9 +506,11 @@ function TempRhDualChart({
             orientation="right"
             domain={hDom}
             tick={{ fontSize: 10, fill: '#c4b5fd' }}
+            tickFormatter={dec1}
+            width={44}
             label={{ value: rhLabel, angle: 90, position: 'insideRight', fill: '#c4b5fd', fontSize: 10 }}
           />
-          <Tooltip />
+          <Tooltip formatter={(v: number | string) => dec1(Number(v))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line
             yAxisId="temp"
@@ -528,25 +541,66 @@ function TempRhDualChart({
 function GasDualChart({
   rows,
   t,
+  co2Domain = [0, 5],
+  ethDomain = [0, 160],
 }: {
   rows: { tick: string; co2: number; eth: number }[];
   t: (k: string) => string;
+  co2Domain?: [number, number];
+  ethDomain?: [number, number];
 }) {
   if (!rows.length) return <p className="text-sm text-gray-500 py-4">{t('integral_report_no_series')}</p>;
-  const d1 = yDomainPadded(rows.map((r) => r.co2));
-  const d2 = yDomainPadded(rows.map((r) => r.eth));
+  const dec1 = (v: number) => Number(v).toFixed(1);
   return (
     <div className="h-64 w-full mt-2">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
           <XAxis dataKey="tick" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-          <YAxis yAxisId="co2" domain={d1} tick={{ fontSize: 10 }} width={40} />
-          <YAxis yAxisId="eth" orientation="right" domain={d2} tick={{ fontSize: 10 }} width={44} />
-          <Tooltip />
+          <YAxis
+            yAxisId="co2"
+            domain={co2Domain}
+            tick={{ fontSize: 10 }}
+            width={40}
+            tickFormatter={dec1}
+            label={{ value: 'CO₂ %', angle: -90, position: 'insideLeft', fontSize: 10 }}
+          />
+          <YAxis
+            yAxisId="eth"
+            orientation="right"
+            domain={ethDomain}
+            tick={{ fontSize: 10 }}
+            width={44}
+            tickFormatter={dec1}
+            label={{
+              value: `${t('integral_report_ethylene_axis')} (ppm)`,
+              angle: 90,
+              position: 'insideRight',
+              fontSize: 9,
+            }}
+          />
+          <Tooltip formatter={(v: number | string) => dec1(Number(v))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
-          <Line yAxisId="co2" type="monotone" dataKey="co2" name="CO₂ %" stroke="#57534e" strokeWidth={2} dot={false} />
-          <Line yAxisId="eth" type="monotone" dataKey="eth" name={t('integral_report_ethylene_axis')} stroke="#ea580c" strokeWidth={2} dot={false} />
+          <Line
+            yAxisId="co2"
+            type="monotone"
+            dataKey="co2"
+            name="CO₂ %"
+            stroke="#57534e"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
+          <Line
+            yAxisId="eth"
+            type="monotone"
+            dataKey="eth"
+            name={t('integral_report_ethylene_axis')}
+            stroke="#ea580c"
+            strokeWidth={2}
+            dot={false}
+            isAnimationActive={false}
+          />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
@@ -603,6 +657,7 @@ function StatGrid({ items }: { items: { label: string; value: string }[] }) {
 
 export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
   const { t, formatDateTime, formatFileTimestamp, tempUnit, convertTemp } = useSettings();
+  const integralReportTempDomain: [number, number] = tempUnit === 'F' ? [32, 86] : [0, 30];
   const printRef = useRef<HTMLDivElement>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
 
@@ -756,6 +811,8 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             t={t}
             tempLabel={`${t('detail_monitoring_pulp')} (°${tempUnit})`}
             rhLabel={`${t('relative_humidity')} (%)`}
+            tempDomain={integralReportTempDomain}
+            rhDomain={[0, 100]}
           />
           <StatGrid
             items={[
@@ -810,6 +867,8 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             t={t}
             tempLabel={`${t('detail_monitoring_pulp')} (°${tempUnit})`}
             rhLabel={`${t('relative_humidity')} (%)`}
+            tempDomain={integralReportTempDomain}
+            rhDomain={[0, 100]}
           />
           <StatGrid
             items={[
@@ -834,9 +893,9 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           <StatGrid
             items={[
               { label: t('integral_report_vent_ft3'), value: `${ft3.toFixed(0)} ft³` },
-              { label: t('integral_report_vent_m3'), value: `${m3v.toFixed(2)} m³` },
+              { label: t('integral_report_vent_m3'), value: `${m3v.toFixed(1)} m³` },
               { label: t('integral_report_co2_weighted_vol'), value: co2W.toFixed(1) },
-              { label: t('integral_report_energy_kwh'), value: kwh != null ? kwh.toFixed(2) : '—' },
+              { label: t('integral_report_energy_kwh'), value: kwh != null ? kwh.toFixed(1) : '—' },
               { label: t('integral_report_ethylene_injected'), value: t('integral_report_na_future') },
             ]}
           />
@@ -861,11 +920,11 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
               { label: t('integral_report_avg_avl'), value: avgAvl != null ? `${avgAvl.toFixed(1)} CFM` : '—' },
               {
                 label: t('integral_report_ethylene_drop'),
-                value: dEth.delta != null ? `${dEth.delta.toFixed(2)}` : '—',
+                value: dEth.delta != null ? `${dEth.delta.toFixed(1)}` : '—',
               },
               {
                 label: t('integral_report_co2_drop'),
-                value: dCo2.delta != null ? `${dCo2.delta.toFixed(2)} %` : '—',
+                value: dCo2.delta != null ? `${dCo2.delta.toFixed(1)} %` : '—',
               },
             ]}
           />
@@ -901,7 +960,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             items={[
               {
                 label: t('integral_report_cooling_avg_change'),
-                value: deltaAvg != null ? `${deltaAvg > 0 ? '+' : ''}${deltaAvg.toFixed(2)} °${tempUnit}` : '—',
+                value: deltaAvg != null ? `${deltaAvg > 0 ? '+' : ''}${deltaAvg.toFixed(1)} °${tempUnit}` : '—',
               },
             ]}
           />
@@ -981,47 +1040,73 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             )}
 
             {deviceId && startedAtIso && !isLoading && !error && (
-              <>
-                <section>
-                  <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('integral_report_objectives_evolution')}</h3>
-                  {objectivesChart ? (
-                    <div className="h-52 w-full mt-2 min-w-0">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={evolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="index" tick={{ fontSize: 10 }} />
-                          <YAxis tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
-                          <Tooltip />
-                          <Legend wrapperStyle={{ fontSize: 10 }} />
-                          <Line type="monotone" dataKey="brix" name="Brix" stroke="#f97316" dot strokeWidth={2} />
-                          <Line type="monotone" dataKey="firmness" name={t('detail_tracking_firmness_short')} stroke="#2563eb" dot strokeWidth={2} />
-                          <Line type="monotone" dataKey="color" name={t('detail_tracking_color_short')} stroke="#16a34a" dot strokeWidth={2} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-xs py-2">{t('integral_report_no_objectives_series')}</p>
-                  )}
-                </section>
-
-                <section>
-                  <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('recipe_modal_phases_title')}</h3>
-                  <ul className="mt-1 space-y-1 text-xs">
-                    {phaseWindows.map((w) => (
-                      <li key={w.order} className="flex flex-wrap gap-x-2 border-b border-gray-50 pb-1">
-                        <span className="font-semibold">
-                          {w.order}. {w.label}
-                        </span>
-                        <span className="text-gray-500">
-                          {formatDateTime(new Date(w.startMs).toISOString())} — {formatDateTime(new Date(w.endMs).toISOString())}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              </>
+              <section>
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('recipe_modal_phases_title')}</h3>
+                <ul className="mt-1 space-y-1 text-xs">
+                  {phaseWindows.map((w) => (
+                    <li key={w.order} className="flex flex-wrap gap-x-2 border-b border-gray-50 pb-1">
+                      <span className="font-semibold">
+                        {w.order}. {w.label}
+                      </span>
+                      <span className="text-gray-500">
+                        {formatDateTime(new Date(w.startMs).toISOString())} — {formatDateTime(new Date(w.endMs).toISOString())}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             )}
           </div>
+
+          {deviceId && startedAtIso && !isLoading && !error && (
+            <div
+              data-integral-pdf-section="objectives-evolution"
+              className="integral-pdf-section space-y-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+            >
+              <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-2">
+                {t('integral_report_objectives_evolution')}
+              </h2>
+              {objectivesChart ? (
+                <div className="h-56 w-full mt-2 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={evolution} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
+                      <XAxis dataKey="index" tick={{ fontSize: 10 }} />
+                      <YAxis
+                        tick={{ fontSize: 10 }}
+                        domain={['auto', 'auto']}
+                        tickFormatter={(v) => Number(v).toFixed(1)}
+                        width={40}
+                      />
+                      <Tooltip formatter={(v: number) => Number(v).toFixed(1)} />
+                      <Legend wrapperStyle={{ fontSize: 10 }} />
+                      <Line type="monotone" dataKey="brix" name="Brix" stroke="#f97316" dot strokeWidth={2} isAnimationActive={false} />
+                      <Line
+                        type="monotone"
+                        dataKey="firmness"
+                        name={t('detail_tracking_firmness_short')}
+                        stroke="#2563eb"
+                        dot
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="color"
+                        name={t('detail_tracking_color_short')}
+                        stroke="#16a34a"
+                        dot
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-xs py-2">{t('integral_report_no_objectives_series')}</p>
+              )}
+            </div>
+          )}
 
           {deviceId && startedAtIso && !isLoading && !error && (
             <>

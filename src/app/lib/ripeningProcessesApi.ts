@@ -2,8 +2,11 @@ import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth, getToken } from '@/app/lib/auth';
 import {
   SIM_INKAPACKING_DEVICE_IDS,
+  applySimulatedRipeningSampling,
   buildSimulatedRipeningProcessRow,
+  isSimulatedRipeningProcessId,
   shouldShowSimulatedInkapackingFleet,
+  simulatedDeviceIdFromRipeningProcessId,
 } from '@/app/lib/simulatedInkapackingFleet';
 
 function base() {
@@ -89,6 +92,12 @@ export async function fetchRipeningProcesses(opts?: {
 }
 
 export async function fetchRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  if (isSimulatedRipeningProcessId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('sin datos');
+    const did = simulatedDeviceIdFromRipeningProcessId(id);
+    if (!did) throw new Error('sin datos');
+    return buildSimulatedRipeningProcessRow(did);
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, { headers: authHeaders() });
   const json = await handle<{ data: RipeningProcessRow }>(res);
   if (!json.data) throw new Error('sin datos');
@@ -155,6 +164,10 @@ export async function postRipeningSampling(
   body: SamplingPostBody,
   evidenceFiles: File[] = []
 ): Promise<RipeningProcessRow> {
+  if (isSimulatedRipeningProcessId(processId)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    return applySimulatedRipeningSampling(processId, body, evidenceFiles);
+  }
   const form = new FormData();
   form.append('data', JSON.stringify(body));
   for (const f of evidenceFiles) {

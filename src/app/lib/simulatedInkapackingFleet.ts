@@ -102,7 +102,8 @@ function smoothCargoTarget(
 }
 
 /**
- * Oscilación tipo reefer: enfriar (seno > 0) y descansar alrededor del punto de consigna.
+ * Oscilación tipo reefer (referencia tipo ZGRU / Inkapacking): suministro en sierra ~18–23 °C,
+ * retorno más estable ~20–21.5 °C; varios ciclos por hora según `reeferCycleMinutes`.
  */
 function applyReeferThermalCycle(
   tMs: number,
@@ -119,27 +120,39 @@ function applyReeferThermalCycle(
   evap: number;
   coolingIntensity: number;
 } {
-  const cycleMin = seed.behavior.reeferCycleMinutes ?? 25;
+  const b = seed.behavior as FleetUnitSeed['behavior'] & {
+    supplySwingC?: number;
+    returnSwingC?: number;
+  };
+  const cycleMin = b.reeferCycleMinutes ?? 22;
   const periodMs = cycleMin * 60 * 1000;
   const theta = (tMs / periodMs) * 2 * Math.PI;
-  const cooling = Math.sin(theta);
-  const swing = (seed.behavior.temperatureSwingC ?? 0.5) * 1.45;
-  const micro =
-    swing *
-    0.15 *
-    Math.sin(theta * 2.3 + unitIndex + detNoise01(tMs, unitIndex + 3) * 0.8);
-  const amp = swing + micro;
-  const fastRipple =
-    0.34 * Math.sin((tMs / (8.2 * 60 * 1000)) * 2 * Math.PI + unitIndex * 1.1) +
-    0.22 * Math.sin((tMs / (15 * 60 * 1000)) * 2 * Math.PI + unitIndex * 0.4);
-  const cargo1 = idealCargo + amp * cooling + fastRipple;
+  const phase01 = (tMs / periodMs) % 1;
+  const tri = phase01 < 0.5 ? 4 * phase01 - 1 : 3 - 4 * phase01;
+  const supplySwing = b.supplySwingC ?? 2.35;
+  const returnSwing = b.returnSwingC ?? 0.72;
+  const homogDamp = phase === 'homogenization' ? 0.68 : 1;
 
-  const chill = Math.max(0, cooling);
-  const supplyDelta = 0.75 + 0.55 * chill + 0.15 * Math.sin(theta + 1.1);
-  const retDelta = 1.05 + 0.22 * Math.sin(theta + 0.65);
+  const supplyCenter = idealCargo - 1.18;
+  const retCenter = idealCargo - 0.9;
+  const microSupply =
+    0.24 * Math.sin(theta * 3.12 + unitIndex * 1.15) +
+    0.14 * Math.sin((tMs / (7 * 60 * 1000)) * 2 * Math.PI + unitIndex * 0.9);
+  const phaseLag = 0.48 + unitIndex * 0.06;
 
-  const supply = cargo1 - supplyDelta;
-  const ret = cargo1 + retDelta;
+  let supply =
+    supplyCenter +
+    homogDamp *
+      supplySwing *
+      (0.78 * Math.sin(theta) + 0.22 * tri + 0.05 * Math.sin(theta * 5)) +
+    microSupply * homogDamp;
+  let ret =
+    retCenter +
+    returnSwing * homogDamp * Math.sin(theta + phaseLag) +
+    0.08 * homogDamp * Math.sin(theta * 2.08);
+
+  const chill = Math.max(0, Math.sin(theta));
+  const cargo1 = (supply + ret) / 2 + 0.2 * Math.sin(theta * 0.88);
 
   const baseComp = 52 + unitIndex * 2.5;
   const comp = baseComp + 14 * chill + 4 * Math.sin(phaseElapsedH * 0.08);
@@ -147,38 +160,98 @@ function applyReeferThermalCycle(
   let evap = -17 - 4 * chill;
   if (phase === 'homogenization' && phaseElapsedH < 2) evap -= 1.2;
 
-  return { cargo1, supply, ret, comp, evap, coolingIntensity: chill };
+  /** Caídas aisladas a 0 °C en retorno (artefacto real) para probar omisión en gráficas. */
+  const bucket5m = Math.floor(tMs / (5 * 60 * 1000));
+  if (phase === 'ripening' && bucket5m % 241 === (43 + unitIndex * 67) % 241) {
+    ret = 0;
+  }
+
+  return {
+    cargo1: round1(cargo1),
+    supply: round1(supply),
+    ret: round1(ret),
+    comp,
+    evap,
+    coolingIntensity: chill,
+  };
 }
 
+/**
+ * Etileno estilo reefer (referencia ZGRU / Inkapacking): meseta ~90% del objetivo (≈123–126 ppm si target ~138),
+ * purgas breves (caída hacia ~0) + recargas con picos ~150+ ppm, decaimiento irregular entre eventos y cierre en
+ * escalones hacia valores bajos. `tn` es el avance 0–1 dentro de la fase de maduración (`ripTotalH`).
+ */
 function computeEthyleneRipening(
   re: number,
   ethTarget: number,
+  ripTotalH: number,
   nowMs: number,
   unitIndex: number
 ): { ppm: number; injecting: boolean } {
-  const rampH = 3.5 + unitIndex * 0.45;
-  const t = Math.min(1, re / rampH);
-  const ramp = smoothstep(t);
-  if (t < 0.998) {
-    const ppm = ethTarget * ramp;
-    return { ppm: round1(Math.max(0, ppm)), injecting: re > 0.12 && ramp < 0.96 };
+  const tn = Math.min(1, Math.max(0, re / Math.max(0.01, ripTotalH)));
+  const o = unitIndex * 0.011;
+  const plateau = ethTarget * 0.903;
+  const peak1 = ethTarget * 1.095;
+  const peak2 = ethTarget * 1.115;
+  const afterFirst = ethTarget * 0.87;
+  const preFinal = ethTarget * 0.78;
+  const lateA = ethTarget * 0.36;
+  const lateB = ethTarget * 0.29;
+  const floor = Math.max(0.5, ethTarget * 0.014);
+
+  const seg = (a: number, b: number) => Math.min(1, Math.max(0, (tn - a) / Math.max(1e-6, b - a)));
+
+  let env = plateau;
+  let injecting = false;
+
+  if (tn < 0.18 + o) {
+    env = plateau + 1.3 * Math.sin(re * 0.92 + unitIndex) + 0.38 * Math.sin(re * 2.05 + unitIndex * 0.4);
+  } else if (tn < 0.189 + o) {
+    const u = seg(0.18 + o, 0.189 + o);
+    env = plateau * (1 - smoothstep(u));
+    injecting = u > 0.15;
+  } else if (tn < 0.206 + o) {
+    const u = seg(0.189 + o, 0.206 + o);
+    env = peak1 * smoothstep(u);
+    injecting = true;
+  } else if (tn < 0.465) {
+    const u = seg(0.206 + o, 0.465);
+    const v = smoothstep(u);
+    env = peak1 + (afterFirst - peak1) * v;
+    env += 5.5 * Math.sin(re * 1.12 + unitIndex * 0.9) * (1 - v * 0.9);
+    env += (detNoise01(nowMs, 9 + unitIndex) - 0.5) * 5 * (1 - v * 0.75);
+  } else if (tn < 0.482) {
+    const u = seg(0.465, 0.482);
+    env = afterFirst * (1 - smoothstep(u));
+    injecting = u > 0.12;
+  } else if (tn < 0.505) {
+    const u = seg(0.482, 0.505);
+    env = peak2 * smoothstep(u);
+    injecting = true;
+  } else if (tn < 0.565) {
+    env = peak2 + 2.1 * Math.sin(re * 1.48 + unitIndex * 1.2) + (detNoise01(nowMs, 7 + unitIndex) - 0.5) * 3.2;
+  } else if (tn < 0.775) {
+    const u = seg(0.565, 0.775);
+    const v = smoothstep(u);
+    env = peak2 + (preFinal - peak2) * v;
+    env += 5 * Math.sin(re * 1.02 + unitIndex * 0.8) * (1 - v * 0.88);
+    env += (detNoise01(nowMs, 12 + unitIndex) - 0.5) * 4.5 * (1 - v * 0.72);
+  } else if (tn < 0.835) {
+    const u = seg(0.775, 0.835);
+    const start = preFinal;
+    env = start * (1 - smoothstep(u)) + lateA * smoothstep(u);
+    env += 2.4 * Math.sin(re * 1.45);
+  } else if (tn < 0.915) {
+    const u = seg(0.835, 0.915);
+    env = lateA * (1 - smoothstep(u)) + lateB * smoothstep(u);
+  } else {
+    const u = seg(0.915, 1);
+    env = lateB * (1 - smoothstep(u)) + floor * smoothstep(u);
   }
 
-  const plateau = ethTarget;
-  const slowRipple = 3.5 * Math.sin(re * 1.05 + unitIndex * 0.9);
-  const pulseEveryH = 1.35 + unitIndex * 0.08;
-  const u = (re % pulseEveryH) / pulseEveryH;
-  const pulseW = 0.11;
-  let pulse = 0;
-  if (u < pulseW) {
-    const v = u / pulseW;
-    pulse = Math.sin(v * Math.PI) * (11 + unitIndex * 1.5);
-  }
-  const grain = (detNoise01(nowMs, unitIndex + 9) - 0.5) * 5;
-  let ppm = plateau + slowRipple + pulse + grain;
-  ppm = Math.max(0, Math.min(ethTarget * 1.07, ppm));
-  const injecting = pulse > 3 || slowRipple > 1.8;
-  return { ppm: round1(ppm), injecting };
+  env = Math.max(0, Math.min(ethTarget * 1.22, env));
+  const grain = (detNoise01(nowMs, unitIndex + 21) - 0.5) * 2.2;
+  return { ppm: round1(env + grain), injecting };
 }
 
 function ventilationCfm(
@@ -236,6 +309,15 @@ function doorOpenDelta(
 }
 
 function computeCo2Ripening(re: number, co2LagH: number, co2Target: number, unitIndex: number): number {
+  const lowBand = co2Target <= 0.35;
+  if (lowBand) {
+    /** CO₂ muy bajo y estable (~0,1–0,3 %) como en telemetría reefer de referencia; casi sin transitorios. */
+    const center = Math.max(0.1, Math.min(0.26, co2Target + 0.02));
+    const micro = 0.035 * Math.sin(re * 0.55 + unitIndex * 1.05) + 0.018 * Math.sin(re * 1.35 + unitIndex * 0.6);
+    const nudge = Math.sin(unitIndex * 1.9 + re * 0.18) * 0.012;
+    let v = center + micro + nudge;
+    return Math.min(0.3, Math.max(0.09, v));
+  }
   if (re < co2LagH) {
     return Math.max(0.03, 0.06 + 0.04 * Math.sin(re * 0.65 + unitIndex));
   }
@@ -301,10 +383,17 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
   if (phase === 'homogenization') {
     setPoint = tHom;
     humiditySp = rhHom;
-    const rhOsc = 1.35 * Math.sin((nowMs / (38 * 60 * 1000)) * 2 * Math.PI + unitIndex);
+    const cycleMin = seed.behavior.reeferCycleMinutes ?? 22;
+    const periodMs = cycleMin * 60 * 1000;
+    const thetaRh = (nowMs / periodMs) * 2 * Math.PI;
+    const rhOsc = 2.6 * Math.sin(thetaRh + unitIndex * 0.2) + 0.45 * Math.sin(thetaRh * 2 + 0.5);
     rh =
-      rhHom - 1.4 + smoothstep(phaseElapsedH / homogH) * 1.6 + rhOsc + (detNoise01(nowMs, unitIndex) - 0.5) * 1.1;
-    co2 = round1(Math.max(0.08, 0.2 + 0.14 * Math.sin(phaseElapsedH * 0.55)));
+      rhHom -
+      1.2 +
+      smoothstep(phaseElapsedH / homogH) * 1.4 +
+      rhOsc +
+      (detNoise01(nowMs, unitIndex) - 0.5) * 0.9;
+    co2 = round1(Math.max(0.1, Math.min(0.22, co2Target * 0.92 + 0.04 * Math.sin(phaseElapsedH * 0.48 + unitIndex))));
     ethPpm = round1(Math.max(0, 0.45 * Math.sin(phaseElapsedH * 0.65) ** 2));
     avl = ventilationCfm(
       phase,
@@ -323,10 +412,19 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
     const re = ripElapsedH;
     setPoint = tRip;
     humiditySp = rhRip;
-    const rhOsc = 1.45 * Math.sin((nowMs / (33 * 60 * 1000)) * 2 * Math.PI);
-    rh = rhRip - 1.1 + Math.sin(re * 0.31) * 1.05 + rhOsc + (detNoise01(nowMs, 11 + unitIndex) - 0.5) * 0.8;
+    const cycleMin = seed.behavior.reeferCycleMinutes ?? 22;
+    const periodMs = cycleMin * 60 * 1000;
+    const thetaRh = (nowMs / periodMs) * 2 * Math.PI;
+    const rhAmp = 3.85;
+    rh =
+      rhRip -
+      0.35 +
+      rhAmp * Math.sin(thetaRh + 0.22) +
+      0.42 * Math.sin(thetaRh * 2.05 + unitIndex * 0.3) +
+      Math.sin(re * 0.28) * 0.55 +
+      (detNoise01(nowMs, 11 + unitIndex) - 0.5) * 0.65;
     co2 = round1(computeCo2Ripening(re, co2LagH, co2Target, unitIndex));
-    const eth = computeEthyleneRipening(re, ethTarget, nowMs, unitIndex);
+    const eth = computeEthyleneRipening(re, ethTarget, ripH, nowMs, unitIndex);
     ethPpm = eth.ppm;
     iCtrlRip = eth.injecting ? 1 : 0;
     avl = ventilationCfm(
@@ -358,7 +456,13 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
   const cond = round1(35 + unitIndex + Math.cos(totalElapsedH * 0.14) * 2.2 + therm.coolingIntensity * 2.4);
   evap = round1(evap + Math.sin((nowMs / (21 * 60 * 1000)) * 2 * Math.PI) * 1.05);
 
-  const amb = round1(23 + Math.sin((nowMs / 3_600_000) * 0.06) * 1.35 + unitIndex * 0.18);
+  const reeferCycleMin = seed.behavior.reeferCycleMinutes ?? 22;
+  const amb = round1(
+    21.2 +
+      3.6 * Math.sin((nowMs / (48 * 60 * 1000)) * 2 * Math.PI + unitIndex * 1.1) +
+      1.05 * Math.sin((nowMs / (reeferCycleMin * 60 * 1000)) * 2 * Math.PI + 0.35) +
+      unitIndex * 0.2
+  );
 
   return {
     phase,
@@ -551,6 +655,102 @@ export function buildSimulatedHistoryPoints(imei: string, fechaInicio: string, f
   return pts;
 }
 
+const SIM_RIPENING_SAMPLING_STORAGE_PREFIX = 'ztrack:sim-ripening-sampling:';
+
+/** `rp-process-9100001` … alineados con `SIM_INKAPACKING_DEVICE_IDS`. */
+export function isSimulatedRipeningProcessId(processId: string): boolean {
+  const m = /^rp-process-(\d+)$/.exec(processId);
+  if (!m) return false;
+  const n = Number(m[1]);
+  for (let i = 0; i < SIM_INKAPACKING_DEVICE_IDS.length; i++) {
+    if (9100001 + i === n) return true;
+  }
+  return false;
+}
+
+export function simulatedDeviceIdFromRipeningProcessId(processId: string): SimInkapackingDeviceId | null {
+  const m = /^rp-process-(\d+)$/.exec(processId);
+  if (!m) return null;
+  const idx = Number(m[1]) - 9100001;
+  if (idx >= 0 && idx < SIM_INKAPACKING_DEVICE_IDS.length) return SIM_INKAPACKING_DEVICE_IDS[idx];
+  return null;
+}
+
+function readStoredSamplingTimeline(processId: string): unknown[] {
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(SIM_RIPENING_SAMPLING_STORAGE_PREFIX + processId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredSamplingTimeline(processId: string, events: unknown[]): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(SIM_RIPENING_SAMPLING_STORAGE_PREFIX + processId, JSON.stringify(events));
+  } catch {
+    /* quota / modo privado */
+  }
+}
+
+function mergeSimulatedTimeline(baseTimeline: unknown[], processId: string): unknown[] {
+  const stored = readStoredSamplingTimeline(processId);
+  const merged = [...(Array.isArray(baseTimeline) ? baseTimeline : []), ...stored];
+  merged.sort((a, b) => {
+    const ta = new Date((a as { timestamp?: string }).timestamp ?? 0).getTime();
+    const tb = new Date((b as { timestamp?: string }).timestamp ?? 0).getTime();
+    return ta - tb;
+  });
+  return merged;
+}
+
+export type SimulatedSamplingPostBody = {
+  samplingType: 'initial' | 'monitoring' | 'final';
+  personaEscrita: string;
+  parameters: { name: string; value: string; unit: string }[];
+  notes?: string;
+};
+
+function samplingTitleForSimulated(samplingType: SimulatedSamplingPostBody['samplingType']): string {
+  if (samplingType === 'initial') return 'Muestreo inicial / recepción';
+  if (samplingType === 'final') return 'Muestreo final / liberación';
+  return 'Muestreo de seguimiento';
+}
+
+/** Registra un muestreo demo en localStorage y devuelve el proceso simulado actualizado. */
+export function applySimulatedRipeningSampling(
+  processId: string,
+  body: SimulatedSamplingPostBody,
+  evidenceFiles: File[]
+): RipeningProcessRow {
+  const deviceId = simulatedDeviceIdFromRipeningProcessId(processId);
+  if (!deviceId) throw new Error('Proceso simulado no reconocido');
+
+  const event = {
+    id: `sim-sampling-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    type: 'sampling',
+    title: samplingTitleForSimulated(body.samplingType),
+    timestamp: new Date().toISOString(),
+    persona_escrita: body.personaEscrita,
+    description: body.notes?.trim() || undefined,
+    data: body.parameters,
+    ...(evidenceFiles.length > 0
+      ? {
+          images: [{ desc: `${evidenceFiles.length} imagen(es) — demo local (no se suben al servidor)` }],
+        }
+      : {}),
+  };
+
+  const prev = readStoredSamplingTimeline(processId);
+  writeStoredSamplingTimeline(processId, [...prev, event]);
+
+  return buildSimulatedRipeningProcessRow(deviceId);
+}
+
 export function buildSimulatedRipeningProcessRow(deviceId: SimInkapackingDeviceId): RipeningProcessRow {
   const unitIndex = unitIndexFromImei(deviceId);
   const seed = seedForUnit(unitIndex);
@@ -560,11 +760,12 @@ export function buildSimulatedRipeningProcessRow(deviceId: SimInkapackingDeviceI
   const endMs = startMs + totalH * 3600_000;
   const startIso = new Date(startMs).toISOString();
   const endIso = new Date(endMs).toISOString();
+  const processId = `rp-process-${9100001 + unitIndex}`;
 
   const clientLine = `${seed.client.name} — ${seed.client.location}`;
 
   return {
-    id: `rp-process-${9100001 + unitIndex}`,
+    id: processId,
     user_id: `usr-fleet-700${unitIndex + 1}`,
     status: 'active',
     display_name: `${seed.recipeName} — ${seed.client.location}`,
@@ -614,7 +815,7 @@ export function buildSimulatedRipeningProcessRow(deviceId: SimInkapackingDeviceI
         { name: 'Brix obj.', value: `${seed.batch.brixMin}–${seed.batch.brixMax}`, unit: '°Bx' },
       ],
     },
-    timeline: [],
+    timeline: mergeSimulatedTimeline([], processId),
     created_at: startIso,
     updated_at: now.toISOString(),
   };
