@@ -664,7 +664,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
     } finally {
       setPdfBusy(false);
     }
-  }, [formatFileTimestamp, isLoading, t, view.id]);
+  }, [formatFileTimestamp, t, view.id]);
 
   const deviceId = useMemo(() => {
     const p = (view._row as RipeningProcessRow | undefined)?.payload as { deviceId?: string } | undefined;
