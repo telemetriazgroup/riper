@@ -21,6 +21,10 @@ import {
 import { clsx } from 'clsx';
 import { format, subHours, subDays } from 'date-fns';
 import { formatChartPointLabels } from '@/app/lib/displayTimeZone';
+import {
+  buildLast12hChartData,
+  postProcessHistoricalChartRows,
+} from '@/app/lib/historySeriesSanitize';
 
 /** Etiquetas en español para cada campo de la gráfica histórica */
 export const CHART_METRIC_LABELS: Record<string, string> = {
@@ -210,123 +214,6 @@ const METRIC_COLORS: Record<string, string> = {
   ethylene: '#10b981',
 };
 
-/** Interpola valor entre prev y next; si no hay vecinos, devuelve def. */
-function interpolate(prev: number | null, next: number | null, def: number): number {
-  if (prev != null && next != null) return (prev + next) / 2;
-  if (prev != null) return prev;
-  if (next != null) return next;
-  return def;
-}
-
-/** Detecta lecturas erróneas (ej. 70→0→72) y las reemplaza por interpolación de tendencia (70, 71, 72). */
-function regularizeSeries(values: (number | null)[], options: { lowThreshold?: number; highThreshold?: number } = {}): number[] {
-  const { lowThreshold = 20, highThreshold = 50 } = options;
-  const out: (number | null)[] = values.map((v) => v);
-  for (let i = 0; i < out.length; i++) {
-    const v = out[i];
-    if (v === null) {
-      const prev = i > 0 ? out[i - 1] : null;
-      const next = i < out.length - 1 ? out[i + 1] : null;
-      out[i] = interpolate(prev, next, 0);
-      continue;
-    }
-    const prev = i > 0 ? out[i - 1] : null;
-    const next = i < out.length - 1 ? out[i + 1] : null;
-    const prevHigh = prev != null && prev >= highThreshold;
-    const nextHigh = next != null && next >= highThreshold;
-    if (v < lowThreshold && (prevHigh || nextHigh)) {
-      out[i] = interpolate(prev, next, v);
-    }
-  }
-  return out.map((x) => x ?? 0);
-}
-
-/**
- * Segundo filtro para etileno: corrige errores de lectura del sensor (picos imposibles).
- * Ej: 35.1, 290, 285, 36 en 2 min → 35.1, 35.4, 35.7, 36.
- * Si la tendencia es real (35, 70, 170, 230) no se corrige.
- * Criterio: salto máximo razonable entre lecturas consecutivas; si hay un "bache" que vuelve al nivel anterior en pocos puntos, se interpola.
- */
-function correctEthyleneSensorErrors(values: number[]): number[] {
-  if (values.length <= 2) return values;
-  const out = [...values];
-  const maxStep = 35;
-  const maxRunToCorrect = 6;
-
-  for (let i = 1; i < out.length - 1; i++) {
-    const prev = out[i - 1], curr = out[i], next = out[i + 1];
-    if (Math.abs(curr - prev) > maxStep && Math.abs(curr - next) > maxStep && Math.abs(prev - next) <= maxStep)
-      out[i] = (prev + next) / 2;
-  }
-
-  let i = 1;
-  while (i < out.length - 1) {
-    const prev = out[i - 1];
-    if (Math.abs(out[i] - prev) <= maxStep) { i++; continue; }
-    let j = i;
-    while (j < out.length && Math.abs(out[j] - prev) > maxStep) j++;
-    if (j < out.length && (j - i) <= maxRunToCorrect && (j - i) >= 1) {
-      const vStart = out[i - 1], vEnd = out[j];
-      for (let k = i; k < j; k++)
-        out[k] = vStart + (vEnd - vStart) * (k - (i - 1)) / (j - (i - 1));
-    }
-    i = j > i ? j + 1 : i + 1;
-  }
-  return out;
-}
-
-/**
- * Humedad: trata 0 como dato erróneo (sensor) y lo reemplaza por interpolación.
- * Ej: 88, 0, 90 → 88, 89, 90; 88, 0, 88 → 88, 88, 88. Evita distorsionar la gráfica.
- */
-function regularizeHumiditySeries(values: (number | null)[]): number[] {
-  const out: (number | null)[] = values.map((v) => {
-    if (v == null) return null;
-    if (v === 0) return null;
-    return v;
-  });
-  for (let i = 0; i < out.length; i++) {
-    if (out[i] !== null) continue;
-    let prev: number | null = null;
-    let next: number | null = null;
-    for (let j = i - 1; j >= 0; j--) {
-      if (out[j] != null && out[j] !== 0) { prev = out[j] as number; break; }
-    }
-    for (let j = i + 1; j < out.length; j++) {
-      if (out[j] != null && out[j] !== 0) { next = out[j] as number; break; }
-    }
-    out[i] = interpolate(prev, next, 85);
-  }
-  return out.map((x) => x ?? 85);
-}
-
-/** Regulariza cualquier serie: reemplaza outliers (saltos bruscos) por interpolación lineal. */
-function regularizeSeriesSmooth(values: (number | null)[], maxJumpRatio = 0.5): number[] {
-  const out = values.map((v) => v ?? NaN);
-  for (let i = 0; i < out.length; i++) {
-    if (Number.isNaN(out[i])) {
-      let prev = i > 0 ? out[i - 1] : NaN;
-      let next = NaN;
-      for (let j = i + 1; j < out.length; j++) {
-        if (!Number.isNaN(out[j])) { next = out[j]; break; }
-      }
-      out[i] = Number.isNaN(prev) && Number.isNaN(next) ? 0 : (Number.isNaN(prev) ? next : Number.isNaN(next) ? prev : (prev + next) / 2);
-      continue;
-    }
-    const prev = i > 0 ? out[i - 1] : out[i];
-    const next = i < out.length - 1 ? out[i + 1] : out[i];
-    const prevVal = Number.isNaN(prev) ? out[i] : prev;
-    const nextVal = Number.isNaN(next) ? out[i] : next;
-    const avg = (prevVal + nextVal) / 2;
-    const jump = Math.abs(out[i] - avg);
-    const range = Math.max(Math.abs(prevVal - nextVal), 1);
-    if (jump > range * (1 + maxJumpRatio)) {
-      out[i] = avg;
-    }
-  }
-  return out;
-}
-
 interface TelemetryChartsProps {
   deviceId?: string;
 }
@@ -339,6 +226,11 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
 
+  const data = useMemo(
+    () => buildLast12hChartData(history ?? [], convertTemp),
+    [history, convertTemp]
+  );
+
   if (isLoading) {
     return (
       <Card className="col-span-1 lg:col-span-2 h-[400px] flex items-center justify-center">
@@ -346,36 +238,6 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
       </Card>
     );
   }
-
-  /** Serie de temperatura: `return_air` (API buscar_datos / Madurador); reserva `temp_supply_1` si no hay retorno. */
-  const raw = (history ?? []).map((h: any) => {
-    const tCels =
-      h.return_air != null && h.return_air !== ''
-        ? Number(h.return_air)
-        : h.temp_supply_1 != null
-          ? Number(h.temp_supply_1)
-          : null;
-    return {
-    rawDate: new Date(h.timestamp),
-    time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    tempRaw: tCels != null && Number.isFinite(tCels) ? Number(convertTemp(tCels)) : null,
-    humidityRaw: h.relative_humidity != null ? Number(h.relative_humidity) : null,
-    ethyleneRaw: h.ethylene != null ? Number(h.ethylene) : null,
-    co2Raw: h.co2_reading != null ? Number(h.co2_reading) : null,
-  };
-  });
-  const temp = regularizeSeriesSmooth(raw.map((d: any) => d.tempRaw)).map((v) => Number(v.toFixed(2)));
-  const humidity = regularizeHumiditySeries(raw.map((d: any) => d.humidityRaw)).map((v) => Number(v.toFixed(2)));
-  const ethyleneRaw = regularizeSeries(raw.map((d: any) => d.ethyleneRaw), { lowThreshold: 20, highThreshold: 50 });
-  const ethylene = correctEthyleneSensorErrors(ethyleneRaw);
-  const co2 = regularizeSeriesSmooth(raw.map((d: any) => d.co2Raw)).map((v) => Number(v.toFixed(2)));
-  const data = raw.map((d: any, i: number) => ({
-    ...d,
-    temp: temp[i],
-    humidity: humidity[i],
-    ethylene: ethylene[i],
-    co2: co2[i],
-  }));
 
   const noHistory = (history?.length ?? 0) === 0;
 
@@ -435,14 +297,17 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                     label={{ value: `${t('humidity')} (%)`, angle: 90, position: 'insideRight', fill: '#3b82f6', style: { fontSize: 11 } }}
                   />
                   <Tooltip
-                    formatter={(value: number, name) => [typeof value === 'number' ? value.toFixed(2) : String(value), name]}
+                    formatter={(value: number | null, name) => [
+                      value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                      name,
+                    ]}
                     contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     itemStyle={{ fontSize: '12px' }}
                     labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
-                  <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                  <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                  <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -481,14 +346,17 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                     label={{ value: `${t('co2')} (%)`, angle: 90, position: 'insideRight', fill: '#6b7280', style: { fontSize: 11 } }}
                   />
                   <Tooltip
-                    formatter={(value: number, name) => [typeof value === 'number' ? value.toFixed(2) : String(value), name]}
+                    formatter={(value: number | null, name) => [
+                      value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                      name,
+                    ]}
                     contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                     itemStyle={{ fontSize: '12px' }}
                     labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
                   />
                   <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow />
-                  <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow />
+                  <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                  <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -600,18 +468,12 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
           if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
           else row[key] = Number(v.toFixed(2));
         });
+        row.avl_raw = h.avl_raw ?? null;
         return row;
       });
-      const ethyleneSeries = regularizeSeries(data.map((d: any) => d.ethylene), { lowThreshold: 20, highThreshold: 50 });
-      const ethyleneCorrected = correctEthyleneSensorErrors(ethyleneSeries);
-      const humiditySeries = regularizeHumiditySeries(data.map((d: any) => d.relative_humidity ?? null));
-      const normalized = data.map((row: any, i: number) => ({
-        ...row,
-        ethylene: ethyleneCorrected[i],
-        relative_humidity: humiditySeries[i],
-      }));
-      setChartData(normalized);
-      setZoomRange({ startIndex: 0, endIndex: normalized.length - 1 });
+      postProcessHistoricalChartRows(data);
+      setChartData(data);
+      setZoomRange({ startIndex: 0, endIndex: data.length - 1 });
     } catch (e) {
       console.error(e);
       setChartData([]);
@@ -1321,6 +1183,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                             stroke={color}
                             strokeWidth={2}
                             dot={false}
+                            connectNulls
                             activeDot={{ r: 4 }}
                             name={CHART_METRIC_LABELS[key]}
                           >
@@ -1408,20 +1271,31 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
       const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
-        const row: any = { timestamp: d.getTime() };
+        const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
         CHART_METRIC_KEYS.forEach((key) => {
           let v = h[key];
           if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
-          if (key === 'ethylene') row[key] = v != null ? Number(v) : null;
-          else {
-            v = Number(v ?? 0);
-            row[key] = tempKeysTable.includes(key) ? Number(convertTemp(v).toFixed(2)) : Number(v.toFixed(2));
+          if (key === 'ethylene') {
+            row[key] = v != null ? Number(v) : null;
+            return;
           }
+          v = Number(v ?? 0);
+          if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
+          else row[key] = Number(v.toFixed(2));
         });
+        row.avl_raw = h.avl_raw ?? null;
         return row;
       });
-      const ethyleneSeries = regularizeSeries(data.map((d: any) => d.ethylene), { lowThreshold: 20, highThreshold: 50 });
-      setTableData(data.map((row: any, i: number) => ({ ...row, ethylene: ethyleneSeries[i] })));
+      postProcessHistoricalChartRows(data);
+      const forDisplay = data.map((row: any) => {
+        const next = { ...row };
+        tempKeysTable.forEach((k) => {
+          const v = next[k];
+          if (typeof v === 'number' && !Number.isNaN(v)) next[k] = Number(convertTemp(v).toFixed(2));
+        });
+        return next;
+      });
+      setTableData(forDisplay);
     } catch (e) {
       console.error(e);
       setTableData([]);

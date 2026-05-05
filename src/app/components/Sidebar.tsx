@@ -26,6 +26,8 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
+
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose }) => {
   const { t } = useSettings();
   const restrictedDemo = isGourmetSession() || isFleetDemoSession() || isUltraorganicsSession();
@@ -59,9 +61,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
         "fixed md:sticky top-0 left-0 z-50 h-screen w-64 bg-slate-900 text-white transition-transform duration-200 ease-in-out md:translate-x-0 flex flex-col",
         isOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-4 border-b border-slate-700 flex items-center gap-2">
-          <div className="h-8 w-8 bg-blue-500 rounded-md flex items-center justify-center font-bold">RM</div>
-          <span className="font-bold text-lg">ZTRACK TELEMETRY</span>
+        <div className="p-5 border-b border-slate-700 flex justify-center items-center">
+          <img
+            src={ZTRACK_LOGO_SRC}
+            alt="ZTRACK"
+            className="h-12 sm:h-14 w-auto max-w-[min(100%,240px)] object-contain mx-auto"
+          />
         </div>
 
         <nav className="flex-1 overflow-y-auto p-4 space-y-1">

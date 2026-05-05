@@ -13,6 +13,11 @@ import {
   YAxis,
 } from 'recharts';
 import {
+  chartNullIfZero,
+  sanitizeCo2PercentSeries,
+  sanitizeEthylenePpmSeries,
+} from '@/app/lib/historySeriesSanitize';
+import {
   Activity,
   AlertCircle,
   ClipboardCheck,
@@ -137,13 +142,18 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
 
   const chartRows = useMemo(() => {
     const pts = rangoData?.points ?? [];
-    return pts.map((p: HistoryPoint) => ({
+    if (!pts.length) return [];
+    const tempPulp = pts.map((p: HistoryPoint) => chartNullIfZero(p.return_air));
+    const tempAir = pts.map((p: HistoryPoint) => chartNullIfZero(p.temp_supply_1));
+    const eth = sanitizeEthylenePpmSeries(pts.map((p: HistoryPoint) => p.ethylene));
+    const co2 = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
+    return pts.map((p: HistoryPoint, i: number) => ({
       tick: chartTick(p.timestamp),
       ts: p.timestamp,
-      temp_pulp: p.return_air,
-      temp_air: p.temp_supply_1,
-      ethylene: p.ethylene ?? 0,
-      co2: p.co2_reading ?? 0,
+      temp_pulp: tempPulp[i],
+      temp_air: tempAir[i],
+      ethylene: eth[i],
+      co2: co2[i],
     }));
   }, [rangoData?.points]);
 
@@ -386,6 +396,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       stroke="#ef4444"
                       fillOpacity={0}
                       strokeWidth={2}
+                      connectNulls
                     />
                     <Area
                       type="monotone"
@@ -394,6 +405,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       stroke="#2563eb"
                       fill="url(#gradAir)"
                       strokeWidth={2}
+                      connectNulls
                     />
                   </AreaChart>
                 ) : (
@@ -412,6 +424,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       stroke="#9333ea"
                       dot={false}
                       strokeWidth={2}
+                      connectNulls
                     />
                     <Line
                       yAxisId="r"
@@ -421,6 +434,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       stroke="#64748b"
                       dot={false}
                       strokeWidth={2}
+                      connectNulls
                     />
                   </LineChart>
                 )}

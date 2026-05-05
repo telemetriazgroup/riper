@@ -4,6 +4,8 @@ import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { DISPLAY_TIMEZONE_PRESETS } from '@/app/lib/displayTimeZone';
 
+const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
+
 interface HeaderProps {
   onMenuClick: () => void;
   title?: string;
@@ -36,7 +38,17 @@ export const Header: React.FC<HeaderProps> = ({
           <Menu className="h-5 w-5" />
         </Button>
         <h1 className="text-xl font-bold text-foreground hidden md:block">{title || t('dashboard')}</h1>
-        <div className="md:hidden font-semibold text-foreground">{title || 'ZTRACK TELEMETRY'}</div>
+        {title ? (
+          <div className="md:hidden font-semibold text-foreground truncate max-w-[50vw]">{title}</div>
+        ) : (
+          <div className="flex-1 flex justify-center md:hidden pointer-events-none">
+            <img
+              src={ZTRACK_LOGO_SRC}
+              alt="ZTRACK"
+              className="h-10 w-auto max-w-[200px] object-contain"
+            />
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">

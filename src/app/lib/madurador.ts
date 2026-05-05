@@ -11,6 +11,13 @@ import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
 import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
+import {
+  SIM_FLEET_AVL_MAX_CFM,
+  appendSimulatedInkapackingDevices,
+  buildSimulatedHistoryPoints,
+  isSimulatedInkapackingDevice,
+  shouldShowSimulatedInkapackingFleet,
+} from '@/app/lib/simulatedInkapackingFleet';
 
 export type MaduradorRangoFetchOptions = FetchHistoryOptions & {
   /** Incluye filas crudos `datos[]` para métricas (avl CFM, fresh_air_ex_mode). */
@@ -224,6 +231,11 @@ function fanPctFromAvl(avlRaw: number | null): number {
   return Math.min(100, Math.round((avlRaw / 5000) * 100));
 }
 
+function fanPctForSimFleetCfm(avlCfm: number | null): number {
+  if (avlCfm == null || !Number.isFinite(avlCfm) || avlCfm <= 0) return 0;
+  return Math.min(100, Math.round((avlCfm / SIM_FLEET_AVL_MAX_CFM) * 100));
+}
+
 export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const flat = flatMaduradorRow(row);
 
@@ -277,7 +289,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const amb = inRange(toNum(flat.ambient_air), -40, 60) ?? 0;
 
   const avlRaw = toNum(flat.avl);
-  const fanRefPct = fanPctFromAvl(avlRaw);
+  const fanRefPct = isSimulatedInkapackingDevice(imei) ? fanPctForSimFleetCfm(avlRaw) : fanPctFromAvl(avlRaw);
 
   const voltSane = inRange(toNum(flat.line_voltage), 90, 600);
   const batt = inRange(toNum(flat.battery_voltage), 0, 32);
@@ -410,13 +422,14 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   const body = (await res.json()) as { data?: unknown };
   const raw = Array.isArray(body.data) ? body.data : [];
   const list = raw.map((r) => mapMaduradorRowToDevice(r as Record<string, unknown>));
+  const withSim = appendSimulatedInkapackingDevices(list, mapMaduradorRowToDevice);
   if (isUltraorganicsSession()) {
-    return filterDevicesToUltraorganicsPanel(list);
+    return filterDevicesToUltraorganicsPanel(withSim);
   }
   if (isMaduradorSuperadminFullList()) {
-    return list;
+    return withSim;
   }
-  return filterDevicesToIdentificadorImeiSuffix(list, getStoredUser()?.identificador);
+  return filterDevicesToIdentificadorImeiSuffix(withSim, getStoredUser()?.identificador);
 }
 
 export async function getMaduradorDevicesCached(): Promise<Device[]> {
@@ -444,7 +457,10 @@ export function buildMaduradorHistoryFromDevice(
   const pts: HistoryPoint[] = [];
 
   const avlNum = typeof md?.avl_display === 'number' ? md.avl_display : toNum(md?.avl_display);
-  const avl_pct = fanPctFromAvl(avlNum);
+  const avlRawForSim = typeof md?.avl_raw === 'number' ? md.avl_raw : avlNum;
+  const avl_pct = isSimulatedInkapackingDevice(device.id)
+    ? fanPctForSimFleetCfm(avlRawForSim)
+    : fanPctFromAvl(avlNum);
   const spCo2 = typeof md?.set_point_co2_display === 'number' ? md.set_point_co2_display : toNum(md?.set_point_co2_display);
   const compress =
     typeof md?.compress_coil_1_display === 'number'
@@ -470,6 +486,12 @@ export function buildMaduradorHistoryFromDevice(
       cargo_3_temp: null,
       cargo_4_temp: null,
       relative_humidity: tel.relative_humidity,
+      avl_raw:
+        avlRawForSim != null && Number.isFinite(avlRawForSim)
+          ? avlRawForSim
+          : avlNum != null && Number.isFinite(avlNum)
+            ? avlNum
+            : null,
       avl_pct,
       line_voltage: lineV,
       line_frequency: 60,
@@ -605,6 +627,7 @@ export function mapMaduradorDatoMuestraToHistoryPoint(row: Record<string, unknow
     cargo_3_temp: inRange(toNum(flat.cargo_3_temp), -40, 100),
     cargo_4_temp: inRange(toNum(flat.cargo_4_temp), -40, 100),
     relative_humidity: rh,
+    avl_raw: avlRaw != null && Number.isFinite(avlRaw) ? avlRaw : null,
     avl_pct,
     line_voltage: lineV,
     line_frequency: lf,
@@ -631,8 +654,25 @@ export async function fetchMaduradorRangoHistoryForImei(
   imei: string,
   options: MaduradorRangoFetchOptions = {}
 ): Promise<{ cantidad_datos: number; points: HistoryPoint[]; rawDatos?: Record<string, unknown>[] }> {
+  const imeiTrim = imei.trim();
+  if (isSimulatedInkapackingDevice(imeiTrim) && shouldShowSimulatedInkapackingFleet()) {
+    const now = Date.now();
+    let fi = options.fecha_inicio;
+    let ff = options.fecha_fin;
+    if (!fi || !ff) {
+      ff = new Date(now).toISOString();
+      fi = new Date(now - 12 * 60 * 60 * 1000).toISOString();
+    }
+    const points = buildSimulatedHistoryPoints(imeiTrim, fi, ff);
+    return {
+      cantidad_datos: points.length,
+      points,
+      rawDatos: options.includeRawDatos ? [] : undefined,
+    };
+  }
+
   const base = maduradorDemoApiBase();
-  const imeiQ = encodeURIComponent(imei.trim());
+  const imeiQ = encodeURIComponent(imeiTrim);
   let url: string;
   const useLima = Boolean(options.maduradorAmericaLima);
   const fmt = useLima ? formatMaduradorRangoParamAmericaLima : formatMaduradorRangoParam;
@@ -641,7 +681,7 @@ export async function fetchMaduradorRangoHistoryForImei(
     const b = new Date(options.fecha_fin);
     if (Number.isFinite(a.getTime()) && Number.isFinite(b.getTime()) && b > a) {
       const params = new URLSearchParams();
-      params.set('imei', imei.trim());
+      params.set('imei', imeiTrim);
       params.set('fecha_inicio', fmt(a));
       params.set('fecha_fin', fmt(b));
       url = `${base}/Madurador/buscar_datos_madurador_rango/?${params.toString()}`;

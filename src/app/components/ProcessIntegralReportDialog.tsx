@@ -416,6 +416,24 @@ function inlinePdfCloneStyles(sourceRoot: HTMLElement, cloneRoot: HTMLElement) {
   walk(sourceRoot, cloneRoot);
 }
 
+function appendCanvasToPdfMultiPage(pdf: jsPDF, canvas: HTMLCanvasElement, marginMm: number): void {
+  const imgData = canvas.toDataURL('image/png', 1.0);
+  const pdfW = pdf.internal.pageSize.getWidth();
+  const pdfH = pdf.internal.pageSize.getHeight();
+  const pageInnerH = pdfH - 2 * marginMm;
+  const imgW = pdfW - 2 * marginMm;
+  const imgH = (canvas.height * imgW) / canvas.width;
+  let heightLeft = imgH;
+  pdf.addImage(imgData, 'PNG', marginMm, marginMm, imgW, imgH);
+  heightLeft -= pageInnerH;
+  while (heightLeft > 0) {
+    const y = marginMm - (imgH - heightLeft);
+    pdf.addPage();
+    pdf.addImage(imgData, 'PNG', marginMm, y, imgW, imgH);
+    heightLeft -= pageInnerH;
+  }
+}
+
 function chartTick(ts: string): string {
   try {
     const d = new Date(ts);
@@ -589,53 +607,53 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
   const [pdfBusy, setPdfBusy] = useState(false);
 
   const handleDownloadPdf = useCallback(async () => {
-    if (!printRef.current) return;
+    const root = printRef.current;
+    if (!root) return;
+    const sections = Array.from(root.querySelectorAll('[data-integral-pdf-section]')).filter(
+      (n): n is HTMLElement => n instanceof HTMLElement
+    );
+    if (sections.length === 0) {
+      toast.error(t('integral_report_pdf_error'));
+      return;
+    }
     setPdfBusy(true);
     toast.info(t('integral_report_pdf_generating'));
-    await new Promise((r) => setTimeout(r, 650));
+    await new Promise((r) => setTimeout(r, 450));
+    const margin = 10;
     try {
-      const el = printRef.current;
-      const canvas = await html2canvas(el, {
-        scale: 1.5,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: el.scrollWidth,
-        windowHeight: el.scrollHeight,
-        onclone: (clonedDoc, clonedEl) => {
-          stripUnsupportedPdfStylesFromClone(clonedDoc);
-          const cloneRoot =
-            clonedEl instanceof HTMLElement
-              ? clonedEl
-              : (clonedDoc.querySelector('[data-integral-pdf-root]') as HTMLElement | null);
-          if (cloneRoot instanceof HTMLElement) {
-            inlinePdfCloneStyles(el, cloneRoot);
-          }
-          const host =
-            clonedDoc.documentElement instanceof HTMLElement
-              ? clonedDoc.documentElement
-              : clonedDoc.body ?? cloneRoot;
-          if (host instanceof HTMLElement) {
-            sanitizeHtml2CanvasCopiedStylesInSubtree(host);
-          }
-        },
-      });
-      const imgData = canvas.toDataURL('image/png', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pdfW = pdf.internal.pageSize.getWidth();
-      const pdfH = pdf.internal.pageSize.getHeight();
-      const margin = 10;
-      const pageInnerH = pdfH - 2 * margin;
-      const imgW = pdfW - 2 * margin;
-      const imgH = (canvas.height * imgW) / canvas.width;
-      let heightLeft = imgH;
-      pdf.addImage(imgData, 'PNG', margin, margin, imgW, imgH);
-      heightLeft -= pageInnerH;
-      while (heightLeft > 0) {
-        const y = margin - (imgH - heightLeft);
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', margin, y, imgW, imgH);
-        heightLeft -= pageInnerH;
+      let firstSection = true;
+      for (const section of sections) {
+        const canvas = await html2canvas(section, {
+          scale: 1.55,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+          windowWidth: section.scrollWidth,
+          windowHeight: section.scrollHeight,
+          onclone: (clonedDoc, clonedEl) => {
+            stripUnsupportedPdfStylesFromClone(clonedDoc);
+            const cloneRoot =
+              clonedEl instanceof HTMLElement
+                ? clonedEl
+                : (clonedDoc.querySelector('[data-integral-pdf-section]') as HTMLElement | null);
+            if (cloneRoot instanceof HTMLElement) {
+              inlinePdfCloneStyles(section, cloneRoot);
+            }
+            const host =
+              cloneRoot instanceof HTMLElement
+                ? cloneRoot
+                : clonedDoc.documentElement instanceof HTMLElement
+                  ? clonedDoc.documentElement
+                  : (clonedDoc.body ?? undefined);
+            if (host instanceof HTMLElement) {
+              sanitizeHtml2CanvasCopiedStylesInSubtree(host);
+            }
+          },
+        });
+        if (!firstSection) pdf.addPage();
+        firstSection = false;
+        appendCanvasToPdfMultiPage(pdf, canvas, margin);
       }
       const idShort = view.id ? String(view.id).replace(/-/g, '').slice(0, 8) : 'report';
       pdf.save(`integral_${idShort}_${formatFileTimestamp()}.pdf`);
@@ -646,7 +664,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
     } finally {
       setPdfBusy(false);
     }
-  }, [formatFileTimestamp, t, view.id]);
+  }, [formatFileTimestamp, isLoading, t, view.id]);
 
   const deviceId = useMemo(() => {
     const p = (view._row as RipeningProcessRow | undefined)?.payload as { deviceId?: string } | undefined;
@@ -702,7 +720,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
 
   const objectivesChart = hasAnyChartPoint(evolution);
 
-  const renderPhaseChapter = (w: PhaseTimeWindow) => {
+  const renderPhaseChapter = (w: PhaseTimeWindow): React.ReactElement | React.ReactElement[] => {
     const slicePts = filterHistoryPointsInRange(points, w.startMs, w.endMs);
     const sliceRaw = filterRawDatosInRange(rawDatos, w.startMs, w.endMs);
     const typ = w.type.toLowerCase();
@@ -710,9 +728,9 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
     const tempSp = numFromPhase(w.rawPhase, 'temp');
     const humSp = numFromPhase(w.rawPhase, 'humidity');
 
-    const phaseTitle = (key: string) => (
-      <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-1 mt-6">
-        {w.order}. {w.label} — {t(key)}{' '}
+    const phaseSectionHeading = (headingText: string) => (
+      <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-1 mt-0">
+        {w.order}. {headingText}{' '}
         <span className="font-normal text-gray-500 text-xs">
           ({formatDateTime(new Date(w.startMs).toISOString())} → {formatDateTime(new Date(w.endMs).toISOString())})
         </span>
@@ -727,8 +745,12 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
         rh: p.relative_humidity,
       }));
       return (
-        <section key={`${w.order}-hom`}>
-          {phaseTitle('integral_report_chapter_homogenization')}
+        <div
+          key={`${w.order}-hom`}
+          data-integral-pdf-section={`phase-${w.order}-homogenization`}
+          className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+        >
+          {phaseSectionHeading(t('integral_report_pdf_phase_homogenization_heading'))}
           <TempRhDualChart
             rows={rows}
             t={t}
@@ -754,7 +776,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
               {t('integral_report_setpoint_ok')}
             </p>
           )}
-        </section>
+        </div>
       );
     }
 
@@ -775,11 +797,20 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
         eth: p.ethylene ?? 0,
       }));
 
-      return (
-        <section key={`${w.order}-rip`}>
-          {phaseTitle('integral_report_chapter_ripening')}
-          <h4 className="text-xs font-bold uppercase text-gray-600 mt-3">{t('integral_report_ripening_env')}</h4>
-          <TempRhDualChart rows={rowsTh} t={t} tempLabel={`${t('detail_monitoring_pulp')} (°${tempUnit})`} rhLabel={`${t('relative_humidity')} (%)`} />
+      return [
+        <div
+          key={`${w.order}-rip-env`}
+          data-integral-pdf-section={`phase-${w.order}-ripening-env`}
+          className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+        >
+          {phaseSectionHeading(t('integral_report_pdf_phase_ripening_env_heading'))}
+          <h4 className="text-xs font-bold uppercase text-gray-600">{t('integral_report_ripening_env')}</h4>
+          <TempRhDualChart
+            rows={rowsTh}
+            t={t}
+            tempLabel={`${t('detail_monitoring_pulp')} (°${tempUnit})`}
+            rhLabel={`${t('relative_humidity')} (%)`}
+          />
           <StatGrid
             items={[
               { label: t('integral_report_avg_temp'), value: statsTh.avgTemp != null ? `${convertTemp(statsTh.avgTemp).toFixed(1)} °${tempUnit}` : '—' },
@@ -793,8 +824,13 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           {statsTh.setpointReached && (
             <p className="mt-2 text-xs font-semibold text-emerald-700">{t('integral_report_setpoint_ok')}</p>
           )}
-
-          <h4 className="text-xs font-bold uppercase text-gray-600 mt-4">{t('integral_report_ripening_gases')}</h4>
+        </div>,
+        <div
+          key={`${w.order}-rip-gas`}
+          data-integral-pdf-section={`phase-${w.order}-ripening-gases`}
+          className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+        >
+          {phaseSectionHeading(t('integral_report_pdf_phase_ripening_gases_heading'))}
           <StatGrid
             items={[
               { label: t('integral_report_vent_ft3'), value: `${ft3.toFixed(0)} ft³` },
@@ -805,8 +841,8 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             ]}
           />
           <GasDualChart rows={gasRows} t={t} />
-        </section>
-      );
+        </div>,
+      ];
     }
 
     if (typ === 'venting') {
@@ -814,8 +850,12 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
       const dEth = deltaFirstLast(slicePts, 'ethylene');
       const dCo2 = deltaFirstLast(slicePts, 'co2_reading');
       return (
-        <section key={`${w.order}-vent`}>
-          {phaseTitle('integral_report_chapter_venting')}
+        <div
+          key={`${w.order}-vent`}
+          data-integral-pdf-section={`phase-${w.order}-venting`}
+          className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+        >
+          {phaseSectionHeading(t('integral_report_pdf_phase_ventilation_heading'))}
           <StatGrid
             items={[
               { label: t('integral_report_avg_avl'), value: avgAvl != null ? `${avgAvl.toFixed(1)} CFM` : '—' },
@@ -829,7 +869,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
               },
             ]}
           />
-        </section>
+        </div>
       );
     }
 
@@ -850,8 +890,12 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
       const deltaAvg = avgStart != null && avgEnd != null ? avgEnd - avgStart : null;
 
       return (
-        <section key={`${w.order}-cool`}>
-          {phaseTitle('integral_report_chapter_cooling')}
+        <div
+          key={`${w.order}-cool`}
+          data-integral-pdf-section={`phase-${w.order}-cooling`}
+          className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+        >
+          {phaseSectionHeading(t('integral_report_pdf_phase_cooling_heading'))}
           <CargoCoolingChart rows={rows} t={t} />
           <StatGrid
             items={[
@@ -861,15 +905,19 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
               },
             ]}
           />
-        </section>
+        </div>
       );
     }
 
     return (
-      <section key={`${w.order}-oth`}>
-        {phaseTitle('integral_report_chapter_other')}
+      <div
+        key={`${w.order}-oth`}
+        data-integral-pdf-section={`phase-${w.order}-other`}
+        className="integral-pdf-section space-y-3 rounded-lg border border-gray-100 bg-white p-4 mb-6"
+      >
+        {phaseSectionHeading(`${w.label} — ${t('integral_report_chapter_other')}`)}
         <p className="text-xs text-gray-500">{t('integral_report_phase_generic_hint')}</p>
-      </section>
+      </div>
     );
   };
 
@@ -877,7 +925,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[min(94vh,900px)] overflow-y-auto text-gray-900">
+      <DialogContent className="max-w-6xl w-[min(96vw,1280px)] max-h-[min(92vh,960px)] overflow-y-auto overflow-x-hidden text-gray-900 p-6">
         <DialogHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between pr-8">
             <div className="space-y-1.5 text-left min-w-0">
@@ -892,7 +940,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
               variant="outline"
               size="sm"
               className="shrink-0 gap-2 self-start"
-              disabled={pdfBusy}
+              disabled={pdfBusy || isLoading || !deviceId || !startedAtIso}
               onClick={handleDownloadPdf}
             >
               {pdfBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -901,100 +949,126 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           </div>
         </DialogHeader>
 
-        <div ref={printRef} data-integral-pdf-root="" className="space-y-4 text-sm bg-white rounded-md">
-          <IntegralTrackingSummary view={view} deviceId={deviceId} t={t} formatDateTime={formatDateTime} />
+        <div ref={printRef} data-integral-pdf-root="" className="space-y-4 text-sm">
+          <div
+            data-integral-pdf-section="cover"
+            className="integral-pdf-section space-y-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+          >
+            <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-2">
+              {t('integral_report_pdf_cover_title')}
+            </h2>
+            <IntegralTrackingSummary view={view} deviceId={deviceId} t={t} formatDateTime={formatDateTime} />
 
-          {!deviceId && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-              {t('integral_report_no_device')}
-            </div>
-          )}
+            {!deviceId && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                {t('integral_report_no_device')}
+              </div>
+            )}
 
-          {deviceId && !startedAtIso && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">{t('integral_report_no_start')}</div>
-          )}
+            {deviceId && !startedAtIso && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm">{t('integral_report_no_start')}</div>
+            )}
 
-          {deviceId && startedAtIso && isLoading && (
-            <div className="flex items-center gap-2 text-gray-600 py-8 justify-center">
-              <Loader2 className="h-6 w-6 animate-spin" />
-              {t('integral_report_loading')}
-            </div>
-          )}
+            {deviceId && startedAtIso && isLoading && (
+              <div className="flex items-center gap-2 text-gray-600 py-8 justify-center">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                {t('integral_report_loading')}
+              </div>
+            )}
 
-          {deviceId && startedAtIso && error && (
-            <p className="text-red-600 text-sm">{t('detail_monitoring_fetch_error')}</p>
-          )}
+            {deviceId && startedAtIso && error && (
+              <p className="text-red-600 text-sm">{t('detail_monitoring_fetch_error')}</p>
+            )}
+
+            {deviceId && startedAtIso && !isLoading && !error && (
+              <>
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('integral_report_objectives_evolution')}</h3>
+                  {objectivesChart ? (
+                    <div className="h-52 w-full mt-2 min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={evolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="index" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
+                          <Tooltip />
+                          <Legend wrapperStyle={{ fontSize: 10 }} />
+                          <Line type="monotone" dataKey="brix" name="Brix" stroke="#f97316" dot strokeWidth={2} />
+                          <Line type="monotone" dataKey="firmness" name={t('detail_tracking_firmness_short')} stroke="#2563eb" dot strokeWidth={2} />
+                          <Line type="monotone" dataKey="color" name={t('detail_tracking_color_short')} stroke="#16a34a" dot strokeWidth={2} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-xs py-2">{t('integral_report_no_objectives_series')}</p>
+                  )}
+                </section>
+
+                <section>
+                  <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('recipe_modal_phases_title')}</h3>
+                  <ul className="mt-1 space-y-1 text-xs">
+                    {phaseWindows.map((w) => (
+                      <li key={w.order} className="flex flex-wrap gap-x-2 border-b border-gray-50 pb-1">
+                        <span className="font-semibold">
+                          {w.order}. {w.label}
+                        </span>
+                        <span className="text-gray-500">
+                          {formatDateTime(new Date(w.startMs).toISOString())} — {formatDateTime(new Date(w.endMs).toISOString())}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              </>
+            )}
+          </div>
 
           {deviceId && startedAtIso && !isLoading && !error && (
-            <div className="space-y-2 text-sm">
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('integral_report_objectives_evolution')}</h3>
-              {objectivesChart ? (
-                <div className="h-52 w-full mt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={evolution} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="index" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
-                      <Tooltip />
-                      <Legend wrapperStyle={{ fontSize: 10 }} />
-                      <Line type="monotone" dataKey="brix" name="Brix" stroke="#f97316" dot strokeWidth={2} />
-                      <Line type="monotone" dataKey="firmness" name={t('detail_tracking_firmness_short')} stroke="#2563eb" dot strokeWidth={2} />
-                      <Line type="monotone" dataKey="color" name={t('detail_tracking_color_short')} stroke="#16a34a" dot strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-xs py-2">{t('integral_report_no_objectives_series')}</p>
-              )}
-            </section>
+            <>
+              {phaseWindows.flatMap((w) => {
+                const rendered = renderPhaseChapter(w);
+                return Array.isArray(rendered) ? rendered : [rendered];
+              })}
 
-            <section>
-              <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{t('recipe_modal_phases_title')}</h3>
-              <ul className="mt-1 space-y-1 text-xs">
-                {phaseWindows.map((w) => (
-                  <li key={w.order} className="flex flex-wrap gap-x-2 border-b border-gray-50 pb-1">
-                    <span className="font-semibold">
-                      {w.order}. {w.label}
-                    </span>
-                    <span className="text-gray-500">
-                      {formatDateTime(new Date(w.startMs).toISOString())} — {formatDateTime(new Date(w.endMs).toISOString())}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            {phaseWindows.map((w) => renderPhaseChapter(w))}
-
-            <section>
-              <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-1 mt-8">{t('integral_report_samples_title')}</h3>
-              <div className="space-y-4 mt-3">
+              <div className="mt-2 space-y-4">
+                <h3 className="text-sm font-bold text-gray-900 border-b border-gray-200 pb-1">{t('integral_report_samples_title')}</h3>
                 {samplingChrono.length === 0 ? (
-                  <p className="text-gray-500 text-xs">{t('integral_report_no_samples')}</p>
+                  <div
+                    data-integral-pdf-section="samples-empty"
+                    className="integral-pdf-section rounded-lg border border-gray-200 bg-white p-6 text-gray-500 text-sm"
+                  >
+                    {t('integral_report_no_samples')}
+                  </div>
                 ) : (
                   samplingChrono.map((ev) => (
-                    <div key={ev.id} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-                      <div className="flex justify-between gap-2">
-                        <span className="font-semibold">{ev.title}</span>
-                        <span className="text-xs text-gray-500">{formatDateTime(ev.timestamp)}</span>
+                    <div
+                      key={ev.id}
+                      data-integral-pdf-section={`sample-${String(ev.id).replace(/[^a-zA-Z0-9_-]/g, '_')}`}
+                      className="integral-pdf-section rounded-lg border border-gray-200 bg-white p-4 shadow-sm space-y-2"
+                    >
+                      <div className="border-b border-gray-100 pb-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-gray-500">{t('integral_report_pdf_sample_page_title')}</p>
+                        <div className="flex flex-wrap justify-between gap-2 mt-1">
+                          <span className="font-semibold text-gray-900">{ev.title}</span>
+                          <span className="text-xs text-gray-500">{formatDateTime(ev.timestamp)}</span>
+                        </div>
                       </div>
-                      {ev.description && <p className="text-xs text-gray-600 mt-1">{ev.description}</p>}
+                      {ev.description && <p className="text-xs text-gray-600">{ev.description}</p>}
                       {ev.data && ev.data.length > 0 && (
-                        <ul className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                           {ev.data.map((d, i) => (
-                            <li key={i} className="bg-blue-50/80 rounded px-2 py-1">
+                            <li key={i} className="bg-blue-50/80 rounded px-2 py-1.5">
                               <span className="text-blue-800">{d.name}</span>: <span className="font-mono">{d.value}</span> {d.unit}
                             </li>
                           ))}
                         </ul>
                       )}
                       {ev.images && ev.images.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 pt-2">
                           {ev.images.map((img, i) => {
                             const r = resolveEvidencePhoto(img);
                             return (
-                              <div key={i} className="w-24 h-24 rounded border border-gray-200 overflow-hidden shrink-0">
+                              <div key={i} className="w-28 h-28 rounded border border-gray-200 overflow-hidden shrink-0">
                                 {r.apiPath ? (
                                   <AuthedImage apiPath={r.apiPath} alt={r.alt} className="w-full h-full object-cover" />
                                 ) : r.directSrc ? (
@@ -1009,8 +1083,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
                   ))
                 )}
               </div>
-            </section>
-          </div>
+            </>
           )}
         </div>
 

@@ -178,6 +178,8 @@ export interface HistoryPoint {
   cargo_3_temp: number | null;
   cargo_4_temp: number | null;
   relative_humidity: number;
+  /** CFM bruto del ventilador (Madurador `flat.avl`); para filtrar gráficas si > 200. */
+  avl_raw?: number | null;
   avl_pct: number;
   line_voltage: number;
   line_frequency: number;
@@ -285,6 +287,7 @@ export async function fetchDeviceHistory(
         cargo_3_temp: t.cargo_3_temp != null ? Number(t.cargo_3_temp) : null,
         cargo_4_temp: t.cargo_4_temp != null ? Number(t.cargo_4_temp) : null,
         relative_humidity: Number(t.relative_humidity ?? 0),
+        avl_raw: Number.isFinite(avl) && avl > 0 ? avl : null,
         avl_pct: Math.min(100, Math.round((avl / 225) * 100)),
         line_voltage: Number(t.line_voltage ?? 0),
         line_frequency: Number(t.line_frequency ?? 0),
@@ -329,6 +332,7 @@ function getMockHistory(_id: string, start: string, end: string): Promise<Histor
       cargo_3_temp: null,
       cargo_4_temp: null,
       relative_humidity: 90 + Math.random() * 5 - 2.5,
+      avl_raw: 80 + Math.random() * 40,
       avl_pct: Math.round(Math.random() * 100),
       line_voltage: 440 + Math.random() * 20,
       line_frequency: 60,

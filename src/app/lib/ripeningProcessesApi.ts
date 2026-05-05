@@ -1,5 +1,10 @@
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth, getToken } from '@/app/lib/auth';
+import {
+  SIM_INKAPACKING_DEVICE_IDS,
+  buildSimulatedRipeningProcessRow,
+  shouldShowSimulatedInkapackingFleet,
+} from '@/app/lib/simulatedInkapackingFleet';
 
 function base() {
   return `${RIPENER_API_URL.replace(/\/$/, '')}/api/v1/ripening-processes`;
@@ -67,7 +72,20 @@ export async function fetchRipeningProcesses(opts?: {
   const q = opts?.includeArchived ? '?includeArchived=true' : '';
   const res = await fetch(`${base()}${q}`, { headers: authHeaders() });
   const json = await handle<{ data: RipeningProcessRow[] }>(res);
-  return json.data ?? [];
+  let rows = json.data ?? [];
+  if (shouldShowSimulatedInkapackingFleet()) {
+    const seen = new Set(
+      rows
+        .map((r) => String((r.payload as { deviceId?: string })?.deviceId ?? '').trim())
+        .filter(Boolean)
+    );
+    for (const id of SIM_INKAPACKING_DEVICE_IDS) {
+      if (!seen.has(id)) {
+        rows = [...rows, buildSimulatedRipeningProcessRow(id)];
+      }
+    }
+  }
+  return rows;
 }
 
 export async function fetchRipeningProcess(id: string): Promise<RipeningProcessRow> {

@@ -1,0 +1,88 @@
+{
+  "units": [
+    {
+      "client": { "name": "Inkapacking", "location": "Piura" },
+      "recipeName": "Mango Inkapacking",
+      "deviceHost": "INK-Piura-M1",
+      "ipSuffix": 11,
+      "homogenization": { "tempC": 20, "humidityPct": 90, "hours": 12 },
+      "ripening": {
+        "hours": 24,
+        "humidityPct": 95,
+        "co2Pct": 1,
+        "ethylenePpm": 100,
+        "tempC": 22
+      },
+      "batch": {
+        "product": "Mango",
+        "variety": "Edward",
+        "brix": 10.4,
+        "color": 2.4,
+        "brixMin": 9.1,
+        "brixMax": 12.3
+      },
+      "behavior": {
+        "entryCargoTempC": 12,
+        "co2ResponseHoursAfterRipeningStart": 8,
+        "reeferCycleMinutes": 24,
+        "temperatureSwingC": 0.52
+      }
+    },
+    {
+      "client": { "name": "GREENBOX", "location": "Tarma" },
+      "recipeName": "Mango GREENBOX",
+      "deviceHost": "GBX-Tarma-M1",
+      "ipSuffix": 21,
+      "homogenization": { "tempC": 18, "humidityPct": 95, "hours": 10 },
+      "ripening": {
+        "hours": 36,
+        "humidityPct": 90,
+        "co2Pct": 2,
+        "ethylenePpm": 120,
+        "tempC": 21
+      },
+      "batch": {
+        "product": "Mango",
+        "variety": "Haden",
+        "brix": 12.2,
+        "color": 3.2,
+        "brixMin": 11.3,
+        "brixMax": 12.7
+      },
+      "behavior": {
+        "entryCargoTempC": 11.5,
+        "co2ResponseHoursAfterRipeningStart": 7,
+        "reeferCycleMinutes": 27,
+        "temperatureSwingC": 0.48
+      }
+    },
+    {
+      "client": { "name": "Aseptic IQF", "location": "Chincha" },
+      "recipeName": "Mango ASEPTIC",
+      "deviceHost": "ASE-Chincha-M1",
+      "ipSuffix": 31,
+      "homogenization": { "tempC": 19, "humidityPct": 92, "hours": 8 },
+      "ripening": {
+        "hours": 24,
+        "humidityPct": 90,
+        "co2Pct": 2.5,
+        "ethylenePpm": 130,
+        "tempC": 20
+      },
+      "batch": {
+        "product": "Mango",
+        "variety": "Kent",
+        "brix": 11.8,
+        "color": 2.9,
+        "brixMin": 10.8,
+        "brixMax": 12.2
+      },
+      "behavior": {
+        "entryCargoTempC": 12.2,
+        "co2ResponseHoursAfterRipeningStart": 6,
+        "reeferCycleMinutes": 30,
+        "temperatureSwingC": 0.55
+      }
+    }
+  ]
+}
