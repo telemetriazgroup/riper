@@ -1,4 +1,5 @@
 import type { HistoryPoint } from '@/app/lib/api';
+import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import { rawRowTimestampMs } from '@/app/lib/deviceMonitoringMetrics';
 
 function toNum(v: unknown): number | null {
@@ -169,7 +170,12 @@ export function deltaFirstLast(
 ): { first: number | null; last: number | null; delta: number | null } {
   const pick =
     key === 'ethylene'
-      ? (p: HistoryPoint) => (p.ethylene != null ? Number(p.ethylene) : null)
+      ? (p: HistoryPoint) => {
+          if (p.ethylene == null) return null;
+          const n = Number(p.ethylene);
+          if (!Number.isFinite(n) || n > CHART_ETHYLENE_MAX_PPM) return null;
+          return n;
+        }
       : (p: HistoryPoint) => (p.co2_reading != null ? Number(p.co2_reading) : null);
   const vals = points.map(pick).filter((v): v is number => v != null && Number.isFinite(v));
   if (vals.length < 2) return { first: vals[0] ?? null, last: vals[vals.length - 1] ?? null, delta: null };

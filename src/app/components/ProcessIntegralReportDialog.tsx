@@ -51,6 +51,7 @@ import {
   yDomainPadded,
   type PhaseTimeWindow,
 } from '@/app/lib/trackingIntegralReport';
+import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import {
   cumulativeVentilationFt3FromRawRows,
   energyKwhDeltaFromPoints,
@@ -544,7 +545,7 @@ function GasDualChart({
   co2Domain = [0, 5],
   ethDomain = [0, 160],
 }: {
-  rows: { tick: string; co2: number; eth: number }[];
+  rows: { tick: string; co2: number; eth: number | null }[];
   t: (k: string) => string;
   co2Domain?: [number, number];
   ethDomain?: [number, number];
@@ -579,7 +580,7 @@ function GasDualChart({
               fontSize: 9,
             }}
           />
-          <Tooltip formatter={(v: number | string) => dec1(Number(v))} />
+          <Tooltip formatter={(v: number | string | null) => (v == null ? '—' : dec1(Number(v)))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line
             yAxisId="co2"
@@ -599,6 +600,7 @@ function GasDualChart({
             stroke="#ea580c"
             strokeWidth={2}
             dot={false}
+            connectNulls
             isAnimationActive={false}
           />
         </ComposedChart>
@@ -848,11 +850,16 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
       const m3v = ft3ToM3(ft3);
       const co2W = cumulativeCo2WeightedVentilation(sliceRaw);
       const kwh = energyKwhDeltaFromPoints(slicePts);
-      const gasRows = slicePts.map((p) => ({
-        tick: chartTick(p.timestamp),
-        co2: p.co2_reading ?? 0,
-        eth: p.ethylene ?? 0,
-      }));
+      const gasRows = slicePts.map((p) => {
+        const rawEth = p.ethylene != null ? Number(p.ethylene) : null;
+        const eth =
+          rawEth != null && Number.isFinite(rawEth) && rawEth <= CHART_ETHYLENE_MAX_PPM ? rawEth : null;
+        return {
+          tick: chartTick(p.timestamp),
+          co2: p.co2_reading ?? 0,
+          eth,
+        };
+      });
 
       return [
         <div

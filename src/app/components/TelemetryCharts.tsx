@@ -95,6 +95,18 @@ function historicalYAxisIdForMetric(key: string): 'left' | 'pct' | 'gas' | 'aux'
   return 'aux';
 }
 
+/** No trazar ni leyenda de Set CO₂ si en el rango solo hay ceros / sin dato (API suele mandar 0 como ausencia). */
+function historicalCo2SetpointHasPlottedValues(rows: Record<string, unknown>[]): boolean {
+  return rows.some((row) => {
+    const v = row.set_point_co2;
+    return v != null && typeof v === 'number' && !Number.isNaN(v);
+  });
+}
+
+function filterHistoricalChartLineKeys(keys: string[], rows: Record<string, unknown>[]): string[] {
+  return keys.filter((key) => key !== 'set_point_co2' || historicalCo2SetpointHasPlottedValues(rows));
+}
+
 function sortHistoricalSelectedMetrics(keys: string[]): string[] {
   const rank = (k: string) => {
     const a = (HISTORICAL_Y1_TEMP_KEYS as readonly string[]).indexOf(k);
@@ -436,6 +448,11 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     [selectedMetrics]
   );
 
+  const historicalChartLineKeys = useMemo(
+    () => filterHistoricalChartLineKeys(sortedSelectedMetrics, chartData),
+    [sortedSelectedMetrics, chartData]
+  );
+
   const sidebarMetricKeys = useMemo(() => {
     const allowed = new Set(CHART_METRIC_KEYS);
     return HISTORICAL_SIDEBAR_METRIC_ORDER.filter((k) => allowed.has(k));
@@ -535,7 +552,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
 
   /** Y3 CO₂/O₂ (%): base 0–5, hasta ~25 salvo que los datos superen 25. */
   const gasDomain = useMemo((): [number, number] => {
-    const keys = selectedMetrics.filter((k) => (HISTORICAL_Y3_GAS_KEYS as readonly string[]).includes(k));
+    const keys = selectedMetrics
+      .filter((k) => (HISTORICAL_Y3_GAS_KEYS as readonly string[]).includes(k))
+      .filter((k) => k !== 'set_point_co2' || historicalCo2SetpointHasPlottedValues(chartData));
     if (!keys.length || !chartData.length) return [0, 5];
     let maxVal = 0;
     chartData.forEach((row) => {
@@ -1158,7 +1177,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                             );
                           });
                       })()}
-                      {sortedSelectedMetrics.map((key, lineIndex) => {
+                      {historicalChartLineKeys.map((key, lineIndex) => {
                         const color = getLineColor(key);
                         const showLabels = !!showLabelsByMetric[key];
                         const visibleLen = brushEnd - brushStart + 1;

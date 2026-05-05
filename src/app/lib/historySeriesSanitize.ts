@@ -5,6 +5,9 @@
 
 export const CHART_AVL_MAX_CFM = 200;
 
+/** campo_1 (etileno ppm): lecturas mayores no se grafican (telemetría errónea / fuera de rango operativo). */
+export const CHART_ETHYLENE_MAX_PPM = 200;
+
 export function chartNullIfZero(v: unknown): number | null {
   if (v == null || v === '') return null;
   const n = Number(v);
@@ -17,13 +20,17 @@ function median3(a: number, b: number, c: number): number {
 }
 
 /**
- * Etileno (ppm): picos que se alejan de vecinos inmediatos y vuelven al rango → reemplazo por tendencia local.
+ * Etileno (ppm) — campo_1 en telemetría: lecturas > {@link CHART_ETHYLENE_MAX_PPM} se omiten;
+ * picos que se alejan de vecinos inmediatos y vuelven al rango → reemplazo por tendencia local.
  * Ej. 100,102,202,102 → 100,102,102,102; pasa mediana 3 cuando el centro desentona.
  */
 export function sanitizeEthylenePpmSeries(values: (number | null | undefined)[]): (number | null)[] {
-  const x: (number | null)[] = values.map((v) =>
-    v == null || v === '' || !Number.isFinite(Number(v)) ? null : Number(v)
-  );
+  const x: (number | null)[] = values.map((v) => {
+    if (v == null || v === '' || !Number.isFinite(Number(v))) return null;
+    const n = Number(v);
+    if (n > CHART_ETHYLENE_MAX_PPM) return null;
+    return n;
+  });
   const n = x.length;
   if (n === 0) return x;
 
@@ -156,6 +163,7 @@ export function postProcessHistoricalChartRows(rows: Record<string, unknown>[]):
   if (!rows.length) return;
   for (const row of rows) {
     row.relative_humidity = chartNullIfZero(row.relative_humidity);
+    row.set_point_co2 = chartNullIfZero(row.set_point_co2);
     for (const k of TEMP_KEYS_ZERO_NULL) {
       row[k] = chartNullIfZero(row[k]);
     }
