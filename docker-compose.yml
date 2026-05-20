@@ -30,6 +30,9 @@ services:
       SUPERUSER_PASSWORD: ${SUPERUSER_PASSWORD:-changeme123}
       UPLOAD_DIR: uploads
       MADURADOR_API_BASE: ${MADURADOR_API_BASE:-http://161.132.53.51:9051}
+      SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR: ${SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR:-2001}
+      SUPERUSER_MADURADOR_EMPRESA_IDENTIFICADOR: ${SUPERUSER_MADURADOR_EMPRESA_IDENTIFICADOR:-3001}
+      SUPERUSER_DEVICE_IMEI: ${SUPERUSER_DEVICE_IMEI:-PRUEBA_CA000001}
       # Upstream listar + buscar_datos (madurador-demo): …/9051/Madurador/…?identificador= (Vite: VITE_MADURADOR_DEMO_PROXY_TARGET)
       MADURADOR_DEMO_API_BASE: ${MADURADOR_DEMO_API_BASE:-http://161.132.53.51:9051}
     extra_hosts:
@@ -62,7 +65,7 @@ services:
   # Solo Vite en contenedor: docker compose --profile dev up app-dev
   # (desarrollo habitual: `docker compose up -d db api` + `pnpm dev` en el host)
   app-dev:
-    image: node:20-alpine
+    image: node:22-alpine
     working_dir: /app
     command: sh -c "corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm run dev"
     ports:

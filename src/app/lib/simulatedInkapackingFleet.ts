@@ -1,6 +1,5 @@
 import type { HistoryPoint } from '@/app/lib/api';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
-import { getStoredUser } from '@/app/lib/auth';
 import seedsJson from '@/app/data/fleetSimulationSeeds.json';
 
 type FleetUnitSeed = (typeof seedsJson.units)[number];
@@ -13,8 +12,9 @@ export const SIM_FLEET_AVL_MAX_CFM = 220;
 
 export type SimInkapackingDeviceId = (typeof SIM_INKAPACKING_DEVICE_IDS)[number];
 
+/** Desactivado: el panel usa solo datos reales upstream (lista Madurador). Las rutas legacy sim pueden reactivarse con env futuro si hiciera falta. */
 export function shouldShowSimulatedInkapackingFleet(): boolean {
-  return getStoredUser()?.role === 'superadmin';
+  return false;
 }
 
 export function isSimulatedInkapackingDevice(id: string): boolean {

@@ -19,6 +19,7 @@ Run `pnpm install` or `npm install` to install the dependencies.
 El acceso usa la **API Ripener** (`/api/v1/auth/login`) contra PostgreSQL. Tras el primer arranque se crea un **superusuario** si no existe:
 
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
+- **Superadmin Madurador**: la API concatena dos listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`) y equipo concreto empresa **3001** con IMEI `PRUEBA_CA000001` (env `SUPERUSER_DEVICE_IMEI`, `*` para no filtrar IMEI).
 wsl
 - Definir `JWT_SECRET` largo y aleatorio en producción.
 

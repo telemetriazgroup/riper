@@ -15,6 +15,14 @@ export function chartNullIfZero(v: unknown): number | null {
   return n;
 }
 
+/** Lecturas CO₂/O₂ en gráficas: 0 tratado como “sin dato” (sin punto). */
+function nullReadingIfZero(rows: Record<string, unknown>[], key: string): void {
+  for (const row of rows) {
+    const v = row[key];
+    if (typeof v === 'number' && !Number.isNaN(v) && v === 0) row[key] = null;
+  }
+}
+
 function median3(a: number, b: number, c: number): number {
   return [a, b, c].sort((x, y) => x - y)[1];
 }
@@ -159,7 +167,10 @@ export function sanitizeAvlPctForChart(avl_pct: number, avl_raw?: number | null)
 const TEMP_KEYS_ZERO_NULL = ['set_point', 'return_air', 'temp_supply_1'] as const;
 
 /** Post-proceso filas del modal histórico (mismas claves que CHART_METRIC_KEYS + avl_raw). */
-export function postProcessHistoricalChartRows(rows: Record<string, unknown>[]): void {
+export function postProcessHistoricalChartRows(
+  rows: Record<string, unknown>[],
+  opts?: { nullZeroCo2O2Readings?: boolean }
+): void {
   if (!rows.length) return;
   for (const row of rows) {
     row.relative_humidity = chartNullIfZero(row.relative_humidity);
@@ -178,8 +189,12 @@ export function postProcessHistoricalChartRows(rows: Record<string, unknown>[]):
     r.ethylene = eth[i];
     r.co2_reading = co2[i];
   });
-}
 
+  if (opts?.nullZeroCo2O2Readings) {
+    nullReadingIfZero(rows, 'co2_reading');
+    nullReadingIfZero(rows, 'o2_reading');
+  }
+}
 export type Last12hChartPoint = {
   rawDate: Date;
   time: string;
@@ -220,12 +235,16 @@ export function buildLast12hChartData(
   const ethylene = sanitizeEthylenePpmSeries(ethRaw);
   const co2 = sanitizeCo2PercentSeries(co2Raw);
 
-  return history.map((h, i) => ({
-    rawDate: new Date(h.timestamp),
-    time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    temp: rawTempC[i] != null ? Number(rawTempC[i]!.toFixed(2)) : null,
-    humidity: humidity[i] != null ? Number(humidity[i]!.toFixed(2)) : null,
-    ethylene: ethylene[i] != null ? Number(ethylene[i]!.toFixed(2)) : null,
-    co2: co2[i] != null ? Number(co2[i]!.toFixed(2)) : null,
-  }));
+  return history.map((h, i) => {
+    const c = co2[i];
+    const coVal = c != null && c === 0 ? null : c;
+    return {
+      rawDate: new Date(h.timestamp),
+      time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      temp: rawTempC[i] != null ? Number(rawTempC[i]!.toFixed(2)) : null,
+      humidity: humidity[i] != null ? Number(humidity[i]!.toFixed(2)) : null,
+      ethylene: ethylene[i] != null ? Number(ethylene[i]!.toFixed(2)) : null,
+      co2: coVal != null ? Number(coVal.toFixed(2)) : null,
+    };
+  });
 }

@@ -95,11 +95,16 @@ function historicalYAxisIdForMetric(key: string): 'left' | 'pct' | 'gas' | 'aux'
   return 'aux';
 }
 
-/** No trazar ni leyenda de Set CO₂ si en el rango solo hay ceros / sin dato (API suele mandar 0 como ausencia). */
+/** No dibujar set CO₂ en leyenda si solo hay ausencia o ceros */
 function historicalCo2SetpointHasPlottedValues(rows: Record<string, unknown>[]): boolean {
   return rows.some((row) => {
     const v = row.set_point_co2;
-    return v != null && typeof v === 'number' && !Number.isNaN(v);
+    return (
+      v != null &&
+      typeof v === 'number' &&
+      !Number.isNaN(v) &&
+      v !== 0
+    );
   });
 }
 
@@ -488,7 +493,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         row.avl_raw = h.avl_raw ?? null;
         return row;
       });
-      postProcessHistoricalChartRows(data);
+      postProcessHistoricalChartRows(data, { nullZeroCo2O2Readings: true });
       setChartData(data);
       setZoomRange({ startIndex: 0, endIndex: data.length - 1 });
     } catch (e) {
@@ -1353,6 +1358,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
   const formatCellForExport = (row: any, key: string): string => {
     const v = row[key];
     if (v == null) return '—';
+    if ((key === 'co2_reading' || key === 'o2_reading') && Number(v) === 0) return '-';
     if (key === 'ethylene' && Number(v) === 0) return 'NA';
     if (typeof v === 'number') return Number(v).toFixed(2);
     return String(v);
@@ -1515,7 +1521,15 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                         <td className="px-3 py-2 text-gray-600 whitespace-nowrap">{row.timeStr}</td>
                         {selectedColumns.map((key) => (
                           <td key={key} className="px-3 py-2 text-right font-mono whitespace-nowrap">
-                            {row[key] == null ? '—' : key === 'ethylene' && Number(row[key]) === 0 ? 'NA' : typeof row[key] === 'number' ? Number(row[key]).toFixed(2) : String(row[key])}
+                            {row[key] == null
+                              ? '—'
+                              : (key === 'co2_reading' || key === 'o2_reading') && Number(row[key]) === 0
+                                ? '-'
+                                : key === 'ethylene' && Number(row[key]) === 0
+                                  ? 'NA'
+                                  : typeof row[key] === 'number'
+                                    ? Number(row[key]).toFixed(2)
+                                    : String(row[key])}
                           </td>
                         ))}
                       </tr>

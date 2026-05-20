@@ -854,9 +854,10 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
         const rawEth = p.ethylene != null ? Number(p.ethylene) : null;
         const eth =
           rawEth != null && Number.isFinite(rawEth) && rawEth <= CHART_ETHYLENE_MAX_PPM ? rawEth : null;
+        const cRaw = p.co2_reading != null ? Number(p.co2_reading) : null;
         return {
           tick: chartTick(p.timestamp),
-          co2: p.co2_reading ?? 0,
+          co2: cRaw != null && Number.isFinite(cRaw) && cRaw !== 0 ? cRaw : null,
           eth,
         };
       });

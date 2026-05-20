@@ -146,7 +146,8 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
     const tempPulp = pts.map((p: HistoryPoint) => chartNullIfZero(p.return_air));
     const tempAir = pts.map((p: HistoryPoint) => chartNullIfZero(p.temp_supply_1));
     const eth = sanitizeEthylenePpmSeries(pts.map((p: HistoryPoint) => p.ethylene));
-    const co2 = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
+    const co2San = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
+    const co2 = co2San.map((v) => (v === 0 ? null : v));
     return pts.map((p: HistoryPoint, i: number) => ({
       tick: chartTick(p.timestamp),
       ts: p.timestamp,
