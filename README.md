@@ -20,7 +20,7 @@ El acceso usa la **API Ripener** (`/api/v1/auth/login`) contra PostgreSQL. Tras 
 
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
 - **Superadmin Madurador**: la API concatena dos listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`) y equipo concreto empresa **3001** con IMEI `PRUEBA_CA000001` (env `SUPERUSER_DEVICE_IMEI`, `*` para no filtrar IMEI).
-wsl
+- **ThermoKing (demo atmósfera controlada)** sembrado en DB: usuario `thermoking@riper.local`, contraseña `thermoking2026!` (o `THERMOKING_PASSWORD`), `identificador` empresa `3001` y la API sirve solo el IMEI `THERMOKING_DEVICE_IMEI` (por defecto `PRUEBA_CA000001`).
 - Definir `JWT_SECRET` largo y aleatorio en producción.
 
 Cambiar contraseña y datos desde **Usuarios** (admin) o **Mi perfil** (cada usuario).

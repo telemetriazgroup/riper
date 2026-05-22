@@ -9,7 +9,7 @@ import type {
 import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
   SIM_FLEET_AVL_MAX_CFM,
@@ -283,6 +283,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
 
   const ethylene = inRange(toNum(flat.campo_1), 0, 500);
   const co2 = inRange(toNum(flat.co2_reading), 0, 100);
+  const o2 = inRange(toNum(flat.o2_reading), 0, 100);
 
   const evap = inRange(toNum(flat.evaporation_coil), -60, 80) ?? 0;
   const cond = inRange(toNum(flat.condensation_coil), -20, 90) ?? 0;
@@ -302,6 +303,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     relative_humidity: humidityVal,
     ethylene,
     co2_reading: co2,
+    o2_reading: o2,
     set_point,
     stateProcess,
     power_state,
@@ -426,6 +428,10 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   if (isUltraorganicsSession()) {
     return filterDevicesToUltraorganicsPanel(withSim);
   }
+  if (isThermoKingSession()) {
+    const pin = getThermoKingPinnedImei();
+    return withSim.filter((d) => String(d.id ?? '').trim() === pin);
+  }
   if (isMaduradorSuperadminFullList()) {
     return withSim;
   }
@@ -495,8 +501,8 @@ export function buildMaduradorHistoryFromDevice(
       avl_pct,
       line_voltage: lineV,
       line_frequency: 60,
-      co2_reading: tel.co2_reading,
-      o2_reading: null,
+        co2_reading: tel.co2_reading,
+        o2_reading: tel.o2_reading ?? null,
       set_point: tel.set_point,
       capacity_load: cap,
       power_state: tel.power_state,
@@ -724,7 +730,9 @@ export async function fetchMaduradorRangoHistoryForImei(
 
 /** Úsese historial real por rango si aplica (flota demo, identificador Madurador, ULTRAORGANICS). */
 export function shouldUseMaduradorRangoHistory(): boolean {
-  return isFleetDemoSession() || hasMaduradorIdentificador() || isUltraorganicsSession();
+  return (
+    isFleetDemoSession() || hasMaduradorIdentificador() || isUltraorganicsSession() || isThermoKingSession()
+  );
 }
 
 export function formatMaduradorScalar(value: string | number | null | undefined): string {

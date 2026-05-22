@@ -18,7 +18,7 @@ import { Loader2 } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/app/contexts/SettingsContext';
 import { getToken, fetchMe, clearAuth, type AuthUser } from '@/app/lib/auth';
 import { GOURMET_USER_EMAIL } from '@/app/lib/gourmet';
-import { FLEET_DEMO_EMAIL, isUltraorganicsFleetEmail } from '@/app/lib/fleetDemo';
+import { FLEET_DEMO_EMAIL, isUltraorganicsFleetEmail, isThermoKingFleetEmail } from '@/app/lib/fleetDemo';
 
 export default function App() {
   return (
@@ -62,7 +62,8 @@ function AppContent() {
   const isRestrictedDemoUser =
     session?.email?.toLowerCase() === GOURMET_USER_EMAIL.toLowerCase() ||
     session?.email?.toLowerCase() === FLEET_DEMO_EMAIL.toLowerCase() ||
-    isUltraorganicsFleetEmail(session?.email);
+    isUltraorganicsFleetEmail(session?.email) ||
+    isThermoKingFleetEmail(session?.email);
 
   useEffect(() => {
     if (!isRestrictedDemoUser) return;

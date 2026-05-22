@@ -23,8 +23,10 @@ import { format, subHours, subDays } from 'date-fns';
 import { formatChartPointLabels } from '@/app/lib/displayTimeZone';
 import {
   buildLast12hChartData,
+  buildThermoKingLast12hChartData,
   postProcessHistoricalChartRows,
 } from '@/app/lib/historySeriesSanitize';
+import { isThermoKingSession } from '@/app/lib/fleetDemo';
 
 /** Etiquetas en español para cada campo de la gráfica histórica */
 export const CHART_METRIC_LABELS: Record<string, string> = {
@@ -77,6 +79,7 @@ const HISTORICAL_PRESET_STANDARD = [
 ] as const;
 /** CO₂, etileno y ventilación (avl_pct). */
 const HISTORICAL_PRESET_GASES = ['co2_reading', 'ethylene', 'avl_pct'] as const;
+const HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE = ['o2_reading', 'co2_reading', 'ethylene'] as const;
 
 const HISTORICAL_SIDEBAR_METRIC_ORDER: string[] = [
   ...HISTORICAL_Y1_TEMP_KEYS,
@@ -85,7 +88,7 @@ const HISTORICAL_SIDEBAR_METRIC_ORDER: string[] = [
   ...HISTORICAL_Y4_AUX_KEYS,
 ];
 
-type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases';
+type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases' | 'controlled_atmosphere';
 
 function historicalYAxisIdForMetric(key: string): 'left' | 'pct' | 'gas' | 'aux' {
   if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) return 'left';
@@ -243,8 +246,13 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
 
-  const data = useMemo(
+  const isTkCharts = isThermoKingSession();
+  const dataClassic = useMemo(
     () => buildLast12hChartData(history ?? [], convertTemp),
+    [history, convertTemp]
+  );
+  const dataThermoKing = useMemo(
+    () => buildThermoKingLast12hChartData(history ?? [], convertTemp),
     [history, convertTemp]
   );
 
@@ -280,104 +288,276 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
           </div>
         ) : (
         <div className="w-full space-y-6">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">{t('integral_report_ripening_env')}</p>
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={data}
-                  margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis
-                    yAxisId="left"
-                    domain={[0, 30]}
-                    stroke="#ef4444"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(val) => Number(val).toFixed(1)}
-                    width={44}
-                    label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[30, 100]}
-                    stroke="#3b82f6"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(val) => Number(val).toFixed(0)}
-                    width={40}
-                    label={{ value: `${t('humidity')} (%)`, angle: 90, position: 'insideRight', fill: '#3b82f6', style: { fontSize: 11 } }}
-                  />
-                  <Tooltip
-                    formatter={(value: number | null, name) => [
-                      value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
-                      name,
-                    ]}
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    itemStyle={{ fontSize: '12px' }}
-                    labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                  <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_chart_ethylene_co2')}</p>
-            <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={data}
-                  margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                  <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis
-                    yAxisId="left"
-                    domain={[0, 250]}
-                    stroke="#10b981"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(val) => Number(val).toFixed(0)}
-                    width={44}
-                    label={{ value: `${t('ethylene')} (ppm)`, angle: -90, position: 'insideLeft', fill: '#10b981', style: { fontSize: 11 } }}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 6]}
-                    stroke="#6b7280"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(val) => Number(val).toFixed(1)}
-                    width={40}
-                    label={{ value: `${t('co2')} (%)`, angle: 90, position: 'insideRight', fill: '#6b7280', style: { fontSize: 11 } }}
-                  />
-                  <Tooltip
-                    formatter={(value: number | null, name) => [
-                      value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
-                      name,
-                    ]}
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    itemStyle={{ fontSize: '12px' }}
-                    labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
-                  />
-                  <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                  <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          {isTkCharts ? (
+            <>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_dual_temp_supply_return')}</p>
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={dataThermoKing}
+                      margin={{ top: 8, right: 24, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis
+                        yAxisId="left"
+                        domain={['auto', 'auto']}
+                        stroke="#6b7280"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        width={44}
+                        label={{
+                          value: `${t('temperature')} (°${tempUnit})`,
+                          angle: -90,
+                          position: 'insideLeft',
+                          fill: '#6b7280',
+                          style: { fontSize: 11 },
+                        }}
+                      />
+                      <Tooltip
+                        formatter={(value: number | null, name) => [
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          name,
+                        ]}
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        }}
+                        itemStyle={{ fontSize: '12px' }}
+                        labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="temp_return"
+                        name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`}
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        allowDataOverflow
+                        connectNulls
+                      />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="temp_supply"
+                        name={`${CHART_METRIC_LABELS.temp_supply_1} (°${tempUnit})`}
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        allowDataOverflow
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_gases_et_co_o2')}</p>
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={dataThermoKing}
+                      margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis
+                        yAxisId="left"
+                        domain={[0, 250]}
+                        stroke="#10b981"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(0)}
+                        width={44}
+                        label={{ value: `${t('ethylene')} (ppm)`, angle: -90, position: 'insideLeft', fill: '#10b981', style: { fontSize: 11 } }}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={[0, 25]}
+                        stroke="#0ea5e9"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        width={44}
+                        label={{
+                          value: `${t('co2')} / ${CHART_METRIC_LABELS.o2_reading} (%)`,
+                          angle: 90,
+                          position: 'insideRight',
+                          fill: '#0ea5e9',
+                          style: { fontSize: 11 },
+                        }}
+                      />
+                      <Tooltip
+                        formatter={(value: number | null, name) => [
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          name,
+                        ]}
+                        contentStyle={{
+                          backgroundColor: '#fff',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                        }}
+                        itemStyle={{ fontSize: '12px' }}
+                        labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="ethylene"
+                        name={`${t('ethylene')} (ppm)`}
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        allowDataOverflow
+                        connectNulls
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="co2"
+                        name={`${t('co2')} (%)`}
+                        stroke="#78716c"
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        allowDataOverflow
+                        connectNulls
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="o2"
+                        name={`${CHART_METRIC_LABELS.o2_reading} (%)`}
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        allowDataOverflow
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('integral_report_ripening_env')}</p>
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={dataClassic}
+                      margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis
+                        yAxisId="left"
+                        domain={[0, 30]}
+                        stroke="#ef4444"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        width={44}
+                        label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={[30, 100]}
+                        stroke="#3b82f6"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(0)}
+                        width={40}
+                        label={{ value: `${t('humidity')} (%)`, angle: 90, position: 'insideRight', fill: '#3b82f6', style: { fontSize: 11 } }}
+                      />
+                      <Tooltip
+                        formatter={(value: number | null, name) => [
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          name,
+                        ]}
+                        contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        itemStyle={{ fontSize: '12px' }}
+                        labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                      <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_chart_ethylene_co2')}</p>
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={dataClassic}
+                      margin={{ top: 8, right: 48, left: 8, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis
+                        yAxisId="left"
+                        domain={[0, 250]}
+                        stroke="#10b981"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(0)}
+                        width={44}
+                        label={{ value: `${t('ethylene')} (ppm)`, angle: -90, position: 'insideLeft', fill: '#10b981', style: { fontSize: 11 } }}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={[0, 6]}
+                        stroke="#6b7280"
+                        fontSize={12}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        width={40}
+                        label={{ value: `${t('co2')} (%)`, angle: 90, position: 'insideRight', fill: '#6b7280', style: { fontSize: 11 } }}
+                      />
+                      <Tooltip
+                        formatter={(value: number | null, name) => [
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          name,
+                        ]}
+                        contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        itemStyle={{ fontSize: '12px' }}
+                        labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '12px' }} />
+                      <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         )}
       </CardContent>
@@ -407,8 +587,12 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     end: format(new Date(), "yyyy-MM-dd'T'HH:mm") 
   });
   
-  const [historicalPreset, setHistoricalPreset] = useState<HistoricalChartPreset | null>('standard');
-  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(() => [...HISTORICAL_PRESET_STANDARD]);
+  const [historicalPreset, setHistoricalPreset] = useState<HistoricalChartPreset | null>(() =>
+    isThermoKingSession() ? 'controlled_atmosphere' : 'standard'
+  );
+  const [selectedMetrics, setSelectedMetrics] = useState<string[]>(() =>
+    isThermoKingSession() ? [...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE] : [...HISTORICAL_PRESET_STANDARD]
+  );
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [metricColors, setMetricColors] = useState<Record<string, string>>({});
@@ -594,6 +778,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     if (preset === 'cooling') setSelectedMetrics([...HISTORICAL_PRESET_COOLING]);
     else if (preset === 'ripening') setSelectedMetrics([...HISTORICAL_PRESET_RIPENING]);
     else if (preset === 'gases') setSelectedMetrics([...HISTORICAL_PRESET_GASES]);
+    else if (preset === 'controlled_atmosphere')
+      setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
     else setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
   }, []);
 
@@ -615,12 +801,17 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
       });
       setChartData([]);
       setZoomRange(null);
-      setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
-      setHistoricalPreset('standard');
+      if (isThermoKingSession()) {
+        setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
+        setHistoricalPreset('controlled_atmosphere');
+      } else {
+        setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+        setHistoricalPreset('standard');
+      }
       setShowLabelsByMetric({});
       setHistoricalTempUnit(tempUnit === 'F' ? 'F' : 'C');
     }
-  }, [isOpen]);
+  }, [isOpen, tempUnit]);
 
   useEffect(() => {
     if (chartData.length > 0 && zoomRange === null)
@@ -938,6 +1129,15 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                   onClick={() => applyHistoricalPreset('gases')}
                 >
                   {t('historical_preset_gases')}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={historicalPreset === 'controlled_atmosphere' ? 'default' : 'outline'}
+                  className="w-full justify-center text-xs"
+                  onClick={() => applyHistoricalPreset('controlled_atmosphere')}
+                >
+                  {t('historical_preset_controlled_atmosphere')}
                 </Button>
                 <Button
                   type="button"
@@ -1262,8 +1462,17 @@ const TABLE_PRESETS = [
   { id: 'basic', columns: ['temp_supply_1', 'return_air', 'relative_humidity', 'ethylene', 'co2_reading'] },
   { id: 'temperatures', columns: ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'set_point'] },
   { id: 'gases', columns: ['relative_humidity', 'ethylene', 'co2_reading', 'o2_reading', 'avl_pct'] },
+  { id: 'controlled_atmosphere', columns: ['o2_reading', 'co2_reading', 'ethylene'] },
   { id: 'full', columns: CHART_METRIC_KEYS },
 ];
+
+function tableModalDefaultPresetColumns(): string[] {
+  if (isThermoKingSession()) {
+    const preset = TABLE_PRESETS.find((p) => p.id === 'controlled_atmosphere');
+    if (preset) return [...preset.columns];
+  }
+  return [...TABLE_PRESETS[0].columns];
+}
 
 const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean; onClose: () => void; deviceId?: string }) => {
   const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp } = useSettings();
@@ -1271,7 +1480,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
     end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
   });
-  const [selectedColumns, setSelectedColumns] = useState<string[]>(TABLE_PRESETS[0].columns);
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(() => tableModalDefaultPresetColumns());
   const [tableData, setTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -1335,6 +1544,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
         end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
       });
       setTableData([]);
+      setSelectedColumns(tableModalDefaultPresetColumns());
     }
   }, [isOpen]);
 

@@ -92,6 +92,8 @@ export interface TelemetryData {
   relative_humidity: number;
   ethylene: number | null;
   co2_reading: number | null;
+  /** Oxígeno (%). null si no llega desde Madurador. */
+  o2_reading?: number | null;
   set_point: number;
   stateProcess: 'None' | 'Homogenization' | 'Ripening' | 'Ventilation' | 'Cooling' | 'Integral';
   power_state: 0 | 1;

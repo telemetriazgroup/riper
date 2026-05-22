@@ -248,3 +248,63 @@ export function buildLast12hChartData(
     };
   });
 }
+
+/** ThermoKing — últimas 12 h: retorno y suministro por separado; etileno, CO₂ y O₂ (%). */
+export type ThermoKingLast12hChartPoint = {
+  rawDate: Date;
+  time: string;
+  temp_return: number | null;
+  temp_supply: number | null;
+  ethylene: number | null;
+  co2: number | null;
+  o2: number | null;
+};
+
+export function buildThermoKingLast12hChartData(
+  history: {
+    timestamp: string;
+    return_air?: number;
+    temp_supply_1?: number;
+    ethylene?: number | null;
+    co2_reading?: number | null;
+    o2_reading?: number | null;
+  }[],
+  convertTemp: (c: number) => number
+): ThermoKingLast12hChartPoint[] {
+  const rawReturn = history.map((h) => {
+    const ret = h.return_air;
+    if (ret != null && Number.isFinite(Number(ret)) && Number(ret) !== 0)
+      return Number(convertTemp(Number(ret)).toFixed(2));
+    return null as number | null;
+  });
+  const rawSupply = history.map((h) => {
+    const sup = h.temp_supply_1;
+    if (sup != null && Number.isFinite(Number(sup)) && Number(sup) !== 0)
+      return Number(convertTemp(Number(sup)).toFixed(2));
+    return null as number | null;
+  });
+
+  const ethRaw = history.map((h) => (h.ethylene == null ? null : Number(h.ethylene)));
+  const co2Raw = history.map((h) => (h.co2_reading == null ? null : Number(h.co2_reading)));
+  const o2Raw = history.map((h) => (h.o2_reading == null ? null : Number(h.o2_reading)));
+
+  const ethylene = sanitizeEthylenePpmSeries(ethRaw);
+  const co2San = sanitizeCo2PercentSeries(co2Raw);
+  const o2San = sanitizeCo2PercentSeries(o2Raw);
+
+  return history.map((h, i) => {
+    const c = co2San[i];
+    const coVal = c != null && c === 0 ? null : c;
+    const oo = o2San[i];
+    const oVal = oo != null && oo === 0 ? null : oo;
+    return {
+      rawDate: new Date(h.timestamp),
+      time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      temp_return: rawReturn[i],
+      temp_supply: rawSupply[i],
+      ethylene: ethylene[i] != null ? Number(ethylene[i]!.toFixed(2)) : null,
+      co2: coVal != null ? Number(coVal.toFixed(2)) : null,
+      o2: oVal != null ? Number(oVal.toFixed(2)) : null,
+    };
+  });
+}

@@ -13,6 +13,7 @@ import {
   Droplets,
   Wind,
   Activity,
+  Gauge,
   Clock,
   Edit2,
   Check,
@@ -33,6 +34,7 @@ import { toast } from 'sonner';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
+import { isThermoKingSession } from '@/app/lib/fleetDemo';
 
 interface DeviceCardProps {
   device: Device;
@@ -142,7 +144,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isDateValid = isValidDate(lastSeenDate);
 
   const minsSinceLastSeen = isDateValid ? differenceInMinutes(new Date(), lastSeenDate) : 999999;
-  
+
+  const isTkCard = isThermoKingSession();
+
   let connectionStatus: 'online' | 'standby' | 'offline' = 'online';
   if (minsSinceLastSeen > 720) connectionStatus = 'offline'; // > 12 hours
   else if (minsSinceLastSeen > 30) connectionStatus = 'standby'; // > 30 mins
@@ -442,10 +446,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                    </div>
                  </div>
                  <div className="flex items-center gap-2">
-                   <Droplets className="h-4 w-4 text-blue-500" />
+                   {isTkCard ? (
+                     <Gauge className="h-4 w-4 text-sky-500" />
+                   ) : (
+                     <Droplets className="h-4 w-4 text-blue-500" />
+                   )}
                    <div>
-                     <div className="text-xs text-gray-500">{t('humidity')}</div>
-                     <div className="font-bold text-gray-900">{device.telemetry.relative_humidity}%</div>
+                     <div className="text-xs text-gray-500">{isTkCard ? t('oxygen') : t('humidity')}</div>
+                     <div className="font-bold text-gray-900">
+                       {isTkCard
+                         ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
+                           ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
+                           : '—'
+                         : `${device.telemetry.relative_humidity}%`}
+                     </div>
                    </div>
                  </div>
                </div>
@@ -483,10 +497,20 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               </div>
               
               <div className="flex items-center gap-2">
-                <Droplets className="h-4 w-4 text-blue-500" />
+                {isTkCard ? (
+                  <Gauge className="h-4 w-4 text-sky-500" />
+                ) : (
+                  <Droplets className="h-4 w-4 text-blue-500" />
+                )}
                 <div>
-                  <div className="text-xs text-gray-500">{t('humidity')}</div>
-                  <div className="font-bold text-gray-900">{device.telemetry.relative_humidity}%</div>
+                  <div className="text-xs text-gray-500">{isTkCard ? t('oxygen') : t('humidity')}</div>
+                  <div className="font-bold text-gray-900">
+                    {isTkCard
+                      ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
+                        ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
+                        : '—'
+                      : `${device.telemetry.relative_humidity}%`}
+                  </div>
                 </div>
               </div>
             </div>

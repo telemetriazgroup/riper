@@ -38,6 +38,23 @@ function isUltraorganicsFleetEmail(email) {
   return String(email || '').toLowerCase().endsWith('ultraorganics@riper.local');
 }
 
+function thermoKingEmailLogin() {
+  return String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();
+}
+
+function isThermoKingFleetEmail(email) {
+  return String(email || '').trim().toLowerCase() === thermoKingEmailLogin();
+}
+
+function thermoKingEmpresaIdentificador() {
+  const s = String(process.env.THERMOKING_EMPRESA_IDENTIFICADOR || '3001').trim();
+  return s || '3001';
+}
+
+function thermoKingPinnedDeviceImei() {
+  return String(process.env.THERMOKING_DEVICE_IMEI || 'PRUEBA_CA000001').trim();
+}
+
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
 
 function rowImeiFromMaduradorRow(row) {
@@ -169,6 +186,18 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       }
       const out = ULTRAORGANICS_IMEI_ORDER.map((id) => byImei.get(id)).filter(Boolean);
       return res.json({ data: out });
+    }
+
+    if (isThermoKingFleetEmail(email)) {
+      const tkIdent = thermoKingEmpresaIdentificador();
+      const pinImei = thermoKingPinnedDeviceImei();
+      const listTk = await fetchMaduradorDispositivosList(base, tkIdent, ctrl);
+      if (listTk === null) {
+        console.error('[madurador] thermoking upstream failed', tkIdent);
+        return res.status(502).json({ error: 'madurador_upstream', message: `upstream thermoking ${tkIdent}` });
+      }
+      const filtered = filterRowsByImeiExact(listTk, pinImei);
+      return res.json({ data: filtered });
     }
 
     const { rows } = await pool.query(

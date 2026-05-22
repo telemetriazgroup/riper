@@ -161,3 +161,28 @@ export async function seedUltraorganicsTeamUsers() {
     );
   }
 }
+
+/** ThermoKing: empresa 3001, un solo IMEI (`THERMOKING_DEVICE_IMEI`, por defecto PRUEBA_CA000001). Contraseña vía THERMOKING_PASSWORD. */
+export async function seedThermoKingUser() {
+  const email = String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const password = process.env.THERMOKING_PASSWORD || 'thermoking2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'viewer', $3, 'ThermoKing CA', false, true, '3001')`,
+      ['ThermoKing', email, hash]
+    );
+    console.log(`[seed] ThermoKing user: ${email} (set THERMOKING_PASSWORD in production)`);
+  }
+
+  await pool.query(
+    `UPDATE app_users SET identificador = '3001', updated_at = now()
+     WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+}

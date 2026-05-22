@@ -38,6 +38,15 @@ function isUltraorganicsFleetEmail(email) {
   return normalizeEmail(email).endsWith('ultraorganics@riper.local');
 }
 
+function isThermoKingFleetEmail(email) {
+  return normalizeEmail(email) === normalizeEmail(process.env.THERMOKING_EMAIL || 'thermoking@riper.local');
+}
+
+/** Demo flotas restringidas: sin alta/baja/edición de usuarios ajenos. */
+function isDemoFleetRestricted(reqUserEmail) {
+  return isUltraorganicsFleetEmail(reqUserEmail) || isThermoKingFleetEmail(reqUserEmail);
+}
+
 function normalizeCompany(c) {
   const s = String(c ?? '').trim();
   return s.length ? s : 'sin empresa';
@@ -78,7 +87,7 @@ usersRouter.get('/', async (req, res) => {
 });
 
 usersRouter.post('/', requireAdmin, async (req, res) => {
-  if (isUltraorganicsFleetEmail(req.user?.email)) {
+  if (isDemoFleetRestricted(req.user?.email)) {
     return res.status(403).json({ error: 'forbidden', message: 'user management not allowed for this account' });
   }
   const { name, email, role, active = true, password, company, identificador } = req.body || {};
@@ -118,7 +127,7 @@ usersRouter.post('/', requireAdmin, async (req, res) => {
 usersRouter.patch('/:id', async (req, res) => {
   const { id } = req.params;
   const self = req.user.id === id;
-  if (!self && isUltraorganicsFleetEmail(req.user?.email)) {
+  if (!self && isDemoFleetRestricted(req.user?.email)) {
     return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
   }
   if (!self && !isAdmin(req)) {
@@ -229,7 +238,7 @@ usersRouter.patch('/:id', async (req, res) => {
 });
 
 usersRouter.delete('/:id', requireAdmin, async (req, res) => {
-  if (isUltraorganicsFleetEmail(req.user?.email)) {
+  if (isDemoFleetRestricted(req.user?.email)) {
     return res.status(403).json({ error: 'forbidden', message: 'user management not allowed for this account' });
   }
   const { id } = req.params;
