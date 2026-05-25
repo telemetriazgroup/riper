@@ -162,6 +162,32 @@ export async function seedUltraorganicsTeamUsers() {
   }
 }
 
+/** Greenyard: empresa 4001 (`GREENYARD_IDENTIFICADOR`), lista sólo “operación normal”. Contraseña vía `GREENYARD_PASSWORD`. */
+export async function seedGreenyardUser() {
+  const email = String(process.env.GREENYARD_EMAIL || 'greenyard@riper.local').trim().toLowerCase();
+  const ident = String(process.env.GREENYARD_IDENTIFICADOR || '4001').trim() || '4001';
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const password = process.env.GREENYARD_PASSWORD || 'greenyard2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'viewer', $3, 'Greenyard', false, true, $4)`,
+      ['Greenyard', email, hash, ident]
+    );
+    console.log(`[seed] Greenyard user: ${email} (set GREENYARD_PASSWORD in production)`);
+  }
+
+  await pool.query(
+    `UPDATE app_users SET identificador = $2, updated_at = now()
+     WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email, ident]
+  );
+}
+
 /** ThermoKing: empresa 3001, un solo IMEI (`THERMOKING_DEVICE_IMEI`, por defecto PRUEBA_CA000001). Contraseña vía THERMOKING_PASSWORD. */
 export async function seedThermoKingUser() {
   const email = String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();

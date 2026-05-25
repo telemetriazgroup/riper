@@ -9,7 +9,7 @@ import type {
 import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
   SIM_FLEET_AVL_MAX_CFM,
@@ -432,6 +432,10 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     const pin = getThermoKingPinnedImei();
     return withSim.filter((d) => String(d.id ?? '').trim() === pin);
   }
+  /** Greenyard: Ripener ya devolvió todos los IMEI del identificador 4001 (sin recortar en cliente por sufijo IMEI). */
+  if (isGreenyardSession()) {
+    return withSim;
+  }
   if (isMaduradorSuperadminFullList()) {
     return withSim;
   }
@@ -731,7 +735,11 @@ export async function fetchMaduradorRangoHistoryForImei(
 /** Úsese historial real por rango si aplica (flota demo, identificador Madurador, ULTRAORGANICS). */
 export function shouldUseMaduradorRangoHistory(): boolean {
   return (
-    isFleetDemoSession() || hasMaduradorIdentificador() || isUltraorganicsSession() || isThermoKingSession()
+    isFleetDemoSession() ||
+    hasMaduradorIdentificador() ||
+    isUltraorganicsSession() ||
+    isThermoKingSession() ||
+    isGreenyardSession()
   );
 }
 

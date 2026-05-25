@@ -33,6 +33,14 @@ function superadminPinnedDeviceImei() {
   return s || null;
 }
 
+/** Tercera empresa en fusión superadmin (p. ej. Greenyard 4001). `NONE` / `0` / vacío → no cargar. */
+function superadminGreenyardEmpresaIdentificador() {
+  const raw = process.env.SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR;
+  const s = raw != null ? String(raw).trim() : '4001';
+  if (!s || s.toUpperCase() === 'NONE' || s === '0') return '';
+  return s;
+}
+
 /** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
 function isUltraorganicsFleetEmail(email) {
   return String(email || '').toLowerCase().endsWith('ultraorganics@riper.local');
@@ -53,6 +61,19 @@ function thermoKingEmpresaIdentificador() {
 
 function thermoKingPinnedDeviceImei() {
   return String(process.env.THERMOKING_DEVICE_IMEI || 'PRUEBA_CA000001').trim();
+}
+
+function greenyardEmailLogin() {
+  return String(process.env.GREENYARD_EMAIL || 'greenyard@riper.local').trim().toLowerCase();
+}
+
+function isGreenyardFleetEmail(email) {
+  return String(email || '').trim().toLowerCase() === greenyardEmailLogin();
+}
+
+function greenyardEmpresaIdentificador() {
+  const s = String(process.env.GREENYARD_IDENTIFICADOR || '4001').trim();
+  return s || '4001';
 }
 
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
@@ -89,6 +110,36 @@ function filterRowsByImeiExact(rows, imeiExact) {
   const want = String(imeiExact || '').trim();
   if (!want || !Array.isArray(rows) || rows.length === 0) return rows;
   return rows.filter((row) => rowImeiFromMaduradorRow(row) === want);
+}
+
+/** Compresor en `normal` y sin alarmas activas — solo si {@link greenyardFilterNormalOperationEnabled}. */
+function filterMaduradorRowsNormalOperation(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => {
+    if (!row || typeof row !== 'object') return false;
+    const cc = row.compress_coil_1;
+    if (cc && typeof cc === 'object' && cc !== null && 'estado' in cc) {
+      const st = String(cc.estado || '').trim().toLowerCase();
+      if (st && st !== 'normal') return false;
+    }
+    const al = row.alarmas;
+    if (
+      al &&
+      typeof al === 'object' &&
+      al !== null &&
+      Array.isArray(al.activas) &&
+      al.activas.length > 0
+    )
+      return false;
+    return true;
+  });
+}
+
+/** `GREENYARD_FILTER_NORMAL_OPERATION=1`/`true` activa {@link filterMaduradorRowsNormalOperation}; por defecto off. */
+function greenyardFilterNormalOperationEnabled() {
+  const v = process.env.GREENYARD_FILTER_NORMAL_OPERATION;
+  if (v == null || String(v).trim() === '') return false;
+  return String(v).trim() === '1' || /^true$/i.test(String(v).trim());
 }
 
 async function fetchMaduradorDispositivosList(base, identificadorEmpresa, ctrl) {
@@ -152,7 +203,19 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         listPinned = filterRowsByImeiExact(listWide, pinImei);
       }
 
-      const merged = mergeDispositivosRows(listWide, listPinned);
+      const mergedBase = mergeDispositivosRows(listWide, listPinned);
+
+      const gySuperId = superadminGreenyardEmpresaIdentificador();
+      let merged = mergedBase;
+      if (gySuperId) {
+        const listGy = await fetchMaduradorDispositivosList(base, gySuperId, ctrl);
+        if (listGy === null) {
+          console.error('[madurador] superadmin greenyard empresa upstream failed', gySuperId);
+        } else {
+          merged = mergeDispositivosRows(mergedBase, listGy);
+        }
+      }
+
       return res.json({ data: merged });
     }
 
@@ -198,6 +261,21 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       }
       const filtered = filterRowsByImeiExact(listTk, pinImei);
       return res.json({ data: filtered });
+    }
+
+    if (isGreenyardFleetEmail(email)) {
+      const gyIdent = greenyardEmpresaIdentificador();
+      const listGy = await fetchMaduradorDispositivosList(base, gyIdent, ctrl);
+      if (listGy === null) {
+        console.error('[madurador] greenyard upstream failed', gyIdent);
+        return res.status(502).json({ error: 'madurador_upstream', message: `upstream greenyard ${gyIdent}` });
+      }
+      /** Varios IMEI por identificador (p. ej. 4001): sufijo IMEI opcional; ver `filterRowsByImeiIdentificadorSuffix`. */
+      const suffixed = filterRowsByImeiIdentificadorSuffix(listGy, gyIdent);
+      const data = greenyardFilterNormalOperationEnabled()
+        ? filterMaduradorRowsNormalOperation(suffixed)
+        : suffixed;
+      return res.json({ data });
     }
 
     const { rows } = await pool.query(

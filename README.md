@@ -8,6 +8,13 @@ pass : @gourmet2026!
 http://161.132.53.51:18080/
 # Mobile Ripening Management System
 
+
+thermoking@riper.local / thermoking2026!
+
+user :thermoking@riper.local 
+pass : thermoking2026!
+
+
 This is a code bundle for Mobile Ripening Management System. The original project is available at https://www.figma.com/design/oz3WSqQWEbB1mKplcS4Weq/Mobile-Ripening-Management-System.
 
 ## Running the code
@@ -18,13 +25,20 @@ Run `pnpm install` or `npm install` to install the dependencies.
 
 El acceso usa la **API Ripener** (`/api/v1/auth/login`) contra PostgreSQL. Tras el primer arranque se crea un **superusuario** si no existe:
 
+
+greenyard@riper.local
+greenyard2026!
+
+`, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`)
+
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
-- **Superadmin Madurador**: la API concatena dos listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`) y equipo concreto empresa **3001** con IMEI `PRUEBA_CA000001` (env `SUPERUSER_DEVICE_IMEI`, `*` para no filtrar IMEI).
-- **ThermoKing (demo atmósfera controlada)** sembrado en DB: usuario `thermoking@riper.local`, contraseña `thermoking2026!` (o `THERMOKING_PASSWORD`), `identificador` empresa `3001` y la API sirve solo el IMEI `THERMOKING_DEVICE_IMEI` (por defecto `PRUEBA_CA000001`).
+- **Superadmin Madurador**: la API fusiona listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`), empresa pin **3001** con IMEI `PRUEBA_CA000001` si aplica (`SUPERUSER_DEVICE_IMEI`, `*` = todos de esa empresa), y **empresa Greenyard** (`SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR`, default `4001`; `NONE` o `0` para no cargar).
+- **ThermoKing (demo atmósfera controlada)** sembrado en DB: usuario `thermoking@riper.local`, contraseña `thermoking2026!` (o `THERMOKING_PASSWORD`), `identificador` empresa `3001` y la API sirve solo el IMEI `THERMOKING_DEVICE_IMEI` (por defecto `PRUEBA_CA000001`). En el cliente, **Seguimiento** lista solo procesos de ese IMEI y **Recetas** muestra únicamente la(s) receta(s) aplicada(s) en dichos seguimientos (`VITE_THERMOKING_DEVICE_IMEI` debe coincidir).
+- **Greenyard** (`identificador` [4001](http://161.132.53.51:9051/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=4001), **varios IMEI**, p. ej. `NEWY2001` y `NEWY1001`): usuario `greenyard@riper.local`, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`). Ripener `/madurador/dispositivos` devuelve por defecto **el mismo número de equipos que el upstream** (todos los del array `4001`; el front **no** recorta por sufijo IMEI `4001`). Opcionalmente, `GREENYARD_FILTER_NORMAL_OPERATION=1` restringe a compresión `normal` sin `alarmas.activas` (si antes solo veías uno con dos en upstream, ese era el motivo). El superadmin sigue fusionando la lista **4001** completa aparte de sus otras fuentes.
 - Definir `JWT_SECRET` largo y aleatorio en producción.
 
 Cambiar contraseña y datos desde **Usuarios** (admin) o **Mi perfil** (cada usuario).
-
+greenyard2026!
 Run `pnpm dev` or `npm run dev` to start the development server.
 
 ## Stack completo (PostgreSQL + API + frontend en Docker)

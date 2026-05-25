@@ -64,3 +64,24 @@ export function isThermoKingSession(): boolean {
   }
 }
 
+export function greenyardLoginEmail(): string {
+  const raw =
+    (typeof import.meta !== 'undefined' && ((import.meta as unknown as { env?: { VITE_GREENYARD_EMAIL?: string } }).env?.VITE_GREENYARD_EMAIL)) ||
+    'greenyard@riper.local';
+  return String(raw).trim().toLowerCase() || 'greenyard@riper.local';
+}
+
+export function isGreenyardFleetEmail(email: string | undefined | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === greenyardLoginEmail().toLowerCase();
+}
+
+export function isGreenyardSession(): boolean {
+  try {
+    const u = getStoredUser();
+    return isGreenyardFleetEmail(u?.email);
+  } catch {
+    return false;
+  }
+}
+

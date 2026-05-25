@@ -33,6 +33,37 @@ import {
   updateRecipe,
 } from '@/app/lib/recipesApi';
 import { RecipeFruitAvatar } from '@/app/lib/recipeFruitPresets';
+import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { isThermoKingSession } from '@/app/lib/fleetDemo';
+
+/** Recetas usadas en seguimiento pero no enlazadas a fila catálogo (p. ej. personalizada solo en payload). */
+function recipesAppliedOnThermoKingDevice(catalog: Recipe[], processRows: RipeningProcessRow[]): Recipe[] {
+  const catalogIds = new Set<string>();
+  const embedded: Recipe[] = [];
+  for (const row of processRows) {
+    const pr = row.payload?.recipe as Partial<Recipe> | undefined;
+    if (!pr || typeof pr !== 'object' || !String(pr.name ?? '').trim()) continue;
+    const rid = typeof pr.id === 'string' ? pr.id.trim() : '';
+    const catalogMatch = rid && rid !== 'new' ? catalog.find((c) => c.id === rid) : undefined;
+    if (catalogMatch) {
+      catalogIds.add(rid);
+      continue;
+    }
+    if (Array.isArray(pr.phases) && pr.phases.length > 0) {
+      embedded.push({
+        id: `seguimiento-${row.id}`,
+        name: String(pr.name),
+        fruit: typeof pr.fruit === 'string' ? pr.fruit : '',
+        description: typeof pr.description === 'string' ? pr.description : '',
+        phases: pr.phases as Recipe['phases'],
+        iconKey: pr.iconKey ?? null,
+        customImageUrl: pr.customImageUrl ?? null,
+        is_system: Boolean(pr.is_system),
+      });
+    }
+  }
+  return [...embedded, ...catalog.filter((rec) => catalogIds.has(rec.id))];
+}
 
 export const RecipeList = () => {
   const { t } = useSettings();
@@ -60,12 +91,18 @@ export const RecipeList = () => {
     setLoading(true);
     try {
       const includeArchived = Boolean(isSuperAdmin && showArchivedCatalog);
-      const [p, r] = await Promise.all([
+      const ripeningOpts = includeArchived ? { includeArchived: true as const } : undefined;
+      const [p, r, thermoProcesses] = await Promise.all([
         fetchProducts({ includeArchived }),
         fetchRecipes({ includeArchived }),
+        isThermoKingSession() ? fetchRipeningProcesses(ripeningOpts) : Promise.resolve([] as RipeningProcessRow[]),
       ]);
       setProducts(p);
-      setRecipes(r);
+      if (isThermoKingSession()) {
+        setRecipes(recipesAppliedOnThermoKingDevice(r, thermoProcesses));
+      } else {
+        setRecipes(r);
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : t('load_error'));
     } finally {

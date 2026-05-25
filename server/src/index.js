@@ -11,6 +11,7 @@ import {
   seedUltraorganicsUser,
   seedUltraorganicsTeamUsers,
   seedThermoKingUser,
+  seedGreenyardUser,
 } from './seed.js';
 import { seedCatalog } from './seedCatalog.js';
 import { authRouter } from './routes/auth.js';
@@ -44,6 +45,7 @@ async function main() {
   await seedUltraorganicsUser();
   await seedUltraorganicsTeamUsers();
   await seedThermoKingUser();
+  await seedGreenyardUser();
   await seedCatalog();
 
   const app = express();

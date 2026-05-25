@@ -42,9 +42,17 @@ function isThermoKingFleetEmail(email) {
   return normalizeEmail(email) === normalizeEmail(process.env.THERMOKING_EMAIL || 'thermoking@riper.local');
 }
 
+function isGreenyardFleetEmail(email) {
+  return normalizeEmail(email) === normalizeEmail(process.env.GREENYARD_EMAIL || 'greenyard@riper.local');
+}
+
 /** Demo flotas restringidas: sin alta/baja/edición de usuarios ajenos. */
 function isDemoFleetRestricted(reqUserEmail) {
-  return isUltraorganicsFleetEmail(reqUserEmail) || isThermoKingFleetEmail(reqUserEmail);
+  return (
+    isUltraorganicsFleetEmail(reqUserEmail) ||
+    isThermoKingFleetEmail(reqUserEmail) ||
+    isGreenyardFleetEmail(reqUserEmail)
+  );
 }
 
 function normalizeCompany(c) {
