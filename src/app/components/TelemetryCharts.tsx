@@ -7,7 +7,7 @@ import { useDeviceHistory } from '@/app/hooks/useDevices';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { Loader2, History, Calendar as CalendarIcon, Filter, Table2, Download } from 'lucide-react';
+import { Loader2, History, Calendar as CalendarIcon, Filter, Search, Table2, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
@@ -79,7 +79,8 @@ const HISTORICAL_PRESET_STANDARD = [
 ] as const;
 /** CO₂, etileno y ventilación (avl_pct). */
 const HISTORICAL_PRESET_GASES = ['co2_reading', 'ethylene', 'avl_pct'] as const;
-const HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE = ['o2_reading', 'co2_reading', 'ethylene'] as const;
+/** Incluye Set O2 por defecto (TermoKing / atmósfera controlada). */
+const HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE = ['set_point_o2', 'o2_reading', 'co2_reading', 'ethylene'] as const;
 
 const HISTORICAL_SIDEBAR_METRIC_ORDER: string[] = [
   ...HISTORICAL_Y1_TEMP_KEYS,
@@ -223,8 +224,10 @@ const METRIC_COLORS: Record<string, string> = {
   avl_pct: '#6366f1',
   line_voltage: '#a855f7',
   line_frequency: '#d946ef',
-  co2_reading: '#78716c',
-  o2_reading: '#57534e',
+  /** CO₂ lectura por defecto (R244 G102 B1) */
+  co2_reading: '#f46601',
+  /** O₂ lectura por defecto (R5 G79 B250) */
+  o2_reading: '#054ffa',
   set_point: '#dc2626',
   capacity_load: '#ea580c',
   humidity_set_point: '#2563eb',
@@ -431,7 +434,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         type="monotone"
                         dataKey="co2"
                         name={`${t('co2')} (%)`}
-                        stroke="#78716c"
+                        stroke="#f46601"
                         strokeWidth={2}
                         strokeDasharray="5 5"
                         dot={false}
@@ -444,7 +447,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         type="monotone"
                         dataKey="o2"
                         name={`${CHART_METRIC_LABELS.o2_reading} (%)`}
-                        stroke="#0ea5e9"
+                        stroke="#054ffa"
                         strokeWidth={2}
                         dot={false}
                         activeDot={{ r: 6 }}
@@ -551,7 +554,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       />
                       <Legend wrapperStyle={{ paddingTop: '12px' }} />
                       <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                      <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#f46601" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -601,6 +604,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   const [showPowerShading, setShowPowerShading] = useState(false);
   const [showInjectionShading, setShowInjectionShading] = useState(false);
   const [historicalTempUnit, setHistoricalTempUnit] = useState<'C' | 'F'>('C');
+  const [variablesColorSearch, setVariablesColorSearch] = useState('');
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const pinchStartRef = useRef<{ distance: number; startIndex: number; endIndex: number } | null>(null);
   const dragStartRef = useRef<{ clientX: number; startIndex: number; endIndex: number } | null>(null);
@@ -646,6 +650,15 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     const allowed = new Set(CHART_METRIC_KEYS);
     return HISTORICAL_SIDEBAR_METRIC_ORDER.filter((k) => allowed.has(k));
   }, []);
+
+  const filteredSidebarMetricKeys = useMemo(() => {
+    const q = variablesColorSearch.trim().toLowerCase();
+    if (!q) return sidebarMetricKeys;
+    return sidebarMetricKeys.filter((key) => {
+      const label = (CHART_METRIC_LABELS[key] ?? key).toLowerCase();
+      return label.includes(q) || key.toLowerCase().includes(q);
+    });
+  }, [sidebarMetricKeys, variablesColorSearch]);
 
   const generateData = async () => {
     if (!deviceId) return;
@@ -810,6 +823,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
       }
       setShowLabelsByMetric({});
       setHistoricalTempUnit(tempUnit === 'F' ? 'F' : 'C');
+      setVariablesColorSearch('');
     }
   }, [isOpen, tempUnit]);
 
@@ -1183,10 +1197,25 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
             </div>
             <div className="min-h-0 flex flex-col">
               <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
-                <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> Variables y color
+                <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {t('historical_variables_and_color')}
               </h4>
+              <div className="relative mb-1.5 sm:mb-2">
+                <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 shrink-0" aria-hidden />
+                <input
+                  type="search"
+                  value={variablesColorSearch}
+                  onChange={(e) => setVariablesColorSearch(e.target.value)}
+                  placeholder={t('historical_variables_search_placeholder')}
+                  className="w-full pl-8 pr-2 py-1.5 rounded-md border border-gray-200 bg-white text-xs text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
               <div className="space-y-1 max-h-[20vh] sm:max-h-[45vh] overflow-y-auto">
-                {sidebarMetricKeys.map((key) => (
+                {filteredSidebarMetricKeys.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-2 px-1">{t('historical_variables_no_match')}</p>
+                ) : (
+                  filteredSidebarMetricKeys.map((key) => (
                   <div key={key} className="flex flex-wrap items-center gap-1.5 text-xs hover:bg-gray-50 p-1.5 rounded group">
                     <input
                       type="checkbox"
@@ -1225,7 +1254,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                       title={`Color de ${CHART_METRIC_LABELS[key]}`}
                     />
                   </div>
-                ))}
+                ))
+                )}
               </div>
             </div>
           </div>
@@ -1462,7 +1492,7 @@ const TABLE_PRESETS = [
   { id: 'basic', columns: ['temp_supply_1', 'return_air', 'relative_humidity', 'ethylene', 'co2_reading'] },
   { id: 'temperatures', columns: ['temp_supply_1', 'return_air', 'evaporation_coil', 'condensation_coil', 'set_point'] },
   { id: 'gases', columns: ['relative_humidity', 'ethylene', 'co2_reading', 'o2_reading', 'avl_pct'] },
-  { id: 'controlled_atmosphere', columns: ['o2_reading', 'co2_reading', 'ethylene'] },
+  { id: 'controlled_atmosphere', columns: ['set_point_o2', 'o2_reading', 'co2_reading', 'ethylene'] },
   { id: 'full', columns: CHART_METRIC_KEYS },
 ];
 
