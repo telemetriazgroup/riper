@@ -6,7 +6,7 @@ DemoFlota2026! (o FLEET_DEMO_PASSWORD en el entorno)
 user : gourmettrading@ztrack.app  
 pass : @gourmet2026!
 http://161.132.53.51:18080/
-# Mobile Ripening Management System
+# Mobile Ripening Management System @gourmet2026!
 
 
 thermoking@riper.local / thermoking2026!
@@ -32,9 +32,10 @@ greenyard2026!
 `, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`)
 
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
-- **Superadmin Madurador**: la API fusiona listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`), empresa pin **3001** con IMEI `PRUEBA_CA000001` si aplica (`SUPERUSER_DEVICE_IMEI`, `*` = todos de esa empresa), y **empresa Greenyard** (`SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR`, default `4001`; `NONE` o `0` para no cargar).
+- **Superadmin Madurador**: la API fusiona listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`), empresa pin **3001** con IMEI `PRUEBA_CA000001` si aplica (`SUPERUSER_DEVICE_IMEI`, `*` = todos de esa empresa), **empresa Greenyard** (`SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR`, default `4001`; `NONE` o `0` para no cargar) y **empresa 5001** (`SUPERUSER_MADURADOR_5001_IDENTIFICADOR`, default `5001`; `NONE` o `0` para no cargar). Solo el JWT con rol `superadmin` (p. ej. `superadmin@riper.local`) recibe esa fusión.
 - **ThermoKing (demo atmósfera controlada)** sembrado en DB: usuario `thermoking@riper.local`, contraseña `thermoking2026!` (o `THERMOKING_PASSWORD`), `identificador` empresa `3001` y la API sirve solo el IMEI `THERMOKING_DEVICE_IMEI` (por defecto `PRUEBA_CA000001`). En el cliente, **Seguimiento** lista solo procesos de ese IMEI y **Recetas** muestra únicamente la(s) receta(s) aplicada(s) en dichos seguimientos (`VITE_THERMOKING_DEVICE_IMEI` debe coincidir).
 - **Greenyard** (`identificador` [4001](http://161.132.53.51:9051/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=4001), **varios IMEI**, p. ej. `NEWY2001` y `NEWY1001`): usuario `greenyard@riper.local`, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`). Ripener `/madurador/dispositivos` devuelve por defecto **el mismo número de equipos que el upstream** (todos los del array `4001`; el front **no** recorta por sufijo IMEI `4001`). Opcionalmente, `GREENYARD_FILTER_NORMAL_OPERATION=1` restringe a compresión `normal` sin `alarmas.activas` (si antes solo veías uno con dos en upstream, ese era el motivo). El superadmin sigue fusionando la lista **4001** completa aparte de sus otras fuentes.
+- **Gourmet Trading** (`gourmettrading@ztrack.app`, contraseña `@gourmet2026!` o `GOURMET_TRADING_PASSWORD='@gourmet2026!'` entre comillas en `.env`): rol **admin** (recetas y seguimiento). Upstream identificador **5001**; solo IMEI `867856038562796` y `866262036100104`.
 - Definir `JWT_SECRET` largo y aleatorio en producción.
 
 Cambiar contraseña y datos desde **Usuarios** (admin) o **Mi perfil** (cada usuario).

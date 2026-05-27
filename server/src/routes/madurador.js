@@ -41,6 +41,14 @@ function superadminGreenyardEmpresaIdentificador() {
   return s;
 }
 
+/** Cuarta empresa en fusión superadmin (p. ej. 5001). `NONE` / `0` / vacío → no cargar. */
+function superadminEmpresa5001Identificador() {
+  const raw = process.env.SUPERUSER_MADURADOR_5001_IDENTIFICADOR;
+  const s = raw != null ? String(raw).trim() : '5001';
+  if (!s || s.toUpperCase() === 'NONE' || s === '0') return '';
+  return s;
+}
+
 /** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
 function isUltraorganicsFleetEmail(email) {
   return String(email || '').toLowerCase().endsWith('ultraorganics@riper.local');
@@ -74,6 +82,29 @@ function isGreenyardFleetEmail(email) {
 function greenyardEmpresaIdentificador() {
   const s = String(process.env.GREENYARD_IDENTIFICADOR || '4001').trim();
   return s || '4001';
+}
+
+function gourmetTradingEmailLogin() {
+  return String(process.env.GOURMET_TRADING_EMAIL || 'gourmettrading@ztrack.app').trim().toLowerCase();
+}
+
+function isGourmetTradingFleetEmail(email) {
+  return String(email || '').trim().toLowerCase() === gourmetTradingEmailLogin();
+}
+
+function gourmetTradingEmpresaIdentificador() {
+  const s = String(process.env.GOURMET_TRADING_IDENTIFICADOR || '5001').trim();
+  return s || '5001';
+}
+
+/** IMEI visibles para Gourmet Trading (por defecto los dos del identificador 5001). */
+function gourmetTradingPinnedImeis() {
+  const raw =
+    process.env.GOURMET_TRADING_DEVICE_IMEIS || '867856038562796,866262036100104';
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
@@ -110,6 +141,18 @@ function filterRowsByImeiExact(rows, imeiExact) {
   const want = String(imeiExact || '').trim();
   if (!want || !Array.isArray(rows) || rows.length === 0) return rows;
   return rows.filter((row) => rowImeiFromMaduradorRow(row) === want);
+}
+
+/** Solo IMEI en `allowlist`, en el orden indicado (p. ej. Gourmet Trading). */
+function filterRowsByImeiAllowlistOrdered(rows, allowlist) {
+  const ids = Array.isArray(allowlist) ? allowlist.map((s) => String(s || '').trim()).filter(Boolean) : [];
+  if (!ids.length || !Array.isArray(rows) || rows.length === 0) return [];
+  const byImei = new Map();
+  for (const row of rows) {
+    const imei = rowImeiFromMaduradorRow(row);
+    if (imei) byImei.set(imei, row);
+  }
+  return ids.map((id) => byImei.get(id)).filter(Boolean);
 }
 
 /** Compresor en `normal` y sin alarmas activas — solo si {@link greenyardFilterNormalOperationEnabled}. */
@@ -207,12 +250,24 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
 
       const gySuperId = superadminGreenyardEmpresaIdentificador();
       let merged = mergedBase;
+      const superadminExtraIds = new Set([wideId, pinEmpresaId].filter(Boolean));
       if (gySuperId) {
         const listGy = await fetchMaduradorDispositivosList(base, gySuperId, ctrl);
         if (listGy === null) {
           console.error('[madurador] superadmin greenyard empresa upstream failed', gySuperId);
         } else {
           merged = mergeDispositivosRows(mergedBase, listGy);
+          superadminExtraIds.add(gySuperId);
+        }
+      }
+
+      const id5001 = superadminEmpresa5001Identificador();
+      if (id5001 && !superadminExtraIds.has(id5001)) {
+        const list5001 = await fetchMaduradorDispositivosList(base, id5001, ctrl);
+        if (list5001 === null) {
+          console.error('[madurador] superadmin empresa 5001 upstream failed', id5001);
+        } else {
+          merged = mergeDispositivosRows(merged, list5001);
         }
       }
 
@@ -275,6 +330,18 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const data = greenyardFilterNormalOperationEnabled()
         ? filterMaduradorRowsNormalOperation(suffixed)
         : suffixed;
+      return res.json({ data });
+    }
+
+    if (isGourmetTradingFleetEmail(email)) {
+      const gtIdent = gourmetTradingEmpresaIdentificador();
+      const listGt = await fetchMaduradorDispositivosList(base, gtIdent, ctrl);
+      if (listGt === null) {
+        console.error('[madurador] gourmet trading upstream failed', gtIdent);
+        return res.status(502).json({ error: 'madurador_upstream', message: `upstream gourmet ${gtIdent}` });
+      }
+      const allow = gourmetTradingPinnedImeis();
+      const data = filterRowsByImeiAllowlistOrdered(listGt, allow);
       return res.json({ data });
     }
 

@@ -587,6 +587,13 @@ const translations: Record<Language, Record<string, string>> = {
     'password_required_new': 'Indique una contraseña para el nuevo usuario',
     'password_change_hint': 'Nueva contraseña',
     'password_optional_placeholder': 'Dejar vacío para no cambiar',
+    'superadmin_reset_password': 'Contraseña',
+    'superadmin_reset_password_title': 'Restablecer contraseña',
+    'superadmin_reset_password_desc': 'Nueva contraseña para {{name}} ({{email}}).',
+    'superadmin_reset_password_confirm': 'Confirmar contraseña',
+    'superadmin_reset_password_mismatch': 'Las contraseñas no coinciden',
+    'superadmin_reset_password_min': 'La contraseña debe tener al menos 6 caracteres',
+    'superadmin_password_section_hint': 'Como super administrador puede cambiar la contraseña de cualquier cuenta.',
     
     // Status
     'status_active': 'Activo',
@@ -1529,6 +1536,13 @@ const translations: Record<Language, Record<string, string>> = {
     'password_required_new': 'Set a password for the new user',
     'password_change_hint': 'New password',
     'password_optional_placeholder': 'Leave blank to keep current',
+    'superadmin_reset_password': 'Password',
+    'superadmin_reset_password_title': 'Reset password',
+    'superadmin_reset_password_desc': 'New password for {{name}} ({{email}}).',
+    'superadmin_reset_password_confirm': 'Confirm password',
+    'superadmin_reset_password_mismatch': 'Passwords do not match',
+    'superadmin_reset_password_min': 'Password must be at least 6 characters',
+    'superadmin_password_section_hint': 'As super administrator you can change any account password.',
 
     // Status
     'status_active': 'Active',

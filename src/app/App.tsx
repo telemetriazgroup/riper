@@ -17,7 +17,7 @@ import { LoginPage } from '@/app/components/LoginPage';
 import { Loader2 } from 'lucide-react';
 import { SettingsProvider, useSettings } from '@/app/contexts/SettingsContext';
 import { getToken, fetchMe, clearAuth, type AuthUser } from '@/app/lib/auth';
-import { GOURMET_USER_EMAIL } from '@/app/lib/gourmet';
+import { gourmetTradingLoginEmail } from '@/app/lib/gourmet';
 import { FLEET_DEMO_EMAIL, isUltraorganicsFleetEmail, isThermoKingFleetEmail, isGreenyardFleetEmail } from '@/app/lib/fleetDemo';
 
 export default function App() {
@@ -60,7 +60,7 @@ function AppContent() {
   }, [refreshSession]);
 
   const isRestrictedDemoUser =
-    session?.email?.toLowerCase() === GOURMET_USER_EMAIL.toLowerCase() ||
+    session?.email?.toLowerCase() === gourmetTradingLoginEmail() ||
     session?.email?.toLowerCase() === FLEET_DEMO_EMAIL.toLowerCase() ||
     isUltraorganicsFleetEmail(session?.email) ||
     isThermoKingFleetEmail(session?.email) ||

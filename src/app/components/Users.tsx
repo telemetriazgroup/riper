@@ -19,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/app/components/ui/alert-dialog';
-import { Plus, Mail, Shield, Loader2, Trash2, Building2, Camera, X } from 'lucide-react';
+import { Plus, Mail, Shield, Loader2, Trash2, Building2, Camera, X, KeyRound } from 'lucide-react';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import {
   fetchUsers,
@@ -45,6 +45,9 @@ export const UsersList: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AppUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AppUser | null>(null);
+  const [passwordResetTarget, setPasswordResetTarget] = useState<AppUser | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('');
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,6 +62,7 @@ export const UsersList: React.FC = () => {
 
   const current = getStoredUser();
   const canManageSuperadmin = current?.role === 'superadmin' || current?.is_superuser;
+  const isSuperAdmin = current?.role === 'superadmin' || Boolean(current?.is_superuser);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,6 +208,39 @@ export const UsersList: React.FC = () => {
     }
   };
 
+  const openPasswordReset = (u: AppUser) => {
+    setPasswordResetTarget(u);
+    setResetPassword('');
+    setResetPasswordConfirm('');
+  };
+
+  const submitPasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordResetTarget) return;
+    const pw = resetPassword.trim();
+    const pw2 = resetPasswordConfirm.trim();
+    if (pw.length < 6) {
+      toast.error(t('superadmin_reset_password_min'));
+      return;
+    }
+    if (pw !== pw2) {
+      toast.error(t('superadmin_reset_password_mismatch'));
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateUser(passwordResetTarget.id, { password: pw });
+      toast.success(t('user_updated'));
+      setPasswordResetTarget(null);
+      setResetPassword('');
+      setResetPasswordConfirm('');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center">
@@ -280,6 +317,18 @@ export const UsersList: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-1">
+                        {isSuperAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            title={t('superadmin_reset_password_title')}
+                            onClick={() => openPasswordReset(user)}
+                          >
+                            <KeyRound className="h-4 w-4 mr-1" />
+                            {t('superadmin_reset_password')}
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" type="button" onClick={() => openEdit(user)}>
                           {t('edit')}
                         </Button>
@@ -441,6 +490,11 @@ export const UsersList: React.FC = () => {
                 <p className="text-xs text-gray-500">{t('identificador_hint')}</p>
               </div>
               <div className="grid gap-2">
+                {isSuperAdmin && editing && (
+                  <p className="text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded-md px-3 py-2">
+                    {t('superadmin_password_section_hint')}
+                  </p>
+                )}
                 <Label htmlFor="u-pass">{editing ? t('password_change_hint') : t('password_new_user')}</Label>
                 <input
                   id="u-pass"
@@ -487,6 +541,77 @@ export const UsersList: React.FC = () => {
                 {t('cancel')}
               </Button>
               <Button type="submit" disabled={saving} className="min-w-[120px]">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save')}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!passwordResetTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPasswordResetTarget(null);
+            setResetPassword('');
+            setResetPasswordConfirm('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={submitPasswordReset}>
+            <DialogHeader>
+              <DialogTitle>{t('superadmin_reset_password_title')}</DialogTitle>
+            </DialogHeader>
+            {passwordResetTarget && (
+              <p className="text-sm text-muted-foreground mt-2 mb-4">
+                {t('superadmin_reset_password_desc', {
+                  name: passwordResetTarget.name,
+                  email: passwordResetTarget.email,
+                })}
+              </p>
+            )}
+            <div className="grid gap-3 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="reset-pass">{t('password_change_hint')}</Label>
+                <input
+                  id="reset-pass"
+                  type="password"
+                  className={inputClass}
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="reset-pass2">{t('superadmin_reset_password_confirm')}</Label>
+                <input
+                  id="reset-pass2"
+                  type="password"
+                  className={inputClass}
+                  value={resetPasswordConfirm}
+                  onChange={(e) => setResetPasswordConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                  minLength={6}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0 mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPasswordResetTarget(null);
+                  setResetPassword('');
+                  setResetPasswordConfirm('');
+                }}
+              >
+                {t('cancel')}
+              </Button>
+              <Button type="submit" disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save')}
               </Button>
             </DialogFooter>

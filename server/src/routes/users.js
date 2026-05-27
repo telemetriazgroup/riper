@@ -46,12 +46,17 @@ function isGreenyardFleetEmail(email) {
   return normalizeEmail(email) === normalizeEmail(process.env.GREENYARD_EMAIL || 'greenyard@riper.local');
 }
 
+function isGourmetTradingFleetEmail(email) {
+  return normalizeEmail(email) === normalizeEmail(process.env.GOURMET_TRADING_EMAIL || 'gourmettrading@ztrack.app');
+}
+
 /** Demo flotas restringidas: sin alta/baja/edición de usuarios ajenos. */
 function isDemoFleetRestricted(reqUserEmail) {
   return (
     isUltraorganicsFleetEmail(reqUserEmail) ||
     isThermoKingFleetEmail(reqUserEmail) ||
-    isGreenyardFleetEmail(reqUserEmail)
+    isGreenyardFleetEmail(reqUserEmail) ||
+    isGourmetTradingFleetEmail(reqUserEmail)
   );
 }
 
@@ -104,6 +109,9 @@ usersRouter.post('/', requireAdmin, async (req, res) => {
   const pw = String(password || '');
   if (!n || !em || !pw) {
     return res.status(400).json({ error: 'validation', message: 'name, email and password required' });
+  }
+  if (pw.length < 6) {
+    return res.status(400).json({ error: 'validation', message: 'password must be at least 6 characters' });
   }
   if (!ROLES.has(role)) {
     return res.status(400).json({ error: 'validation', message: 'invalid role' });
@@ -170,6 +178,17 @@ usersRouter.patch('/:id', async (req, res) => {
     active = undefined;
   }
 
+  /** Superadmin puede restablecer contraseña de cualquier cuenta (incl. otras cuentas superadmin). */
+  if (
+    password !== undefined &&
+    String(password).length > 0 &&
+    !self &&
+    existing.is_superuser &&
+    req.user.role !== 'superadmin'
+  ) {
+    return res.status(403).json({ error: 'forbidden', message: 'only superadmin can reset superuser password' });
+  }
+
   if (name !== undefined) {
     const n = String(name).trim();
     if (!n) return res.status(400).json({ error: 'validation', message: 'name empty' });
@@ -212,7 +231,11 @@ usersRouter.patch('/:id', async (req, res) => {
     vals.push(iden);
   }
   if (password !== undefined && String(password).length > 0) {
-    const hash = await bcrypt.hash(String(password), 10);
+    const pw = String(password);
+    if (pw.length < 6) {
+      return res.status(400).json({ error: 'validation', message: 'password must be at least 6 characters' });
+    }
+    const hash = await bcrypt.hash(pw, 10);
     fields.push(`password_hash = $${i++}`);
     vals.push(hash);
   }

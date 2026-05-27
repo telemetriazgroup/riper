@@ -10,6 +10,7 @@ import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
 import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
+import { getGourmetTradingPinnedImeis, isGourmetSession } from '@/app/lib/gourmet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
   SIM_FLEET_AVL_MAX_CFM,
@@ -432,6 +433,10 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     const pin = getThermoKingPinnedImei();
     return withSim.filter((d) => String(d.id ?? '').trim() === pin);
   }
+  if (isGourmetSession()) {
+    const allow = new Set(getGourmetTradingPinnedImeis());
+    return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
+  }
   /** Greenyard: Ripener ya devolvió todos los IMEI del identificador 4001 (sin recortar en cliente por sufijo IMEI). */
   if (isGreenyardSession()) {
     return withSim;
@@ -739,7 +744,8 @@ export function shouldUseMaduradorRangoHistory(): boolean {
     hasMaduradorIdentificador() ||
     isUltraorganicsSession() ||
     isThermoKingSession() ||
-    isGreenyardSession()
+    isGreenyardSession() ||
+    isGourmetSession()
   );
 }
 

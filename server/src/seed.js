@@ -28,29 +28,84 @@ export async function seedSuperuser() {
   console.log(`[seed] superuser created: ${email} (change SUPERUSER_PASSWORD in production)`);
 }
 
-/** Usuario demo Gourmet Trading: datos locales desde data_gourmet.json (solo si no existe). */
+/** Usuario Gourmet Trading: Madurador identificador 5001, dos IMEI pin, rol admin. */
+function gourmetTradingDefaultPassword() {
+  return (
+    process.env.GOURMET_TRADING_PASSWORD ||
+    process.env.GOURMET_DEMO_PASSWORD ||
+    '@gourmet2026!'
+  );
+}
+
+/** `GOURMET_TRADING_SYNC_PASSWORD=1` fuerza la contraseña del README/env en cada arranque. */
+function gourmetPasswordSyncForced() {
+  const v = process.env.GOURMET_TRADING_SYNC_PASSWORD;
+  return v === '1' || /^true$/i.test(String(v || '').trim());
+}
+
+async function syncGourmetTradingPassword(email) {
+  const { rows } = await pool.query(
+    `SELECT password_hash FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (!rows.length) return;
+
+  const newPw = gourmetTradingDefaultPassword();
+  let shouldUpdate = gourmetPasswordSyncForced();
+
+  if (!shouldUpdate) {
+    const legacyPasswords = ['GourmetDemo2026!', 'GourmetDemo2026'];
+    for (const legacy of legacyPasswords) {
+      if (rows[0].password_hash && (await bcrypt.compare(legacy, rows[0].password_hash))) {
+        shouldUpdate = true;
+        break;
+      }
+    }
+  }
+
+  if (!shouldUpdate) return;
+
+  const hash = await bcrypt.hash(newPw, 10);
+  await pool.query(
+    `UPDATE app_users SET password_hash = $1, active = true, updated_at = now()
+     WHERE lower(email) = $2 AND deleted_at IS NULL`,
+    [hash, email]
+  );
+  console.log(`[seed] Gourmet Trading password synced (${email})`);
+}
+
 export async function seedGourmetDemoUser() {
-  const email = 'gourmettrading@ztrack.app';
+  const email = String(process.env.GOURMET_TRADING_EMAIL || 'gourmettrading@ztrack.app')
+    .trim()
+    .toLowerCase();
+  const ident = String(process.env.GOURMET_TRADING_IDENTIFICADOR || '5001').trim() || '5001';
   const { rows } = await pool.query(
     `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
     [email]
   );
   if (rows.length === 0) {
-    const password = process.env.GOURMET_DEMO_PASSWORD || 'GourmetDemo2026!';
+    const password = gourmetTradingDefaultPassword();
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
       `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
-       VALUES ($1, $2, 'viewer', $3, 'Gourmet Trading', false, true, '1001')`,
-      ['Gourmet Trading', email, hash]
+       VALUES ($1, $2, 'admin', $3, 'Gourmet Trading', false, true, $4)`,
+      ['Gourmet Trading', email, hash, ident]
     );
-    console.log(`[seed] gourmet demo user: ${email} (set GOURMET_DEMO_PASSWORD in production)`);
+    console.log(`[seed] Gourmet Trading user: ${email} (set GOURMET_TRADING_PASSWORD in production)`);
   }
 
   await pool.query(
-    `UPDATE app_users SET identificador = '1001', updated_at = now()
-     WHERE lower(email) = 'gourmettrading@ztrack.app' AND deleted_at IS NULL
-       AND (identificador IS NULL OR btrim(identificador) = '')`
+    `UPDATE app_users
+        SET identificador = $2,
+            role = 'admin',
+            company = 'Gourmet Trading',
+            active = true,
+            updated_at = now()
+      WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email, ident]
   );
+
+  await syncGourmetTradingPassword(email);
 }
 
 /** Demo flota: dispositivos sintéticos en el front (todos los estados del panel / tarjetas). Sin identificador Madurador. */

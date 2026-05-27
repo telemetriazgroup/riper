@@ -2,7 +2,7 @@ import express from 'express';
 
 export const tunelRouter = express.Router();
 
-const GOURMET_TUNEL_EMAIL = (process.env.GOURMET_TUNEL_USER_EMAIL || 'gourmettrading@ztrack.app')
+const GOURMET_TUNEL_EMAIL = (process.env.GOURMET_TRADING_EMAIL || process.env.GOURMET_TUNEL_USER_EMAIL || 'gourmettrading@ztrack.app')
   .trim()
   .toLowerCase();
 

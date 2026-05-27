@@ -10,6 +10,46 @@ type RawRow = Record<string, unknown> & {
 const gourmetRaw = gourmetJson as RawRow[];
 
 export const GOURMET_USER_EMAIL = 'gourmettrading@ztrack.app';
+
+/** IMEI por defecto empresa 5001 (Gourmet Trading). */
+export const GOURMET_TRADING_DEFAULT_IMEIS = ['867856038562796', '866262036100104'] as const;
+
+export function gourmetTradingLoginEmail(): string {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_GOURMET_TRADING_EMAIL?: string } }).env?.VITE_GOURMET_TRADING_EMAIL)) ||
+    GOURMET_USER_EMAIL;
+  return String(raw).trim().toLowerCase() || GOURMET_USER_EMAIL.toLowerCase();
+}
+
+export function getGourmetTradingPinnedImeis(): string[] {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_GOURMET_TRADING_DEVICE_IMEIS?: string } }).env
+        ?.VITE_GOURMET_TRADING_DEVICE_IMEIS)) ||
+    GOURMET_TRADING_DEFAULT_IMEIS.join(',');
+  const list = String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length > 0 ? list : [...GOURMET_TRADING_DEFAULT_IMEIS];
+}
+
+export function isGourmetSession(): boolean {
+  try {
+    const u = getStoredUser();
+    return (u?.email ?? '').toLowerCase() === gourmetTradingLoginEmail();
+  } catch {
+    return false;
+  }
+}
+
+/** Perfil con identificador Madurador: datos reales upstream, sin JSON local ni túnel extra. */
+export function isGourmetMaduradorFleetSession(): boolean {
+  if (!isGourmetSession()) return false;
+  return Boolean(getStoredUser()?.identificador?.trim());
+}
+
 export const GOURMET_DEVICE_ID = 'CC:DB:A7:9D:F3:E8';
 export const GOURMET_DEVICE_NAME = 'Madurador Gourment';
 
@@ -22,15 +62,6 @@ const WINDOW_MS = 12 * 60 * 60 * 1000;
 const HISTORY_BUILD_VERSION = 2;
 let gourmetHistoryCache: HistoryPoint[] | null = null;
 let historyCacheVersion = 0;
-
-export function isGourmetSession(): boolean {
-  try {
-    const u = getStoredUser();
-    return (u?.email ?? '').toLowerCase() === GOURMET_USER_EMAIL.toLowerCase();
-  } catch {
-    return false;
-  }
-}
 
 function parseFecha(row: RawRow): number | null {
   const f = row.fecha;
