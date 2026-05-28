@@ -4,10 +4,10 @@ import { writeAudit } from '../auditLog.js';
 import { requireSuperAdmin } from '../authMiddleware.js';
 import { maybeFinalizeDeviceControlDebounced } from '../autoFinalizeDueProcesses.js';
 import {
-  filterRowsByGreenyardDeviceIds,
-  isGreenyardDeviceId,
-  isGreenyardFleetEmail,
-} from '../greenyardFleet.js';
+  filterRowsByPinnedFleetDeviceIds,
+  isPinnedFleetDeviceId,
+  isPinnedFleetDemoEmail,
+} from '../demoFleetFilter.js';
 
 function parseIncludeArchived(req) {
   const v = req.query.includeArchived ?? req.query.include_archived;
@@ -53,8 +53,8 @@ deviceControlRouter.get('/active', async (req, res) => {
     if (!deviceId) {
       return res.status(400).json({ error: 'validation', message: 'deviceId required' });
     }
-    if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
-      return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
+    if (isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
+      return res.status(403).json({ error: 'forbidden', message: 'device not in fleet scope' });
     }
     const { rows } = await pool.query(
       `SELECT s.*, u.name AS user_name, u.email AS user_email,
@@ -89,8 +89,8 @@ deviceControlRouter.post('/start', async (req, res) => {
   if (!deviceId) {
     return res.status(400).json({ error: 'validation', message: 'deviceId required' });
   }
-  if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
-    return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
+  if (isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
+    return res.status(403).json({ error: 'forbidden', message: 'device not in fleet scope' });
   }
   const auditLog = body.auditLog === true && processType === 'Manual';
   if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling', 'StopPlan', 'Manual'].includes(processType)) {
@@ -225,8 +225,8 @@ deviceControlRouter.get('/sessions', async (req, res) => {
       [includeArchived]
     );
     let data = rows;
-    if (isGreenyardFleetEmail(req.user?.email) && req.user?.role !== 'superadmin') {
-      data = filterRowsByGreenyardDeviceIds(rows, (r) => r.device_id);
+    if (isPinnedFleetDemoEmail(req.user?.email) && req.user?.role !== 'superadmin') {
+      data = filterRowsByPinnedFleetDeviceIds(req.user.email, rows, (r) => r.device_id);
     }
     return res.json({ data });
   } catch (e) {

@@ -18,6 +18,8 @@ import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPa
 import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
 import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
 import { DeviceMonitoringAnalysis } from '@/app/components/DeviceMonitoringAnalysis';
+import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandCompliancePanel';
+import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -193,6 +195,9 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
             formatDateTime={formatDateTime}
           />
           <DeviceControlProcessPanel deviceId={deviceId} />
+          {isGourmetTunnelCommandDevice(deviceId) && (
+            <TunnelCommandCompliancePanel deviceId={deviceId} />
+          )}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* Left Column: Control Panel */}
           <div className="lg:col-span-1">

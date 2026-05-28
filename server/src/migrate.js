@@ -148,6 +148,39 @@ CREATE INDEX IF NOT EXISTS idx_dctrl_sessions_not_archived ON app_device_control
 `;
 
 /** Trazabilidad: solo inserción; no hay DELETE desde la aplicación. */
+const SQL_TUNNEL_COMMAND_JOBS = `
+CREATE TABLE IF NOT EXISTS app_tunnel_command_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  device_id VARCHAR(128) NOT NULL,
+  batch_id UUID NOT NULL,
+  kind VARCHAR(32) NOT NULL CHECK (kind IN ('temperature', 'humidity', 'ethylene', 'ventilation')),
+  target_value NUMERIC(12, 4) NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'sent', 'verifying', 'waiting', 'completed', 'failed', 'cancelled')),
+  tunnel_tipo SMALLINT NOT NULL,
+  verify_field VARCHAR(64) NOT NULL,
+  tolerance NUMERIC(12, 4) NOT NULL DEFAULT 0.5,
+  attempts INT NOT NULL DEFAULT 0,
+  max_attempts INT NOT NULL DEFAULT 40,
+  next_check_at TIMESTAMPTZ NULL,
+  last_read_value NUMERIC(12, 4) NULL,
+  last_error TEXT NULL,
+  steps JSONB NOT NULL DEFAULT '[]'::jsonb,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tunnel_cmd_device_status
+  ON app_tunnel_command_jobs (device_id, status, next_check_at);
+CREATE INDEX IF NOT EXISTS idx_tunnel_cmd_batch
+  ON app_tunnel_command_jobs (batch_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_tunnel_cmd_pending
+  ON app_tunnel_command_jobs (next_check_at)
+  WHERE status IN ('pending', 'sent', 'verifying', 'waiting');
+`;
+
 const SQL_AUDIT = `
 CREATE TABLE IF NOT EXISTS app_audit_logs (
   id BIGSERIAL PRIMARY KEY,
@@ -211,6 +244,7 @@ export async function runMigrate() {
     await client.query(SQL_DEVICE_CONTROL);
     await client.query(SQL_DEVICE_CONTROL_CANCEL_META);
     await client.query(SQL_DEVICE_CONTROL_ARCHIVE);
+    await client.query(SQL_TUNNEL_COMMAND_JOBS);
     await client.query(SQL_AUDIT);
     await client.query(SQL_COMPANIES);
     await migrateRoleConstraint(client);

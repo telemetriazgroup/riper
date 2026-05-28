@@ -50,6 +50,12 @@ export function isGourmetMaduradorFleetSession(): boolean {
   return Boolean(getStoredUser()?.identificador?.trim());
 }
 
+/** Dispositivo IMEI Gourmet: control manual vía API Tunel (tipo 1/2/5+0/6). */
+export function isGourmetTunnelCommandDevice(deviceId?: string | null): boolean {
+  if (!deviceId || !isGourmetSession()) return false;
+  return getGourmetTradingPinnedImeis().includes(String(deviceId).trim());
+}
+
 export const GOURMET_DEVICE_ID = 'CC:DB:A7:9D:F3:E8';
 export const GOURMET_DEVICE_NAME = 'Madurador Gourment';
 

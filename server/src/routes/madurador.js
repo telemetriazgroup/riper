@@ -5,6 +5,11 @@ import {
   greenyardDeviceImeis,
   isGreenyardFleetEmail,
 } from '../greenyardFleet.js';
+import {
+  gourmetTradingEmpresaIdentificador,
+  gourmetTradingDeviceImeis,
+  isGourmetTradingFleetEmail,
+} from '../gourmetFleet.js';
 
 export const maduradorRouter = express.Router();
 
@@ -74,29 +79,6 @@ function thermoKingEmpresaIdentificador() {
 
 function thermoKingPinnedDeviceImei() {
   return String(process.env.THERMOKING_DEVICE_IMEI || 'PRUEBA_CA000001').trim();
-}
-
-function gourmetTradingEmailLogin() {
-  return String(process.env.GOURMET_TRADING_EMAIL || 'gourmettrading@ztrack.app').trim().toLowerCase();
-}
-
-function isGourmetTradingFleetEmail(email) {
-  return String(email || '').trim().toLowerCase() === gourmetTradingEmailLogin();
-}
-
-function gourmetTradingEmpresaIdentificador() {
-  const s = String(process.env.GOURMET_TRADING_IDENTIFICADOR || '5001').trim();
-  return s || '5001';
-}
-
-/** IMEI visibles para Gourmet Trading (por defecto los dos del identificador 5001). */
-function gourmetTradingPinnedImeis() {
-  const raw =
-    process.env.GOURMET_TRADING_DEVICE_IMEIS || '867856038562796,866262036100104';
-  return String(raw)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
 }
 
 const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
@@ -331,7 +313,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         console.error('[madurador] gourmet trading upstream failed', gtIdent);
         return res.status(502).json({ error: 'madurador_upstream', message: `upstream gourmet ${gtIdent}` });
       }
-      const allow = gourmetTradingPinnedImeis();
+      const allow = gourmetTradingDeviceImeis();
       const data = filterRowsByImeiAllowlistOrdered(listGt, allow);
       return res.json({ data });
     }

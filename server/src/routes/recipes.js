@@ -2,7 +2,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { requireAdmin, requireSuperAdmin } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
-import { isGreenyardFleetEmail } from '../greenyardFleet.js';
+import { isScopedRecipeDemoUser, scopedRecipeSql } from '../demoFleetFilter.js';
 
 export const recipesRouter = express.Router();
 
@@ -48,8 +48,8 @@ function parseIncludeArchived(req) {
   return v === true || v === 'true' || v === '1';
 }
 
-function greenyardRecipeScopeSql(userIdParamIndex) {
-  return `(is_system IS TRUE OR created_by_user_id = $${userIdParamIndex}::uuid)`;
+function recipeScopeSql(userIdParamIndex) {
+  return scopedRecipeSql(userIdParamIndex);
 }
 
 recipesRouter.get('/', async (req, res) => {
@@ -58,19 +58,19 @@ recipesRouter.get('/', async (req, res) => {
     if (includeArchived && req.user?.role !== 'superadmin') {
       return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
     }
-    const gy = isGreenyardFleetEmail(req.user?.email) && req.user?.role !== 'superadmin';
+    const scoped = isScopedRecipeDemoUser(req);
     const { rows } = await pool.query(
-      gy
+      scoped
         ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
-             AND ${greenyardRecipeScopeSql(2)}
+             AND ${recipeScopeSql(2)}
            ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`
         : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
            ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
-      gy ? [includeArchived, req.user.id] : [includeArchived]
+      scoped ? [includeArchived, req.user.id] : [includeArchived]
     );
     res.json({ data: rows.map(rowToRecipe) });
   } catch (e) {
@@ -106,17 +106,17 @@ recipesRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
 recipesRouter.get('/:id', async (req, res) => {
   try {
     const superadmin = req.user?.role === 'superadmin';
-    const gy = isGreenyardFleetEmail(req.user?.email) && !superadmin;
+    const scoped = isScopedRecipeDemoUser(req);
     const { rows } = await pool.query(
-      gy
+      scoped
         ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)
-             AND ${greenyardRecipeScopeSql(3)}`
+             AND ${recipeScopeSql(3)}`
         : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
-      gy ? [req.params.id, superadmin, req.user.id] : [req.params.id, superadmin]
+      scoped ? [req.params.id, superadmin, req.user.id] : [req.params.id, superadmin]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ data: rowToRecipe(rows[0]) });
@@ -220,8 +220,7 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
       });
     }
     if (
-      isGreenyardFleetEmail(req.user?.email) &&
-      req.user?.role !== 'superadmin' &&
+      isScopedRecipeDemoUser(req) &&
       chk[0].created_by_user_id !== req.user.id
     ) {
       return res.status(403).json({ error: 'forbidden', message: 'cannot modify another user recipe' });
@@ -269,8 +268,7 @@ recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
       });
     }
     if (
-      isGreenyardFleetEmail(req.user?.email) &&
-      req.user?.role !== 'superadmin' &&
+      isScopedRecipeDemoUser(req) &&
       chk[0].created_by_user_id !== req.user.id
     ) {
       return res.status(403).json({ error: 'forbidden', message: 'cannot archive another user recipe' });

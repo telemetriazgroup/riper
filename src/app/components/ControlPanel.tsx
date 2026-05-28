@@ -18,6 +18,8 @@ import { cn } from '@/app/lib/utils';
 import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Timer, WifiOff, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
+import { applyTunnelManualCommands } from '@/app/lib/tunnelCommandsApi';
+import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
 import { Device } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes } from 'date-fns';
@@ -364,12 +366,34 @@ const ManualControl = ({
     if (!deviceId) return;
     setIsSubmitting(true);
     try {
-      await sendControlCommand(deviceId, 'manual_update', {
-        set_point: temp,
-        humidity_set_point: humidity,
-        ethylene,
-        fan_speed: fan,
-      });
+      const tunnelCommands: {
+        set_point?: number;
+        humidity_set_point?: number;
+        ethylene?: number;
+        fan_speed?: number;
+      } = {};
+      if (temp !== originalTemp) tunnelCommands.set_point = Number(temp.toFixed(1));
+      if (humidity !== originalHumidity) tunnelCommands.humidity_set_point = Math.round(humidity);
+      if (ethylene !== originalEthylene) tunnelCommands.ethylene = Math.round(ethylene);
+      if (fan !== originalFan) tunnelCommands.fan_speed = Math.round(fan);
+
+      if (isGourmetTunnelCommandDevice(deviceId)) {
+        if (Object.keys(tunnelCommands).length === 0) {
+          toast.error(t('no_changes_to_apply') || 'Sin cambios');
+          setIsConfirmOpen(false);
+          return;
+        }
+        const result = await applyTunnelManualCommands({ deviceId, commands: tunnelCommands });
+        const sentKinds = result.jobs.map((j) => j.kind).join(', ');
+        console.info('[tunnel] comandos enviados upstream', deviceId, tunnelCommands, sentKinds);
+      } else {
+        await sendControlCommand(deviceId, 'manual_update', {
+          set_point: temp,
+          humidity_set_point: humidity,
+          ethylene,
+          fan_speed: fan,
+        });
+      }
       const summary = changes.map((c) => `${c.name}: ${c.from} → ${c.to}`).join(' · ');
       await startControlProcess({
         deviceId,
@@ -390,7 +414,11 @@ const ManualControl = ({
       void revalidateControlSessionsList();
       void revalidateFleetActiveControlSessions();
       await sessionMutate();
-      toast.success(t('manual_control_logged') || t('apply_changes') + ' OK');
+      toast.success(
+        isGourmetTunnelCommandDevice(deviceId)
+          ? t('tunnel_cmd_sent_ok') || 'Comandos enviados al túnel — seguimiento en curso'
+          : t('manual_control_logged') || t('apply_changes') + ' OK'
+      );
       setIsConfirmOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error');

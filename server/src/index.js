@@ -27,10 +27,12 @@ import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripe
 import { deviceControlRouter } from './routes/deviceControl.js';
 import { auditRouter } from './routes/audit.js';
 import { companiesRouter } from './routes/companies.js';
+import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
 import {
   finalizeDueRipeningProcesses,
   finalizeDueDeviceControlSessions,
 } from './autoFinalizeDueProcesses.js';
+import { processTunnelCommandJobs, POLL_INTERVAL_MS } from './tunnelCommandCompliance.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const AUTO_FINALIZE_MS = Math.max(15000, Number(process.env.AUTO_FINALIZE_INTERVAL_MS) || 60000);
@@ -80,6 +82,7 @@ async function main() {
   app.use('/api/v1/device-control', authMiddleware, deviceControlRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/companies', authMiddleware, companiesRouter);
+  app.use('/api/v1/tunnel-commands', authMiddleware, tunnelCommandsRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);
@@ -95,6 +98,10 @@ async function main() {
       console.error('[auto-finalize]', e.message)
     );
   }, AUTO_FINALIZE_MS).unref?.();
+
+  setInterval(() => {
+    processTunnelCommandJobs().catch((e) => console.error('[tunnel-compliance]', e.message));
+  }, POLL_INTERVAL_MS).unref?.();
 }
 
 main().catch((e) => {
