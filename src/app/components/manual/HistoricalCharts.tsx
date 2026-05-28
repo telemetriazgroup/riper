@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSettings } from '@/app/contexts/SettingsContext';
 import { LineChart, BarChart3, Table, TrendingUp } from 'lucide-react';
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -25,7 +26,31 @@ interface HistoricalChartProps {
   highlightColor: string;
 }
 
+interface DataTableProps {
+  highlightColor: string;
+  title: string;
+  subtitle: string;
+}
+
+function useChartLabels() {
+  const { t, language } = useSettings();
+  const en = language === 'en';
+  return {
+    t,
+    average: en ? 'Average' : 'Promedio',
+    maximum: en ? 'Maximum' : 'Máximo',
+    minimum: en ? 'Minimum' : 'Mínimo',
+    deviation: en ? 'Deviation' : 'Desviación',
+    time: en ? 'Time' : 'Hora',
+    trend: en ? 'Trend' : 'Tendencia',
+    minLabel: en ? 'Min' : 'Min',
+    maxLabel: en ? 'Max' : 'Max',
+  };
+}
+
 export const HistoricalTemperatureChart: React.FC<HistoricalChartProps> = ({ title, description, highlightColor }) => {
+  const { t, average, maximum, minimum, deviation } = useChartLabels();
+
   return (
     <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid ' + highlightColor }}>
       <div className="flex items-center justify-between mb-4">
@@ -49,7 +74,6 @@ export const HistoricalTemperatureChart: React.FC<HistoricalChartProps> = ({ tit
         </div>
       </div>
 
-      {/* Gráfica de Temperatura */}
       <div className="mb-4">
         <ResponsiveContainer width="100%" height={300}>
           <RechartsLineChart data={historicalData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -82,7 +106,7 @@ export const HistoricalTemperatureChart: React.FC<HistoricalChartProps> = ({ tit
               dataKey="temperatura" 
               stroke="rgb(239, 68, 68)" 
               strokeWidth={3}
-              name="Temperatura (°C)"
+              name={`${t('temperature')} (°C)`}
               dot={{ fill: 'rgb(239, 68, 68)', r: 4 }}
               activeDot={{ r: 6 }}
             />
@@ -90,22 +114,21 @@ export const HistoricalTemperatureChart: React.FC<HistoricalChartProps> = ({ tit
         </ResponsiveContainer>
       </div>
 
-      {/* Estadísticas */}
       <div className="grid grid-cols-4 gap-4 pt-4 border-t" style={{ borderColor: 'rgb(226, 232, 240)' }}>
         <div className="text-center">
-          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Promedio</p>
+          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{average}</p>
           <p className="text-lg font-bold" style={{ color: 'rgb(239, 68, 68)' }}>20.1°C</p>
         </div>
         <div className="text-center">
-          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Máximo</p>
+          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{maximum}</p>
           <p className="text-lg font-bold" style={{ color: 'rgb(239, 68, 68)' }}>20.5°C</p>
         </div>
         <div className="text-center">
-          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Mínimo</p>
+          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{minimum}</p>
           <p className="text-lg font-bold" style={{ color: 'rgb(37, 99, 235)' }}>19.8°C</p>
         </div>
         <div className="text-center">
-          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Desviación</p>
+          <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{deviation}</p>
           <p className="text-lg font-bold" style={{ color: 'rgb(100, 116, 139)' }}>±0.25°C</p>
         </div>
       </div>
@@ -114,6 +137,8 @@ export const HistoricalTemperatureChart: React.FC<HistoricalChartProps> = ({ tit
 };
 
 export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, description, highlightColor }) => {
+  const { t } = useChartLabels();
+
   return (
     <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid ' + highlightColor }}>
       <div className="flex items-center justify-between mb-4">
@@ -126,7 +151,6 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
         </div>
       </div>
 
-      {/* Gráfica Multi-Parámetro */}
       <ResponsiveContainer width="100%" height={350}>
         <RechartsLineChart data={historicalData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgb(226, 232, 240)" />
@@ -166,7 +190,7 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
             dataKey="temperatura" 
             stroke="rgb(239, 68, 68)" 
             strokeWidth={2}
-            name="Temperatura (°C)"
+            name={`${t('temperature')} (°C)`}
             dot={{ r: 3 }}
           />
           <Line 
@@ -175,7 +199,7 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
             dataKey="humedad" 
             stroke="rgb(34, 197, 94)" 
             strokeWidth={2}
-            name="Humedad (%)"
+            name={`${t('humidity')} (%)`}
             dot={{ r: 3 }}
           />
           <Line 
@@ -184,7 +208,7 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
             dataKey="etileno" 
             stroke="rgb(234, 88, 12)" 
             strokeWidth={2}
-            name="Etileno (ppm)"
+            name={`${t('ethylene')} (ppm)`}
             dot={{ r: 3 }}
           />
           <Line 
@@ -193,7 +217,7 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
             dataKey="co2" 
             stroke="rgb(147, 51, 234)" 
             strokeWidth={2}
-            name="CO₂ (%)"
+            name={`${t('co2')} (%)`}
             dot={{ r: 3 }}
           />
         </RechartsLineChart>
@@ -202,16 +226,18 @@ export const MultiParameterChart: React.FC<HistoricalChartProps> = ({ title, des
   );
 };
 
-export const DataTable: React.FC<{ highlightColor: string }> = ({ highlightColor }) => {
+export const DataTable: React.FC<DataTableProps> = ({ highlightColor, title, subtitle }) => {
+  const { t, time, trend, minLabel, maxLabel } = useChartLabels();
+
   return (
     <div className="rounded-lg overflow-hidden" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid ' + highlightColor }}>
       <div className="p-4" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
         <h3 className="text-lg font-semibold flex items-center gap-2" style={{ color: 'rgb(15, 23, 42)' }}>
           <Table className="h-5 w-5 animate-pulse" style={{ color: highlightColor }} />
-          Tabla de Datos Históricos
+          {title}
         </h3>
         <p className="text-sm mt-1" style={{ color: 'rgb(100, 116, 139)' }}>
-          Últimas 12 mediciones registradas en las últimas 24 horas
+          {subtitle}
         </p>
       </div>
       
@@ -219,12 +245,12 @@ export const DataTable: React.FC<{ highlightColor: string }> = ({ highlightColor
         <table className="w-full">
           <thead style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'rgb(71, 85, 105)' }}>Hora</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(239, 68, 68)' }}>Temperatura</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(34, 197, 94)' }}>Humedad</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(234, 88, 12)' }}>Etileno</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(147, 51, 234)' }}>CO₂</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(71, 85, 105)' }}>Tendencia</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'rgb(71, 85, 105)' }}>{time}</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(239, 68, 68)' }}>{t('temperature')}</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(34, 197, 94)' }}>{t('humidity')}</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(234, 88, 12)' }}>{t('ethylene')}</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(147, 51, 234)' }}>{t('co2')}</th>
+              <th className="px-4 py-3 text-center text-xs font-semibold" style={{ color: 'rgb(71, 85, 105)' }}>{trend}</th>
             </tr>
           </thead>
           <tbody>
@@ -269,30 +295,29 @@ export const DataTable: React.FC<{ highlightColor: string }> = ({ highlightColor
         </table>
       </div>
 
-      {/* Resumen estadístico */}
       <div className="p-4" style={{ backgroundColor: 'rgb(248, 250, 252)', borderTop: '2px solid rgb(226, 232, 240)' }}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
-            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Temperatura</p>
-            <p style={{ color: 'rgb(239, 68, 68)' }}>Min: {Math.min(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C | Max: {Math.max(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C</p>
+            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>{t('temperature')}</p>
+            <p style={{ color: 'rgb(239, 68, 68)' }}>{minLabel}: {Math.min(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C | {maxLabel}: {Math.max(...historicalData.map((r) => r.temperatura)).toFixed(2)}°C</p>
           </div>
           <div>
-            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Humedad</p>
-            <p style={{ color: 'rgb(34, 197, 94)' }}>Min: {Math.min(...historicalData.map((r) => r.humedad)).toFixed(2)}% | Max: {Math.max(...historicalData.map((r) => r.humedad)).toFixed(2)}%</p>
+            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>{t('humidity')}</p>
+            <p style={{ color: 'rgb(34, 197, 94)' }}>{minLabel}: {Math.min(...historicalData.map((r) => r.humedad)).toFixed(2)}% | {maxLabel}: {Math.max(...historicalData.map((r) => r.humedad)).toFixed(2)}%</p>
           </div>
           <div>
-            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>Etileno</p>
+            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>{t('ethylene')}</p>
             <p style={{ color: 'rgb(234, 88, 12)' }}>
               {(() => {
                 const vals = historicalData.map((r) => r.etileno).filter((v) => v !== 0);
                 if (vals.length === 0) return 'NA';
-                return `Min: ${Math.min(...vals).toFixed(2)} ppm | Max: ${Math.max(...vals).toFixed(2)} ppm`;
+                return `${minLabel}: ${Math.min(...vals).toFixed(2)} ppm | ${maxLabel}: ${Math.max(...vals).toFixed(2)} ppm`;
               })()}
             </p>
           </div>
           <div>
-            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>CO₂</p>
-            <p style={{ color: 'rgb(147, 51, 234)' }}>Min: {Math.min(...historicalData.map((r) => r.co2)).toFixed(2)}% | Max: {Math.max(...historicalData.map((r) => r.co2)).toFixed(2)}%</p>
+            <p className="font-medium mb-1" style={{ color: 'rgb(71, 85, 105)' }}>{t('co2')}</p>
+            <p style={{ color: 'rgb(147, 51, 234)' }}>{minLabel}: {Math.min(...historicalData.map((r) => r.co2)).toFixed(2)}% | {maxLabel}: {Math.max(...historicalData.map((r) => r.co2)).toFixed(2)}%</p>
           </div>
         </div>
       </div>

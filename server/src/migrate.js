@@ -65,6 +65,11 @@ ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS icon_key VARCHAR(64) NULL;
 ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS custom_image_url VARCHAR(2048) NULL;
 `;
 
+const SQL_RECIPE_OWNER = `
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS created_by_user_id UUID NULL REFERENCES app_users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_app_recipes_created_by ON app_recipes (created_by_user_id);
+`;
+
 const SQL_DEVICE_NAMES = `
 CREATE TABLE IF NOT EXISTS app_user_device_names (
   user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -199,6 +204,7 @@ export async function runMigrate() {
     await client.query(SQL_CATALOG);
     await client.query(SQL_RECIPE_SYSTEM);
     await client.query(SQL_RECIPE_VISUAL);
+    await client.query(SQL_RECIPE_OWNER);
     await client.query(SQL_DEVICE_NAMES);
     await client.query(SQL_PROCESS_FOLLOW);
     await client.query(SQL_RIPENING_PROCESSES);

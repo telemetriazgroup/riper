@@ -1,8 +1,14 @@
 import React from 'react';
 import { LayoutDashboard, Activity, AlertCircle, CheckCircle, Clock, MousePointer2, TrendingUp, Thermometer } from 'lucide-react';
+import { useManualT } from './userManualI18n';
+import { ManualCallout } from './ManualCallout';
+import { useSettings } from '@/app/contexts/SettingsContext';
 
 // Step 1: View dashboard overview
 export const DashboardStep1: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[600px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -15,15 +21,15 @@ export const DashboardStep1: React.FC = () => {
                     <LayoutDashboard className="h-6 w-6" style={{ color: 'rgb(37, 99, 235)' }} />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold" style={{ color: 'rgb(15, 23, 42)' }}>Panel de Control</h1>
+                    <h1 className="text-2xl font-bold" style={{ color: 'rgb(15, 23, 42)' }}>{t('dashboard')}</h1>
                     <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
-                      Bienvenido, Administrador
+                      {mt('manual_ui_welcome_admin')}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 rounded-full text-xs font-medium" style={{ backgroundColor: 'rgb(220, 252, 231)', color: 'rgb(22, 163, 74)' }}>
-                    Sistema Operativo
+                    {mt('manual_ui_system_operational')}
                   </div>
                 </div>
               </div>
@@ -31,27 +37,23 @@ export const DashboardStep1: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-blue-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">1</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(37, 99, 235)' }}>
-            Después de iniciar sesión, verá el panel de control principal con el encabezado que muestra su nombre de usuario y el estado del sistema
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={1} variant="blue">{mt('manual_dashboard_1_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 2: Review statistics cards
 export const DashboardStep2: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[600px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="opacity-20">
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-              <h1 className="text-2xl font-bold">Panel de Control</h1>
+              <h1 className="text-2xl font-bold">{t('dashboard')}</h1>
             </div>
           </div>
 
@@ -63,7 +65,7 @@ export const DashboardStep2: React.FC = () => {
                   <TrendingUp className="h-4 w-4" style={{ color: 'rgb(34, 197, 94)' }} />
                 </div>
                 <p className="text-2xl font-bold mb-1" style={{ color: 'rgb(15, 23, 42)' }}>12</p>
-                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>Dispositivos Activos</p>
+                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>{mt('manual_ui_devices')} {mt('manual_ui_active')}</p>
               </div>
 
               <div className="rounded-lg p-4 transform scale-105" style={{ backgroundColor: 'rgb(240, 253, 244)' }}>
@@ -72,7 +74,7 @@ export const DashboardStep2: React.FC = () => {
                   <span className="text-xs font-medium" style={{ color: 'rgb(34, 197, 94)' }}>+2</span>
                 </div>
                 <p className="text-2xl font-bold mb-1" style={{ color: 'rgb(15, 23, 42)' }}>8</p>
-                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>Procesos Completados</p>
+                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>{t('process')} {t('completed')}</p>
               </div>
 
               <div className="rounded-lg p-4 transform scale-105" style={{ backgroundColor: 'rgb(254, 243, 199)' }}>
@@ -90,26 +92,22 @@ export const DashboardStep2: React.FC = () => {
                   <span className="text-xs font-medium" style={{ color: 'rgb(14, 165, 233)' }}>→</span>
                 </div>
                 <p className="text-2xl font-bold mb-1" style={{ color: 'rgb(15, 23, 42)' }}>4</p>
-                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>En Proceso</p>
+                <p className="text-xs" style={{ color: 'rgb(100, 116, 139)' }}>En {t('process')}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-green-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-green-600 text-white text-sm font-bold flex-shrink-0">2</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(22, 163, 74)' }}>
-            Revise las tarjetas de estadísticas que muestran: dispositivos activos, procesos completados, alertas pendientes y procesos en curso
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={2} variant="green">{mt('manual_dashboard_2_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 3: Select a device
 export const DashboardStep3: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[700px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -117,13 +115,13 @@ export const DashboardStep3: React.FC = () => {
           <div className="opacity-20">
             <div className="grid grid-cols-4 gap-4">
               <div className="rounded-lg p-4" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-                <p>12 Activos</p>
+                <p>12 {mt('manual_ui_active')}</p>
               </div>
             </div>
           </div>
 
           <div className="space-y-4">
-            <h2 className="text-lg font-semibold" style={{ color: 'rgb(15, 23, 42)' }}>Dispositivos</h2>
+            <h2 className="text-lg font-semibold" style={{ color: 'rgb(15, 23, 42)' }}>{mt('manual_ui_devices')}</h2>
             
             <div className="ring-4 ring-purple-500 ring-offset-4 rounded-lg">
               <div className="rounded-lg p-6 transform scale-105" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid rgb(147, 51, 234)' }}>
@@ -143,25 +141,25 @@ export const DashboardStep3: React.FC = () => {
                   </div>
                   <div className="px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2" style={{ backgroundColor: 'rgb(220, 252, 231)', color: 'rgb(22, 163, 74)' }}>
                     <div className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: 'rgb(22, 163, 74)' }} />
-                    Activo
+                    {mt('manual_ui_active')}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-4 gap-4">
                   <div className="text-center">
-                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Temperatura</p>
+                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{t('temperature')}</p>
                     <p className="text-lg font-bold" style={{ color: 'rgb(239, 68, 68)' }}>20.2°C</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Humedad</p>
+                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{t('humidity')}</p>
                     <p className="text-lg font-bold" style={{ color: 'rgb(34, 197, 94)' }}>89%</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>Etileno</p>
+                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{t('ethylene')}</p>
                     <p className="text-lg font-bold" style={{ color: 'rgb(234, 88, 12)' }}>98 ppm</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>CO₂</p>
+                    <p className="text-xs mb-1" style={{ color: 'rgb(100, 116, 139)' }}>{t('co2')}</p>
                     <p className="text-lg font-bold" style={{ color: 'rgb(147, 51, 234)' }}>2.8%</p>
                   </div>
                 </div>
@@ -179,20 +177,16 @@ export const DashboardStep3: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-purple-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-purple-600 text-white text-sm font-bold flex-shrink-0">3</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(147, 51, 234)' }}>
-            Haga clic en una tarjeta de dispositivo para ver sus detalles completos. Cada tarjeta muestra el ID, producto, estado y parámetros en tiempo real
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={3} variant="purple">{mt('manual_dashboard_3_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 4: View process progress
 export const DashboardStep4: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[700px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -207,15 +201,15 @@ export const DashboardStep4: React.FC = () => {
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid rgb(234, 88, 12)' }}>
               <h3 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: 'rgb(15, 23, 42)' }}>
                 <Activity className="h-5 w-5 animate-pulse" style={{ color: 'rgb(234, 88, 12)' }} />
-                Progreso del Proceso
+                Progreso del {t('process')}
               </h3>
 
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium" style={{ color: 'rgb(15, 23, 42)' }}>Receta: Mango Kent Standard</p>
+                    <p className="font-medium" style={{ color: 'rgb(15, 23, 42)' }}>{t('recipe')}: Mango Kent Standard</p>
                     <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
-                      Fase actual: Maduración (2 de 4)
+                      Fase actual: {t('ripening')} (2 de 4)
                     </p>
                   </div>
                   <div className="text-right">
@@ -235,16 +229,16 @@ export const DashboardStep4: React.FC = () => {
 
                 <div className="grid grid-cols-4 gap-2 text-xs">
                   <div className="text-center p-2 rounded" style={{ backgroundColor: 'rgb(220, 252, 231)' }}>
-                    <p className="font-medium" style={{ color: 'rgb(22, 163, 74)' }}>✓ Homog.</p>
+                    <p className="font-medium" style={{ color: 'rgb(22, 163, 74)' }}>✓ {t('homogenization').slice(0, 5)}.</p>
                   </div>
                   <div className="text-center p-2 rounded" style={{ backgroundColor: 'rgb(254, 243, 199)' }}>
-                    <p className="font-medium" style={{ color: 'rgb(234, 88, 12)' }}>→ Madur.</p>
+                    <p className="font-medium" style={{ color: 'rgb(234, 88, 12)' }}>→ {t('ripening').slice(0, 5)}.</p>
                   </div>
                   <div className="text-center p-2 rounded" style={{ backgroundColor: 'rgb(241, 245, 249)' }}>
-                    <p className="font-medium" style={{ color: 'rgb(100, 116, 139)' }}>⋯ Ventil.</p>
+                    <p className="font-medium" style={{ color: 'rgb(100, 116, 139)' }}>⋯ {t('ventilation').slice(0, 5)}.</p>
                   </div>
                   <div className="text-center p-2 rounded" style={{ backgroundColor: 'rgb(241, 245, 249)' }}>
-                    <p className="font-medium" style={{ color: 'rgb(100, 116, 139)' }}>⋯ Enfriam.</p>
+                    <p className="font-medium" style={{ color: 'rgb(100, 116, 139)' }}>⋯ {t('cooling').slice(0, 7)}.</p>
                   </div>
                 </div>
               </div>
@@ -252,14 +246,7 @@ export const DashboardStep4: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-orange-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-orange-600 text-white text-sm font-bold flex-shrink-0">4</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(234, 88, 12)' }}>
-            En la sección de progreso, vea el estado actual del proceso: porcentaje completado, tiempo restante y fases (homogeneización, maduración, ventilación, enfriamiento)
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={4} variant="orange">{mt('manual_dashboard_4_callout')}</ManualCallout>
     </div>
   );
 };

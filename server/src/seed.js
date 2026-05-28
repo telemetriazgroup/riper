@@ -217,7 +217,7 @@ export async function seedUltraorganicsTeamUsers() {
   }
 }
 
-/** Greenyard: empresa 4001 (`GREENYARD_IDENTIFICADOR`), lista sólo “operación normal”. Contraseña vía `GREENYARD_PASSWORD`. */
+/** Greenyard: empresa 4001, IMEI pin NEWY2001/NEWY1001, rol admin. */
 export async function seedGreenyardUser() {
   const email = String(process.env.GREENYARD_EMAIL || 'greenyard@riper.local').trim().toLowerCase();
   const ident = String(process.env.GREENYARD_IDENTIFICADOR || '4001').trim() || '4001';
@@ -230,15 +230,20 @@ export async function seedGreenyardUser() {
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
       `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
-       VALUES ($1, $2, 'viewer', $3, 'Greenyard', false, true, $4)`,
+       VALUES ($1, $2, 'admin', $3, 'Greenyard', false, true, $4)`,
       ['Greenyard', email, hash, ident]
     );
     console.log(`[seed] Greenyard user: ${email} (set GREENYARD_PASSWORD in production)`);
   }
 
   await pool.query(
-    `UPDATE app_users SET identificador = $2, updated_at = now()
-     WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    `UPDATE app_users
+        SET identificador = $2,
+            role = 'admin',
+            company = 'Greenyard',
+            active = true,
+            updated_at = now()
+      WHERE lower(email) = $1 AND deleted_at IS NULL`,
     [email, ident]
   );
 }

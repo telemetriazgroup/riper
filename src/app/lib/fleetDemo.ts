@@ -85,3 +85,15 @@ export function isGreenyardSession(): boolean {
   }
 }
 
+/** IMEI visibles para Greenyard (debe coincidir con servidor `GREENYARD_DEVICE_IMEIS`). */
+export function getGreenyardPinnedImeis(): string[] {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_GREENYARD_DEVICE_IMEIS?: string } }).env?.VITE_GREENYARD_DEVICE_IMEIS)) ||
+    'NEWY2001,NEWY1001';
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+

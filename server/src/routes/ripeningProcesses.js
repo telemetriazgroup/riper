@@ -8,6 +8,11 @@ import { pool } from '../db.js';
 import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
 import { maybeFinalizeRipeningDebounced } from '../autoFinalizeDueProcesses.js';
+import {
+  filterRowsByGreenyardDeviceIds,
+  isGreenyardDeviceId,
+  isGreenyardFleetEmail,
+} from '../greenyardFleet.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -193,6 +198,9 @@ ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
   if (!deviceId) {
     return res.status(400).json({ error: 'validation', message: 'deviceId query required' });
   }
+  if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
+    return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
+  }
   try {
     const { rows } = await pool.query(
       `SELECT * FROM app_ripening_processes
@@ -246,7 +254,11 @@ ripeningProcessesRouter.get('/', async (req, res) => {
         ORDER BY deleted_at NULLS FIRST, created_at DESC`,
       [includeArchived]
     );
-    res.json({ data: rows });
+    let data = rows;
+    if (isGreenyardFleetEmail(req.user?.email) && req.user?.role !== 'superadmin') {
+      data = filterRowsByGreenyardDeviceIds(rows, (r) => (r.payload || {}).deviceId);
+    }
+    res.json({ data });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -331,6 +343,10 @@ ripeningProcessesRouter.post(
     }
     const replaceActive = data.replaceActiveProcess === true;
     const deviceId = String(data.deviceId || '').trim();
+    if (isGreenyardFleetEmail(req.user?.email) && deviceId && !isGreenyardDeviceId(deviceId)) {
+      cleanupStaging();
+      return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
+    }
     const dataToStore = { ...data };
     delete dataToStore.replaceActiveProcess;
 

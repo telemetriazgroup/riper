@@ -1,8 +1,13 @@
 import React from 'react';
 import { Users, Plus, Search, Shield, Mail, MousePointer2, Edit, Trash2, UserCog } from 'lucide-react';
+import { useManualT } from './userManualI18n';
+import { ManualCallout } from './ManualCallout';
+import { useSettings } from '@/app/contexts/SettingsContext';
 
 // Step 1: Access users management
 export const UsersStep1: React.FC = () => {
+  const mt = useManualT();
+
   return (
     <div className="relative">
       <div className="min-h-[600px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -16,7 +21,7 @@ export const UsersStep1: React.FC = () => {
                   </div>
                   <div>
                     <h1 className="text-2xl font-bold" style={{ color: 'rgb(15, 23, 42)' }}>
-                      Gestión de Usuarios
+                      {mt('manual_ui_user_management')}
                     </h1>
                     <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
                       12 usuarios registrados en el sistema
@@ -25,7 +30,7 @@ export const UsersStep1: React.FC = () => {
                 </div>
                 <button className="px-4 py-2 rounded-lg font-medium flex items-center gap-2 opacity-30" style={{ backgroundColor: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)' }}>
                   <Plus className="h-5 w-5" />
-                  Nuevo Usuario
+                  {mt('manual_ui_new_user')}
                 </button>
               </div>
             </div>
@@ -38,27 +43,23 @@ export const UsersStep1: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-blue-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">1</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(37, 99, 235)' }}>
-            Acceda a la gestión de usuarios desde el menú principal (solo disponible para usuarios con rol de administrador)
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={1} variant="blue">{mt('manual_users_1_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 2: Add new user
 export const UsersStep2: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[700px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
         <div className="max-w-4xl mx-auto space-y-6">
           <div className="opacity-20">
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-              <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+              <h1 className="text-2xl font-bold">{mt('manual_ui_user_management')}</h1>
             </div>
           </div>
 
@@ -66,7 +67,7 @@ export const UsersStep2: React.FC = () => {
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)', border: '2px solid rgb(34, 197, 94)' }}>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold" style={{ color: 'rgb(15, 23, 42)' }}>
-                  Agregar Nuevo Usuario
+                  {mt('manual_ui_new_user')}
                 </h2>
                 <button className="p-2 rounded-lg animate-pulse" style={{ backgroundColor: 'rgb(34, 197, 94)', color: 'rgb(255, 255, 255)' }}>
                   <Plus className="h-6 w-6" />
@@ -83,12 +84,13 @@ export const UsersStep2: React.FC = () => {
                     value="Juan Pérez Rodríguez"
                     className="w-full px-4 py-2 rounded-lg border-2"
                     style={{ backgroundColor: 'rgb(255, 255, 255)', borderColor: 'rgb(34, 197, 94)' }}
+                    readOnly
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: 'rgb(15, 23, 42)' }}>
-                    Correo Electrónico
+                    {mt('manual_ui_email')}
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 animate-pulse" style={{ color: 'rgb(34, 197, 94)' }} />
@@ -97,51 +99,48 @@ export const UsersStep2: React.FC = () => {
                       value="juan.perez@empresa.com"
                       className="w-full pl-10 pr-4 py-2 rounded-lg border-2"
                       style={{ backgroundColor: 'rgb(255, 255, 255)', borderColor: 'rgb(34, 197, 94)' }}
+                      readOnly
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium mb-2" style={{ color: 'rgb(15, 23, 42)' }}>
-                    Rol de Usuario
+                    {t('role')}
                   </label>
                   <select className="w-full px-4 py-2 rounded-lg border-2" style={{ backgroundColor: 'rgb(255, 255, 255)', borderColor: 'rgb(34, 197, 94)' }}>
-                    <option>Operador</option>
+                    <option>{t('role_operator')}</option>
                     <option>Supervisor</option>
-                    <option>Administrador</option>
+                    <option>{t('role_admin')}</option>
                   </select>
                 </div>
 
                 <button className="w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2" style={{ backgroundColor: 'rgb(34, 197, 94)', color: 'rgb(255, 255, 255)' }}>
                   <Plus className="h-5 w-5" />
-                  Crear Usuario
+                  {mt('manual_ui_new_user')}
                 </button>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-green-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-green-600 text-white text-sm font-bold flex-shrink-0">2</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(22, 163, 74)' }}>
-            Complete el formulario con los datos del nuevo usuario: nombre, correo y rol (Operador, Supervisor o Administrador)
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={2} variant="green">{mt('manual_users_2_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 3: Search users
 export const UsersStep3: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[600px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="opacity-20">
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-              <h1 className="text-2xl font-bold">Gestión de Usuarios</h1>
+              <h1 className="text-2xl font-bold">{mt('manual_ui_user_management')}</h1>
             </div>
           </div>
 
@@ -156,36 +155,33 @@ export const UsersStep3: React.FC = () => {
                     className="w-full pl-10 pr-4 py-2 rounded-lg border-2"
                     style={{ backgroundColor: 'rgb(255, 255, 255)', borderColor: 'rgb(147, 51, 234)', color: 'rgb(15, 23, 42)' }}
                     value="Juan"
+                    readOnly
                   />
                   <div className="absolute -right-12 top-1/2 transform -translate-y-1/2">
                     <MousePointer2 className="h-7 w-7 text-purple-600 animate-pulse" />
                   </div>
                 </div>
                 <select className="px-4 py-2 rounded-lg border" style={{ backgroundColor: 'rgb(255, 255, 255)', borderColor: 'rgb(226, 232, 240)' }}>
-                  <option>Todos los Roles</option>
-                  <option>Administrador</option>
+                  <option>Todos los {t('role')}s</option>
+                  <option>{t('role_admin')}</option>
                   <option>Supervisor</option>
-                  <option>Operador</option>
+                  <option>{t('role_operator')}</option>
                 </select>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-purple-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-purple-600 text-white text-sm font-bold flex-shrink-0">3</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(147, 51, 234)' }}>
-            Use la barra de búsqueda para encontrar usuarios específicos por nombre o correo. Puede filtrar por rol de usuario
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={3} variant="purple">{mt('manual_users_3_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 4: Edit user
 export const UsersStep4: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[700px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -233,26 +229,22 @@ export const UsersStep4: React.FC = () => {
 
             <div className="opacity-30">
               <div className="rounded-lg p-4" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-                <p>María González - Operadora</p>
+                <p>María González - {t('role_operator')}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-orange-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-orange-600 text-white text-sm font-bold flex-shrink-0">4</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(234, 88, 12)' }}>
-            Haga clic en el ícono de editar (lápiz) para modificar los datos del usuario: nombre, correo o cambiar su rol de acceso
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={4} variant="orange">{mt('manual_users_4_callout')}</ManualCallout>
     </div>
   );
 };
 
 // Step 5: Manage permissions
 export const UsersStep5: React.FC = () => {
+  const mt = useManualT();
+  const { t } = useSettings();
+
   return (
     <div className="relative">
       <div className="min-h-[700px] p-6" style={{ backgroundColor: 'rgb(248, 250, 252)' }}>
@@ -269,7 +261,7 @@ export const UsersStep5: React.FC = () => {
                 <UserCog className="h-8 w-8 animate-pulse" style={{ color: 'rgb(37, 99, 235)' }} />
                 <div>
                   <h2 className="text-xl font-bold" style={{ color: 'rgb(15, 23, 42)' }}>
-                    Permisos por Rol
+                    Permisos por {t('role')}
                   </h2>
                   <p className="text-sm" style={{ color: 'rgb(100, 116, 139)' }}>
                     Configure los permisos de acceso para cada rol de usuario
@@ -282,7 +274,7 @@ export const UsersStep5: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold flex items-center gap-2" style={{ color: 'rgb(15, 23, 42)' }}>
                       <Shield className="h-5 w-5" style={{ color: 'rgb(239, 68, 68)' }} />
-                      Administrador
+                      {t('role_admin')}
                     </h3>
                     <span className="text-xs font-medium px-2 py-1 rounded" style={{ backgroundColor: 'rgb(239, 68, 68)', color: 'rgb(255, 255, 255)' }}>
                       Acceso Total
@@ -318,7 +310,7 @@ export const UsersStep5: React.FC = () => {
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold flex items-center gap-2" style={{ color: 'rgb(15, 23, 42)' }}>
                       <Shield className="h-5 w-5" style={{ color: 'rgb(37, 99, 235)' }} />
-                      Operador
+                      {t('role_operator')}
                     </h3>
                     <span className="text-xs font-medium px-2 py-1 rounded" style={{ backgroundColor: 'rgb(37, 99, 235)', color: 'rgb(255, 255, 255)' }}>
                       Acceso Básico
@@ -336,14 +328,7 @@ export const UsersStep5: React.FC = () => {
           </div>
         </div>
       </div>
-      <div className="absolute top-4 right-4 bg-white border-2 border-blue-500 rounded-lg p-4 shadow-xl max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="flex items-center justify-center h-6 w-6 rounded-full bg-blue-600 text-white text-sm font-bold flex-shrink-0">5</div>
-          <p className="text-sm font-semibold" style={{ color: 'rgb(37, 99, 235)' }}>
-            Revise los permisos de cada rol: Administrador (acceso total), Supervisor (intermedio) y Operador (básico). Asigne roles según las responsabilidades
-          </p>
-        </div>
-      </div>
+      <ManualCallout step={5} variant="blue">{mt('manual_users_5_callout')}</ManualCallout>
     </div>
   );
 };

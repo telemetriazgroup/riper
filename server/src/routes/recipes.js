@@ -2,6 +2,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { requireAdmin, requireSuperAdmin } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
+import { isGreenyardFleetEmail } from '../greenyardFleet.js';
 
 export const recipesRouter = express.Router();
 
@@ -22,6 +23,7 @@ function rowToRecipe(row) {
         : null,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    created_by_user_id: row.created_by_user_id ?? null,
     archived_at: del ? new Date(del).toISOString() : null,
     archived: Boolean(del),
   };
@@ -46,18 +48,29 @@ function parseIncludeArchived(req) {
   return v === true || v === 'true' || v === '1';
 }
 
+function greenyardRecipeScopeSql(userIdParamIndex) {
+  return `(is_system IS TRUE OR created_by_user_id = $${userIdParamIndex}::uuid)`;
+}
+
 recipesRouter.get('/', async (req, res) => {
   try {
     const includeArchived = parseIncludeArchived(req);
     if (includeArchived && req.user?.role !== 'superadmin') {
       return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
     }
+    const gy = isGreenyardFleetEmail(req.user?.email) && req.user?.role !== 'superadmin';
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at
-       FROM app_recipes
-       WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
-       ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
-      [includeArchived]
+      gy
+        ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+           FROM app_recipes
+           WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
+             AND ${greenyardRecipeScopeSql(2)}
+           ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`
+        : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+           FROM app_recipes
+           WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
+           ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
+      gy ? [includeArchived, req.user.id] : [includeArchived]
     );
     res.json({ data: rows.map(rowToRecipe) });
   } catch (e) {
@@ -93,11 +106,17 @@ recipesRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
 recipesRouter.get('/:id', async (req, res) => {
   try {
     const superadmin = req.user?.role === 'superadmin';
+    const gy = isGreenyardFleetEmail(req.user?.email) && !superadmin;
     const { rows } = await pool.query(
-      `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at
-       FROM app_recipes
-       WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
-      [req.params.id, superadmin]
+      gy
+        ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+           FROM app_recipes
+           WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)
+             AND ${greenyardRecipeScopeSql(3)}`
+        : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+           FROM app_recipes
+           WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
+      gy ? [req.params.id, superadmin, req.user.id] : [req.params.id, superadmin]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
     res.json({ data: rowToRecipe(rows[0]) });
@@ -126,10 +145,10 @@ recipesRouter.post('/', requireAdmin, async (req, res) => {
   const id = newRecipeId();
   try {
     const { rows } = await pool.query(
-      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system, icon_key, custom_image_url)
-       VALUES ($1, $2, $3, $4, $5::jsonb, false, $6, $7)
-       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at`,
-      [id, n, f, String(description), JSON.stringify(phases), ik === undefined ? null : ik, img === undefined ? null : img]
+      `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_by_user_id)
+       VALUES ($1, $2, $3, $4, $5::jsonb, false, $6, $7, $8::uuid)
+       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
+      [id, n, f, String(description), JSON.stringify(phases), ik === undefined ? null : ik, img === undefined ? null : img, req.user.id]
     );
     await writeAudit(req, {
       action: 'recipe.create',
@@ -190,7 +209,7 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
   vals.push(id);
   try {
     const { rows: chk } = await pool.query(
-      `SELECT is_system FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT is_system, created_by_user_id FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
       [id]
     );
     if (!chk.length) return res.status(404).json({ error: 'not_found' });
@@ -200,10 +219,17 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
         message: 'system recipe cannot be modified; duplicate to customize',
       });
     }
+    if (
+      isGreenyardFleetEmail(req.user?.email) &&
+      req.user?.role !== 'superadmin' &&
+      chk[0].created_by_user_id !== req.user.id
+    ) {
+      return res.status(403).json({ error: 'forbidden', message: 'cannot modify another user recipe' });
+    }
     const { rows } = await pool.query(
       `UPDATE app_recipes SET ${updates.join(', ')}
        WHERE id = $${i} AND deleted_at IS NULL AND (is_system IS NOT TRUE)
-       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at`,
+       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -232,7 +258,7 @@ recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   try {
     const { rows: chk } = await pool.query(
-      `SELECT is_system, name, fruit FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT is_system, name, fruit, created_by_user_id FROM app_recipes WHERE id = $1 AND deleted_at IS NULL`,
       [id]
     );
     if (!chk.length) return res.status(404).json({ error: 'not_found' });
@@ -241,6 +267,13 @@ recipesRouter.delete('/:id', requireAdmin, async (req, res) => {
         error: 'forbidden',
         message: 'standard recipes cannot be deleted; duplicate to create a custom copy',
       });
+    }
+    if (
+      isGreenyardFleetEmail(req.user?.email) &&
+      req.user?.role !== 'superadmin' &&
+      chk[0].created_by_user_id !== req.user.id
+    ) {
+      return res.status(403).json({ error: 'forbidden', message: 'cannot archive another user recipe' });
     }
     const { rowCount } = await pool.query(
       `UPDATE app_recipes SET deleted_at = now(), updated_at = now()

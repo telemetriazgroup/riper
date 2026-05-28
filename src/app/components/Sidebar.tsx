@@ -24,11 +24,12 @@ interface SidebarProps {
   onChangeView: (view: string) => void;
   isOpen: boolean;
   onClose: () => void;
+  onLogout?: () => void;
 }
 
 const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose, onLogout }) => {
   const { t } = useSettings();
   const restrictedDemo =
     isGourmetSession() || isFleetDemoSession() || isUltraorganicsSession() || isThermoKingSession() || isGreenyardSession();
@@ -92,7 +93,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
         </nav>
 
         <div className="p-4 border-t border-slate-700">
-          <Button variant="ghost" className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-slate-800">
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-slate-800"
+            onClick={() => {
+              onClose();
+              onLogout?.();
+            }}
+          >
             <LogOut className="mr-2 h-4 w-4" />
             {t('logout')}
           </Button>

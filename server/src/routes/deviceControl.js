@@ -3,6 +3,11 @@ import { pool } from '../db.js';
 import { writeAudit } from '../auditLog.js';
 import { requireSuperAdmin } from '../authMiddleware.js';
 import { maybeFinalizeDeviceControlDebounced } from '../autoFinalizeDueProcesses.js';
+import {
+  filterRowsByGreenyardDeviceIds,
+  isGreenyardDeviceId,
+  isGreenyardFleetEmail,
+} from '../greenyardFleet.js';
 
 function parseIncludeArchived(req) {
   const v = req.query.includeArchived ?? req.query.include_archived;
@@ -48,6 +53,9 @@ deviceControlRouter.get('/active', async (req, res) => {
     if (!deviceId) {
       return res.status(400).json({ error: 'validation', message: 'deviceId required' });
     }
+    if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
+      return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
+    }
     const { rows } = await pool.query(
       `SELECT s.*, u.name AS user_name, u.email AS user_email,
               uc.name AS cancelled_by_name, uc.email AS cancelled_by_email
@@ -80,6 +88,9 @@ deviceControlRouter.post('/start', async (req, res) => {
 
   if (!deviceId) {
     return res.status(400).json({ error: 'validation', message: 'deviceId required' });
+  }
+  if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
+    return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
   }
   if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling', 'StopPlan'].includes(processType)) {
     return res.status(400).json({ error: 'validation', message: 'invalid processType' });
@@ -202,7 +213,11 @@ deviceControlRouter.get('/sessions', async (req, res) => {
          LIMIT 500`,
       [includeArchived]
     );
-    return res.json({ data: rows });
+    let data = rows;
+    if (isGreenyardFleetEmail(req.user?.email) && req.user?.role !== 'superadmin') {
+      data = filterRowsByGreenyardDeviceIds(rows, (r) => r.device_id);
+    }
+    return res.json({ data });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });

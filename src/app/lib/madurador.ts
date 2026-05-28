@@ -9,7 +9,7 @@ import type {
 import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
 import { getGourmetTradingPinnedImeis, isGourmetSession } from '@/app/lib/gourmet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
@@ -117,6 +117,52 @@ export function controlPanelTabFromStateProcess(sp: TelemetryData['stateProcess'
     default:
       return 'manual';
   }
+}
+
+/** Pestaña según tipo de sesión activa en panel (Homogenization, Ripening, …). */
+export function controlPanelTabFromProcessType(processType: string | null | undefined): string {
+  switch (String(processType ?? '').trim()) {
+    case 'Homogenization':
+      return 'homogenization';
+    case 'Ripening':
+      return 'ripening';
+    case 'Ventilation':
+      return 'ventilation';
+    case 'Cooling':
+      return 'cooling';
+    default:
+      return 'manual';
+  }
+}
+
+/** Pestaña según `procesoApi` del madurador (proceso en curso en el equipo). */
+export function controlPanelTabFromProcesoApi(procesoApi: string | null | undefined): string | null {
+  const raw = String(procesoApi ?? '').trim();
+  if (!raw || isManualProcesoLabel(raw)) return null;
+  const p = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (p.includes('homogen') || p.includes('homog')) return 'homogenization';
+  if (p.includes('ventil') || p.includes('ventilacion')) return 'ventilation';
+  if (p.includes('madur') || p.includes('ripen') || p.includes('maturation')) return 'ripening';
+  if (p.includes('enfri') || p.includes('cool') || p.includes('refrig') || p.includes('frio')) return 'cooling';
+  if (p.includes('integral') || p.includes('automatic')) return 'manual';
+  return null;
+}
+
+/** Prioridad: sesión panel activa → procesoApi → stateProcess telemetría. */
+export function resolveControlPanelTab(opts: {
+  activeSessionProcessType?: string | null;
+  procesoApi?: string | null;
+  stateProcess?: TelemetryData['stateProcess'];
+}): string {
+  if (opts.activeSessionProcessType) {
+    const fromSession = controlPanelTabFromProcessType(opts.activeSessionProcessType);
+    if (fromSession !== 'manual' || opts.activeSessionProcessType === 'StopPlan') {
+      return fromSession;
+    }
+  }
+  const fromApi = controlPanelTabFromProcesoApi(opts.procesoApi);
+  if (fromApi) return fromApi;
+  return controlPanelTabFromStateProcess(opts.stateProcess ?? 'Manual');
 }
 
 export function isManualProcesoLabel(raw: string | null | undefined): boolean {
@@ -437,9 +483,10 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     const allow = new Set(getGourmetTradingPinnedImeis());
     return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
   }
-  /** Greenyard: Ripener ya devolvió todos los IMEI del identificador 4001 (sin recortar en cliente por sufijo IMEI). */
+  /** Greenyard: solo IMEI pin NEWY2001 / NEWY1001 (servidor ya filtra; refuerzo en cliente). */
   if (isGreenyardSession()) {
-    return withSim;
+    const allow = new Set(getGreenyardPinnedImeis());
+    return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
   }
   if (isMaduradorSuperadminFullList()) {
     return withSim;

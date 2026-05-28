@@ -9,8 +9,9 @@ import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { controlPanelTabFromStateProcess, formatMaduradorScalar } from '@/app/lib/madurador';
+import { resolveControlPanelTab, formatMaduradorScalar } from '@/app/lib/madurador';
 import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { TunnelDeviceDetail } from '@/app/components/TunnelDeviceDetail';
 import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperativoSummaryPanel';
 import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
@@ -34,14 +35,29 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
 }) => {
   const { device, isLoading } = useDevice(deviceId);
   const { history } = useDeviceHistory(deviceId);
+  const { session: activeControlSession } = useDeviceControlSession(deviceId);
   const [controlMode, setControlMode] = useState('manual');
   const [activeView, setActiveView] = useState(initialView);
   const { t, convertTemp, tempUnit, formatTemp, toggleTempUnit, formatDateTime } = useSettings();
 
   useEffect(() => {
     if (!device) return;
-    setControlMode(controlPanelTabFromStateProcess(device.telemetry.stateProcess));
-  }, [device?.id, device?.telemetry.stateProcess]);
+    setControlMode(
+      resolveControlPanelTab({
+        activeSessionProcessType:
+          activeControlSession?.status === 'active' ? activeControlSession.process_type : null,
+        procesoApi: device.procesoApi,
+        stateProcess: device.telemetry.stateProcess,
+      })
+    );
+  }, [
+    device?.id,
+    device?.procesoApi,
+    device?.telemetry.stateProcess,
+    activeControlSession?.id,
+    activeControlSession?.status,
+    activeControlSession?.process_type,
+  ]);
 
   const lastSeenDate = device?.last_seen ? new Date(device.last_seen) : null;
   const minsSinceLastSeen =
