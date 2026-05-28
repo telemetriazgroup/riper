@@ -24,7 +24,10 @@ import { differenceInMinutes } from 'date-fns';
 import { ControlProcessStartFlow } from '@/app/components/ControlProcessStartFlow';
 import { StopPlanScheduleModal } from '@/app/components/StopPlanScheduleModal';
 import type { StartControlProcessBody } from '@/app/lib/deviceControlProcessApi';
+import { startControlProcess } from '@/app/lib/deviceControlProcessApi';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
+import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
@@ -365,12 +368,32 @@ const ManualControl = ({
         set_point: temp,
         humidity_set_point: humidity,
         ethylene,
-        fan_speed: fan
+        fan_speed: fan,
       });
-      toast.success(t('apply_changes') + " OK");
+      const summary = changes.map((c) => `${c.name}: ${c.from} → ${c.to}`).join(' · ');
+      await startControlProcess({
+        deviceId,
+        processType: 'Manual',
+        displayLabel: `${t('manual_mode')}: ${summary}`.slice(0, 500),
+        params: {
+          set_point: temp,
+          humidity_set_point: humidity,
+          ethylene,
+          fan_speed: fan,
+          changes,
+          tempUnit,
+        },
+        durationHours: 1 / 3600,
+        auditLog: true,
+        startedAt: new Date().toISOString(),
+      });
+      void revalidateControlSessionsList();
+      void revalidateFleetActiveControlSessions();
+      await sessionMutate();
+      toast.success(t('manual_control_logged') || t('apply_changes') + ' OK');
       setIsConfirmOpen(false);
     } catch (e) {
-      toast.error("Error");
+      toast.error(e instanceof Error ? e.message : 'Error');
       console.error(e);
     } finally {
       setIsSubmitting(false);
@@ -508,6 +531,8 @@ const ManualControl = ({
         deviceId={deviceId}
         onCompleted={async () => {
           await sessionMutate();
+          await revalidateControlSessionsList();
+          await revalidateFleetActiveControlSessions();
         }}
       />
 

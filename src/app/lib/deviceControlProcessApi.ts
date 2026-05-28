@@ -24,7 +24,13 @@ async function handle<T>(res: Response): Promise<T> {
   return body as T;
 }
 
-export type ControlProcessType = 'Homogenization' | 'Ripening' | 'Ventilation' | 'Cooling' | 'StopPlan';
+export type ControlProcessType =
+  | 'Homogenization'
+  | 'Ripening'
+  | 'Ventilation'
+  | 'Cooling'
+  | 'StopPlan'
+  | 'Manual';
 
 export type DeviceControlSessionRow = {
   id: string;
@@ -77,6 +83,8 @@ export type StartControlProcessBody = {
   params: Record<string, unknown>;
   durationHours: number;
   startedAt?: string;
+  /** Ajuste manual instantáneo: registro completado sin cancelar procesos activos. */
+  auditLog?: boolean;
 };
 
 export async function startControlProcess(body: StartControlProcessBody): Promise<DeviceControlSessionRow> {

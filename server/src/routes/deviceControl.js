@@ -92,7 +92,8 @@ deviceControlRouter.post('/start', async (req, res) => {
   if (isGreenyardFleetEmail(req.user?.email) && !isGreenyardDeviceId(deviceId)) {
     return res.status(403).json({ error: 'forbidden', message: 'device not in greenyard fleet' });
   }
-  if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling', 'StopPlan'].includes(processType)) {
+  const auditLog = body.auditLog === true && processType === 'Manual';
+  if (!['Homogenization', 'Ripening', 'Ventilation', 'Cooling', 'StopPlan', 'Manual'].includes(processType)) {
     return res.status(400).json({ error: 'validation', message: 'invalid processType' });
   }
   if (!Number.isFinite(durationHours) || durationHours <= 0 || durationHours > 10000) {
@@ -107,54 +108,62 @@ deviceControlRouter.post('/start', async (req, res) => {
     return res.status(400).json({ error: 'validation', message: 'invalid startedAt' });
   }
   const ms = started.getTime() + durationHours * 3600 * 1000;
-  const estimatedEnd = new Date(ms);
+  const estimatedEnd = auditLog ? started : new Date(ms);
+  const sessionStatus = auditLog ? 'completed' : 'active';
+  /** STOP PLAN y ajustes manuales (auditLog) pueden registrarse aunque haya seguimiento activo. */
+  const skipRipeningGuard = auditLog || processType === 'StopPlan';
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const { rows: ripeningBusy } = await client.query(
-      `SELECT 1 FROM app_ripening_processes
-       WHERE deleted_at IS NULL AND status = 'active'
-         AND (payload->>'deviceId') = $1
-       LIMIT 1`,
-      [deviceId]
-    );
-    if (ripeningBusy.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        error: 'device_ripening_active',
-        message: 'an active ripening tracking exists for this device; cancel or finish it first',
-      });
+    if (!skipRipeningGuard) {
+      const { rows: ripeningBusy } = await client.query(
+        `SELECT 1 FROM app_ripening_processes
+         WHERE deleted_at IS NULL AND status = 'active'
+           AND (payload->>'deviceId') = $1
+         LIMIT 1`,
+        [deviceId]
+      );
+      if (ripeningBusy.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'device_ripening_active',
+          message: 'an active ripening tracking exists for this device; cancel or finish it first',
+        });
+      }
     }
 
-    const { rows: otherCtrl } = await client.query(
-      `SELECT id FROM app_device_control_sessions
-       WHERE device_id = $1 AND status = 'active' AND user_id <> $2::uuid AND archived_at IS NULL
-       LIMIT 1`,
-      [deviceId, req.user.id]
-    );
-    if (otherCtrl.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        error: 'device_control_busy',
-        message: 'another active control session exists for this device',
-      });
+    if (!auditLog) {
+      const { rows: otherCtrl } = await client.query(
+        `SELECT id FROM app_device_control_sessions
+         WHERE device_id = $1 AND status = 'active' AND user_id <> $2::uuid AND archived_at IS NULL
+         LIMIT 1`,
+        [deviceId, req.user.id]
+      );
+      if (otherCtrl.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'device_control_busy',
+          message: 'another active control session exists for this device',
+        });
+      }
+
+      await client.query(
+        `UPDATE app_device_control_sessions
+         SET status = 'cancelled',
+             cancelled_at = now(),
+             cancelled_by_user_id = $3::uuid,
+             updated_at = now()
+         WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active' AND archived_at IS NULL`,
+        [req.user.id, deviceId, req.user.id]
+      );
     }
 
-    await client.query(
-      `UPDATE app_device_control_sessions
-       SET status = 'cancelled',
-           cancelled_at = now(),
-           cancelled_by_user_id = $3::uuid,
-           updated_at = now()
-       WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active' AND archived_at IS NULL`,
-      [req.user.id, deviceId, req.user.id]
-    );
     const { rows } = await client.query(
       `INSERT INTO app_device_control_sessions
          (user_id, device_id, process_type, display_label, params, status, started_at, estimated_end_at, duration_hours, updated_at)
-       VALUES ($1::uuid, $2, $3, $4, $5::jsonb, 'active', $6::timestamptz, $7::timestamptz, $8::numeric, now())
+       VALUES ($1::uuid, $2, $3, $4, $5::jsonb, $6, $7::timestamptz, $8::timestamptz, $9::numeric, now())
        RETURNING *`,
       [
         req.user.id,
@@ -162,6 +171,7 @@ deviceControlRouter.post('/start', async (req, res) => {
         processType,
         displayLabel,
         JSON.stringify(params),
+        sessionStatus,
         started.toISOString(),
         estimatedEnd.toISOString(),
         durationHours,
@@ -178,6 +188,7 @@ deviceControlRouter.post('/start', async (req, res) => {
         processType,
         durationHours,
         display_label: sessionRow.display_label,
+        auditLog,
       },
     });
     return res.json({ data: sessionRow });
