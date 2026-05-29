@@ -147,6 +147,10 @@ ALTER TABLE app_device_control_sessions ADD COLUMN IF NOT EXISTS archived_at TIM
 CREATE INDEX IF NOT EXISTS idx_dctrl_sessions_not_archived ON app_device_control_sessions (created_at DESC) WHERE archived_at IS NULL;
 `;
 
+const SQL_UI_PREFERENCES = `
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS ui_preferences JSONB NOT NULL DEFAULT '{}'::jsonb;
+`;
+
 /** Trazabilidad: solo inserción; no hay DELETE desde la aplicación. */
 const SQL_TUNNEL_COMMAND_JOBS = `
 CREATE TABLE IF NOT EXISTS app_tunnel_command_jobs (
@@ -234,6 +238,7 @@ export async function runMigrate() {
     await client.query('BEGIN');
     await client.query(SQL_INITIAL);
     await client.query(SQL_ALTER);
+    await client.query(SQL_UI_PREFERENCES);
     await client.query(SQL_CATALOG);
     await client.query(SQL_RECIPE_SYSTEM);
     await client.query(SQL_RECIPE_VISUAL);

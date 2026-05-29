@@ -6,6 +6,7 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { requireAdmin } from '../authMiddleware.js';
+import { normalizeUiPreferences, mergeUiPreferences, rawUiPreferences } from '../userUiPreferences.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -77,6 +78,7 @@ function rowToPublic(row) {
     is_superuser: row.is_superuser,
     has_photo: Boolean(row.photo_path),
     identificador: iden.length ? iden : null,
+    ui_preferences: rawUiPreferences(row),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -87,7 +89,7 @@ export const usersRouter = express.Router();
 usersRouter.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at
+      `SELECT id, name, email, role, company, active, is_superuser, photo_path, identificador, ui_preferences, created_at, updated_at
        FROM app_users
        WHERE deleted_at IS NULL
        ORDER BY created_at DESC`
@@ -127,7 +129,7 @@ usersRouter.post('/', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO app_users (name, email, role, password_hash, company, active, is_superuser, identificador)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at`,
+       RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, ui_preferences, created_at, updated_at`,
       [n, em, role, hash, comp, Boolean(active), role === 'superadmin', iden]
     );
     res.status(201).json({ data: rowToPublic(rows[0]) });
@@ -150,7 +152,7 @@ usersRouter.patch('/:id', async (req, res) => {
     return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
   }
 
-  let { name, email, role, active, password, company, identificador } = req.body || {};
+  let { name, email, role, active, password, company, identificador, ui_preferences } = req.body || {};
   if (self && !isAdmin(req)) {
     email = undefined;
     role = undefined;
@@ -162,7 +164,7 @@ usersRouter.patch('/:id', async (req, res) => {
   let i = 1;
 
   const { rows: existingRows } = await pool.query(
-    `SELECT id, is_superuser, role FROM app_users WHERE id = $1::uuid AND deleted_at IS NULL`,
+    `SELECT id, is_superuser, role, ui_preferences FROM app_users WHERE id = $1::uuid AND deleted_at IS NULL`,
     [id]
   );
   if (!existingRows.length) {
@@ -230,6 +232,14 @@ usersRouter.patch('/:id', async (req, res) => {
     fields.push(`identificador = $${i++}`);
     vals.push(iden);
   }
+  if (ui_preferences !== undefined) {
+    if (!self && !isAdmin(req)) {
+      return res.status(403).json({ error: 'forbidden', message: 'forbidden' });
+    }
+    const merged = mergeUiPreferences(existing.ui_preferences, ui_preferences);
+    fields.push(`ui_preferences = $${i++}::jsonb`);
+    vals.push(JSON.stringify(merged));
+  }
   if (password !== undefined && String(password).length > 0) {
     const pw = String(password);
     if (pw.length < 6) {
@@ -250,7 +260,7 @@ usersRouter.patch('/:id', async (req, res) => {
   const sql = `
     UPDATE app_users SET ${fields.join(', ')}
     WHERE id = $${i}::uuid AND deleted_at IS NULL
-    RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, created_at, updated_at
+    RETURNING id, name, email, role, company, active, is_superuser, photo_path, identificador, ui_preferences, created_at, updated_at
   `;
 
   try {

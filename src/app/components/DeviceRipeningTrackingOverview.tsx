@@ -32,7 +32,7 @@ interface DeviceRipeningTrackingOverviewProps {
 export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOverviewProps> = ({
   deviceId,
 }) => {
-  const { t, language, formatDateTime } = useSettings();
+  const { t, language, formatDateTime, convertTemp, tempUnit } = useSettings();
   const { activeTracking, isLoading, mutate } = useRipeningActiveForDevice(deviceId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -107,8 +107,8 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
     if (!phaseInfo?.phasesMeta?.length) return [];
     const raw = phaseInfo.phasesMeta[phaseInfo.currentIndex]?.raw;
     if (!raw || Object.keys(raw).length === 0) return [];
-    return formatRecipePhaseParamLines(raw, t);
-  }, [phaseInfo, t]);
+    return formatRecipePhaseParamLines(raw, t, { convertTemp, tempUnit });
+  }, [phaseInfo, t, convertTemp, tempUnit]);
 
   const onConfirmCancel = async () => {
     const pid = activeTracking?.process?.id;

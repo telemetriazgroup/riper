@@ -6,30 +6,66 @@
  */
 export const DEFAULT_DISPLAY_TIMEZONE = 'Etc/GMT+5';
 
-/** `labelKey` = clave en SettingsContext `t()`; `gmtLabel` = respaldo. */
-export const DISPLAY_TIMEZONE_PRESETS: { value: string; gmtLabel: string; labelKey: string }[] = [
-  { value: 'Etc/GMT+3', gmtLabel: 'GMT-3', labelKey: 'tz_gmt3' },
-  { value: 'Etc/GMT+4', gmtLabel: 'GMT-4', labelKey: 'tz_gmt4' },
-  { value: 'Etc/GMT+5', gmtLabel: 'GMT-5', labelKey: 'tz_gmt5' },
-  { value: 'Etc/GMT+6', gmtLabel: 'GMT-6', labelKey: 'tz_gmt6' },
-  { value: 'Etc/GMT+7', gmtLabel: 'GMT-7', labelKey: 'tz_gmt7' },
-  { value: 'Etc/GMT+8', gmtLabel: 'GMT-8', labelKey: 'tz_gmt8' },
-  { value: 'America/Mexico_City', gmtLabel: 'México (oficial)', labelKey: 'tz_mexico_city' },
-  { value: 'America/Bogota', gmtLabel: 'Colombia', labelKey: 'tz_bogota' },
-  { value: 'America/Lima', gmtLabel: 'Perú', labelKey: 'tz_lima' },
-  { value: 'UTC', gmtLabel: 'UTC', labelKey: 'tz_utc' },
-];
+/** Formato de fecha/hora: día/mes/año (normal) o mes/día/año (americano). */
+export type DateFormatStyle = 'dmy' | 'mdy';
+
+export const DEFAULT_DATE_FORMAT: DateFormatStyle = 'dmy';
+
+export type GmtTimezoneOption = { value: string; label: string };
+
+/** GMT-12 … GMT+0 … GMT+14 (sin horario de verano). */
+export function buildAllGmtTimezoneOptions(): GmtTimezoneOption[] {
+  const out: GmtTimezoneOption[] = [];
+  for (let n = 12; n >= 1; n--) {
+    out.push({ value: `Etc/GMT+${n}`, label: `GMT-${n}` });
+  }
+  out.push({ value: 'UTC', label: 'GMT+0 (UTC)' });
+  for (let n = 1; n <= 14; n++) {
+    out.push({ value: `Etc/GMT-${n}`, label: `GMT+${n}` });
+  }
+  return out;
+}
+
+export const ALL_GMT_TIMEZONE_OPTIONS = buildAllGmtTimezoneOptions();
+
+/** Incluye el valor guardado si no está en la lista estándar (p. ej. migración desde zonas regionales). */
+export function gmtTimezoneOptionsForSelect(currentValue?: string): GmtTimezoneOption[] {
+  const v = String(currentValue || '').trim();
+  if (!v || ALL_GMT_TIMEZONE_OPTIONS.some((o) => o.value === v)) {
+    return ALL_GMT_TIMEZONE_OPTIONS;
+  }
+  return [{ value: v, label: v }, ...ALL_GMT_TIMEZONE_OPTIONS];
+}
+
+/** @deprecated Usar ALL_GMT_TIMEZONE_OPTIONS */
+export const DISPLAY_TIMEZONE_PRESETS = ALL_GMT_TIMEZONE_OPTIONS.map((o) => ({
+  value: o.value,
+  gmtLabel: o.label,
+  labelKey: o.label,
+}));
+
+export function isValidDisplayTimeZone(tz: string): boolean {
+  const v = String(tz || '').trim();
+  if (!v) return false;
+  return ALL_GMT_TIMEZONE_OPTIONS.some((o) => o.value === v);
+}
+
+export function dateFormatLocale(style: DateFormatStyle, language: 'es' | 'en'): string {
+  if (style === 'mdy') return 'en-US';
+  return language === 'es' ? 'es-419' : 'en-GB';
+}
 
 export function formatInDisplayTimeZone(
   input: string | number | Date | null | undefined,
   timeZone: string,
   language: 'es' | 'en',
-  withSeconds = false
+  withSeconds = false,
+  dateFormat: DateFormatStyle = DEFAULT_DATE_FORMAT
 ): string {
   if (input == null || input === '') return '—';
   const d = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(language === 'es' ? 'es-419' : 'en-GB', {
+  return new Intl.DateTimeFormat(dateFormatLocale(dateFormat, language), {
     timeZone,
     day: '2-digit',
     month: '2-digit',
@@ -44,12 +80,13 @@ export function formatInDisplayTimeZone(
 export function formatDateShortInDisplayTimeZone(
   input: string | number | Date | null | undefined,
   timeZone: string,
-  language: 'es' | 'en'
+  language: 'es' | 'en',
+  dateFormat: DateFormatStyle = DEFAULT_DATE_FORMAT
 ): string {
   if (input == null || input === '') return '—';
   const d = input instanceof Date ? input : new Date(input);
   if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat(language === 'es' ? 'es-419' : 'en-GB', {
+  return new Intl.DateTimeFormat(dateFormatLocale(dateFormat, language), {
     timeZone,
     day: '2-digit',
     month: '2-digit',
@@ -74,9 +111,11 @@ export function formatChartPointLabels(
   d: Date,
   prev: Date | null,
   timeZone: string,
-  language: 'es' | 'en'
+  language: 'es' | 'en',
+  dateFormat: DateFormatStyle = DEFAULT_DATE_FORMAT
 ): { timeStr: string; timeAxisLabel: string } {
-  const timeStr = new Intl.DateTimeFormat(language === 'es' ? 'es-419' : 'en-GB', {
+  const locale = dateFormatLocale(dateFormat, language);
+  const timeStr = new Intl.DateTimeFormat(locale, {
     timeZone,
     day: '2-digit',
     month: '2-digit',
@@ -87,7 +126,7 @@ export function formatChartPointLabels(
 
   const sameDay = prev != null && dayKeyInZone(d, timeZone) === dayKeyInZone(prev, timeZone);
   if (sameDay) {
-    const timeOnly = new Intl.DateTimeFormat(language === 'es' ? 'es-419' : 'en-GB', {
+    const timeOnly = new Intl.DateTimeFormat(locale, {
       timeZone,
       hour: '2-digit',
       minute: '2-digit',
@@ -95,18 +134,7 @@ export function formatChartPointLabels(
     }).format(d);
     return { timeStr, timeAxisLabel: timeOnly };
   }
-  if (language === 'es') {
-    const withMonth = new Intl.DateTimeFormat('es-419', {
-      timeZone,
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(d);
-    return { timeStr, timeAxisLabel: withMonth };
-  }
-  const withMonth = new Intl.DateTimeFormat('en-GB', {
+  const withMonth = new Intl.DateTimeFormat(locale, {
     timeZone,
     day: 'numeric',
     month: 'short',

@@ -15,6 +15,7 @@ import { Button } from '../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { clsx } from 'clsx';
 import { useSettings } from '../../contexts/SettingsContext';
+import { celsiusFromDisplayValue, type TempUnit } from '@/app/lib/temperatureUnits';
 import { ProductCombobox, type ProductRow } from './ProductCombobox';
 import type { AppProduct } from '@/app/lib/productsApi';
 import {
@@ -175,7 +176,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
   canCreateProduct = false,
   onProductCreated,
 }) => {
-  const { t } = useSettings();
+  const { t, tempUnit, convertTemp } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
   const [fruit, setFruit] = useState(initialData?.fruit || '');
   const [description, setDescription] = useState(initialData?.description || '');
@@ -550,9 +551,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                         {/* 1. Homogenization Fields */}
                         {def.type === 'homogenization' && (
                           <>
-                            <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                              <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
-                            </InputGroup>
+                            <RecipeTempInput
+                              celsius={config.temp}
+                              readOnly={readOnly}
+                              tempUnit={tempUnit}
+                              convertTemp={convertTemp}
+                              label={t('set_temperature')}
+                              onCelsiusChange={(temp) => handlePhaseChange(def.type, { temp })}
+                            />
                             <InputGroup label={t('set_humidity')} icon={Droplets} unit="%">
                               <input type="number" step="1" min={80} max={98} disabled={readOnly} value={config.humidity ?? 95} onChange={e => handlePhaseChange(def.type, { humidity: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
@@ -565,9 +571,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                         {/* 2. Ripening Fields */}
                         {def.type === 'ripening' && (
                           <>
-                             <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                               <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
-                             </InputGroup>
+                             <RecipeTempInput
+                               celsius={config.temp}
+                               readOnly={readOnly}
+                               tempUnit={tempUnit}
+                               convertTemp={convertTemp}
+                               label={t('set_temperature')}
+                               onCelsiusChange={(temp) => handlePhaseChange(def.type, { temp })}
+                             />
                              <InputGroup label={t('set_ethylene')} icon={FlaskConical} unit={t('unit_ppm')}>
                                <input type="number" step="10" disabled={readOnly} value={config.ethylene} onChange={e => handlePhaseChange(def.type, { ethylene: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                              </InputGroup>
@@ -588,9 +599,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                         {/* 3. Venting Fields */}
                         {def.type === 'venting' && (
                           <>
-                            <InputGroup label={t('set_temperature')} icon={Thermometer} unit="°C">
-                              <input type="number" step="0.1" disabled={readOnly} value={config.temp} onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
-                            </InputGroup>
+                            <RecipeTempInput
+                              celsius={config.temp}
+                              readOnly={readOnly}
+                              tempUnit={tempUnit}
+                              convertTemp={convertTemp}
+                              label={t('set_temperature')}
+                              onCelsiusChange={(temp) => handlePhaseChange(def.type, { temp })}
+                            />
                             <InputGroup label={t('target_co2')} icon={Wind} unit="%">
                               <input type="number" step="0.1" disabled={readOnly} value={config.co2Limit} onChange={e => handlePhaseChange(def.type, { co2Limit: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
@@ -607,17 +623,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                                <label className="text-xs text-cyan-800 font-semibold flex items-center gap-1 mb-1">
                                  <Thermometer className="w-3 h-3" /> {t('target_product_temp')}
                                </label>
-                               <div className="flex items-center bg-white rounded border border-cyan-200 px-2 py-1">
-                                  <input 
-                                    type="number" 
-                                    step="0.1"
-                                    disabled={readOnly}
-                                    value={config.temp} 
-                                    onChange={e => handlePhaseChange(def.type, { temp: Number(e.target.value) })} 
-                                    className="w-full text-center font-bold outline-none text-cyan-700" 
-                                  />
-                                  <span className="text-xs text-gray-500 font-medium ml-1">°C</span>
-                               </div>
+                               <RecipeTempInput
+                                 celsius={config.temp}
+                                 readOnly={readOnly}
+                                 tempUnit={tempUnit}
+                                 convertTemp={convertTemp}
+                                 inline
+                                 onCelsiusChange={(temp) => handlePhaseChange(def.type, { temp })}
+                               />
                                <p className="text-[10px] text-cyan-600 mt-1">{t('pulp_temp_control_note')}</p>
                             </div>
 
@@ -647,7 +660,59 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
   );
 };
 
-// --- Helper Component ---
+// --- Helper Components ---
+function RecipeTempInput({
+  celsius,
+  readOnly,
+  tempUnit,
+  convertTemp,
+  label,
+  onCelsiusChange,
+  inline = false,
+}: {
+  celsius: number;
+  readOnly?: boolean;
+  tempUnit: TempUnit;
+  convertTemp: (c: number) => number;
+  label?: string;
+  onCelsiusChange: (c: number) => void;
+  inline?: boolean;
+}) {
+  const display = convertTemp(celsius);
+  const input = (
+    <input
+      type="number"
+      step={0.1}
+      disabled={readOnly}
+      value={Number.isFinite(display) ? Number(display.toFixed(1)) : ''}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        if (!Number.isFinite(v)) return;
+        onCelsiusChange(celsiusFromDisplayValue(v, tempUnit));
+      }}
+      className={clsx(
+        'w-full text-center font-bold outline-none bg-transparent',
+        inline && 'text-cyan-700'
+      )}
+    />
+  );
+
+  if (inline) {
+    return (
+      <div className="flex items-center bg-white rounded border border-cyan-200 px-2 py-1">
+        {input}
+        <span className="text-xs text-gray-500 font-medium ml-1">°{tempUnit}</span>
+      </div>
+    );
+  }
+
+  return (
+    <InputGroup label={label ?? 'Temp'} icon={Thermometer} unit={`°${tempUnit}`}>
+      {input}
+    </InputGroup>
+  );
+}
+
 const InputGroup = ({ label, icon: Icon, unit, highlight, children }: any) => (
   <div className={clsx("bg-gray-50 p-3 rounded-lg border", highlight ? "border-blue-200 bg-blue-50" : "border-gray-200")}>
     <label className="text-xs text-gray-500 font-medium flex items-center gap-1 mb-1">

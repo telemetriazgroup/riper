@@ -740,7 +740,10 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
   }, [view, startedAtIso]);
 
   const payload = useMemo(() => payloadForRecipeModal(view), [view]);
-  const schedulePlan = useMemo(() => buildPhaseScheduleForModal(payload, t), [payload, t]);
+  const schedulePlan = useMemo(
+    () => buildPhaseScheduleForModal(payload, t, { convertTemp, tempUnit }),
+    [payload, t, convertTemp, tempUnit]
+  );
 
   const enabledPhases = useMemo(() => {
     const raw = (view.recipe as { phases?: Record<string, unknown>[] })?.phases;

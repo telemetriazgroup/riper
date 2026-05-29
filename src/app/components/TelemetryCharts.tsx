@@ -582,7 +582,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 // --- Historical Data Modal Component ---
 
 const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, onClose: () => void, deviceId?: string }) => {
-  const { t, tempUnit, displayTimeZone, language } = useSettings();
+  const { t, tempUnit, displayTimeZone, language, dateFormat } = useSettings();
   
   // Initialize range to last 12 hours
   const [dateRange, setDateRange] = useState({ 
@@ -618,10 +618,10 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     return chartData.map((row, i) => {
       const d = new Date(row.timestamp);
       const prev = i > 0 ? new Date(chartData[i - 1].timestamp) : null;
-      const { timeStr, timeAxisLabel } = formatChartPointLabels(d, prev, displayTimeZone, language);
+      const { timeStr, timeAxisLabel } = formatChartPointLabels(d, prev, displayTimeZone, language, dateFormat);
       return { ...row, timeStr, timeAxisLabel };
     });
-  }, [chartData, displayTimeZone, language]);
+  }, [chartData, displayTimeZone, language, dateFormat]);
 
   const chartDataWithDisplayTemps = useMemo(() => {
     if (!chartDataLabeled.length) return chartDataLabeled;

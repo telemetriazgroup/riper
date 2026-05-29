@@ -2,7 +2,7 @@ import React from 'react';
 import { Bell, Menu, Search, User, LogOut, Sun, Moon, Languages, Thermometer, Clock } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
-import { DISPLAY_TIMEZONE_PRESETS } from '@/app/lib/displayTimeZone';
+import { gmtTimezoneOptionsForSelect } from '@/app/lib/displayTimeZone';
 
 const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
 
@@ -73,9 +73,9 @@ export const Header: React.FC<HeaderProps> = ({
               onChange={(e) => setDisplayTimeZone(e.target.value)}
               aria-label={t('timezone_display_label')}
             >
-              {DISPLAY_TIMEZONE_PRESETS.map((p) => (
+              {gmtTimezoneOptionsForSelect(displayTimeZone).map((p) => (
                 <option key={p.value} value={p.value}>
-                  {t(p.labelKey) !== p.labelKey ? t(p.labelKey) : p.gmtLabel}
+                  {p.label}
                 </option>
               ))}
             </select>

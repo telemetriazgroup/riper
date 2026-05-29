@@ -1,10 +1,22 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import {
+  DEFAULT_DATE_FORMAT,
   DEFAULT_DISPLAY_TIMEZONE,
   formatInDisplayTimeZone,
   formatDateShortInDisplayTimeZone,
   formatFileTimestampInDisplayTimeZone,
+  type DateFormatStyle,
 } from '@/app/lib/displayTimeZone';
+import {
+  hasServerUiPreferences,
+  persistUserUiPreferences,
+  readLocalUiPreferences,
+  resolveUiPreferences,
+  writeLocalUiPreferences,
+  type ResolvedUiPreferences,
+  type UiPreferences,
+} from '@/app/lib/userPreferences';
+import { getStoredUser, getToken } from '@/app/lib/auth';
 
 type Language = 'es' | 'en';
 type Theme = 'light' | 'dark';
@@ -16,10 +28,17 @@ interface SettingsContextType {
   theme: Theme;
   setTheme: (theme: Theme) => void;
   tempUnit: TempUnit;
+  setTempUnit: (unit: TempUnit) => void;
   toggleTempUnit: () => void;
   /** IANA, p. ej. Etc/GMT+5 (visualización GMT-5; datos de referencia por defecto). */
   displayTimeZone: string;
   setDisplayTimeZone: (iana: string) => void;
+  dateFormat: DateFormatStyle;
+  setDateFormat: (fmt: DateFormatStyle) => void;
+  /** Aplica preferencias del perfil al iniciar sesión. */
+  applyUserPreferences: (serverPrefs?: UiPreferences | null, userId?: string) => Promise<void>;
+  /** Preferencias resueltas actuales (para guardar desde perfil). */
+  getResolvedPreferences: () => ResolvedUiPreferences;
   formatDateTime: (input: string | number | Date | null | undefined, withSeconds?: boolean) => string;
   /** dd/MM + HH:mm en el huso (sin año), p. ej. columnas de tabla. */
   formatDateShort: (input: string | number | Date | null | undefined) => string;
@@ -683,6 +702,8 @@ const translations: Record<Language, Record<string, string>> = {
     'control_process_cancel_confirm': '¿Cancelar el proceso de control en curso?',
     'control_process_cancelled': 'Proceso cancelado',
     'manual_control_logged': 'Cambios manuales registrados en Control de dispositivos.',
+    'tunnel_cmd_states_title': 'Estados de comandos',
+    'tunnel_cmd_states_hint': 'Último envío manual. El historial completo está en Control de dispositivos.',
     'report_cancel_section': 'Registro de cancelación',
     'report_cancel_by': 'Cancelado por',
     'report_cancel_at': 'Fecha y hora',
@@ -908,6 +929,17 @@ const translations: Record<Language, Record<string, string>> = {
     'section_users_desc': 'Administración de cuentas y permisos.',
     'section_profile': '10. Perfil de Usuario',
     'section_profile_desc': 'Configuración personal y preferencias.',
+    'profile_preferences': 'Preferencias de interfaz',
+    'profile_pref_language': 'Idioma',
+    'profile_pref_theme': 'Tema',
+    'profile_pref_theme_light': 'Modo día (claro)',
+    'profile_pref_theme_dark': 'Modo noche (oscuro)',
+    'profile_pref_temp': 'Temperatura',
+    'profile_pref_timezone': 'Huso horario (GMT)',
+    'profile_pref_date_format': 'Formato de fecha y hora',
+    'profile_pref_date_dmy': 'Normal (día/mes/año, hora)',
+    'profile_pref_date_mdy': 'Americano (mes/día/año, hora)',
+    'profile_pref_hint': 'Estas opciones se guardan en su perfil y se restauran al iniciar sesión.',
     
     // Login Section Details
     'login_step1': 'Ingrese su correo electrónico corporativo.',
@@ -1632,6 +1664,8 @@ const translations: Record<Language, Record<string, string>> = {
     'control_process_cancel_confirm': 'Cancel the current control process?',
     'control_process_cancelled': 'Process cancelled',
     'manual_control_logged': 'Manual changes saved to Device Control.',
+    'tunnel_cmd_states_title': 'Command status',
+    'tunnel_cmd_states_hint': 'Latest manual send only. Full history is in Device Control.',
     'report_cancel_section': 'Cancellation record',
     'report_cancel_by': 'Cancelled by',
     'report_cancel_at': 'Date and time',
@@ -1927,8 +1961,19 @@ const translations: Record<Language, Record<string, string>> = {
     'profile_step1': 'Click on your avatar or name in the header.',
     'profile_step2': 'Update your personal information: name, email, phone.',
     'profile_step3': 'Change your password if needed.',
-    'profile_step4': 'Configure preferences: language, theme, temperature units.',
-    'profile_note': 'Changes are applied immediately throughout the system.',
+    'profile_step4': 'Configure preferences: language, theme, temperature units, and timezone.',
+    'profile_note': 'Changes are applied immediately and saved to your profile for the next login.',
+    'profile_preferences': 'Interface preferences',
+    'profile_pref_language': 'Language',
+    'profile_pref_theme': 'Theme',
+    'profile_pref_theme_light': 'Day mode (light)',
+    'profile_pref_theme_dark': 'Night mode (dark)',
+    'profile_pref_temp': 'Temperature',
+    'profile_pref_timezone': 'Timezone (GMT)',
+    'profile_pref_date_format': 'Date and time format',
+    'profile_pref_date_dmy': 'Standard (day/month/year, time)',
+    'profile_pref_date_mdy': 'American (month/day/year, time)',
+    'profile_pref_hint': 'These options are saved to your profile and restored when you log in.',
   }
 };
 
@@ -1938,11 +1983,24 @@ const defaultContext: SettingsContextType = {
   theme: 'light',
   setTheme: () => {},
   tempUnit: 'C',
+  setTempUnit: () => {},
   toggleTempUnit: () => {},
   displayTimeZone: DEFAULT_DISPLAY_TIMEZONE,
   setDisplayTimeZone: () => {},
-  formatDateTime: (input, withSeconds) => formatInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es', withSeconds),
-  formatDateShort: (input) => formatDateShortInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es'),
+  dateFormat: DEFAULT_DATE_FORMAT,
+  setDateFormat: () => {},
+  applyUserPreferences: async () => {},
+  getResolvedPreferences: () => ({
+    language: 'es',
+    theme: 'light',
+    temp_unit: 'C',
+    display_timezone: DEFAULT_DISPLAY_TIMEZONE,
+    date_format: DEFAULT_DATE_FORMAT,
+  }),
+  formatDateTime: (input, withSeconds) =>
+    formatInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es', withSeconds, DEFAULT_DATE_FORMAT),
+  formatDateShort: (input) =>
+    formatDateShortInDisplayTimeZone(input, DEFAULT_DISPLAY_TIMEZONE, 'es', DEFAULT_DATE_FORMAT),
   formatFileTimestamp: (input) => formatFileTimestampInDisplayTimeZone(input ?? new Date(), DEFAULT_DISPLAY_TIMEZONE),
   convertTemp: (c) => c,
   formatTemp: (c) => `${c}°C`,
@@ -1950,50 +2008,119 @@ const defaultContext: SettingsContextType = {
 };
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('es');
-  const [theme, setThemeState] = useState<Theme>('light');
-  const [tempUnit, setTempUnit] = useState<TempUnit>('C');
-  const [displayTimeZone, setDisplayTimeZoneState] = useState<string>(DEFAULT_DISPLAY_TIMEZONE);
+  const initialLocal = readLocalUiPreferences();
+  const [language, setLanguageState] = useState<Language>(initialLocal.language ?? 'es');
+  const [theme, setThemeState] = useState<Theme>(initialLocal.theme ?? 'light');
+  const [tempUnit, setTempUnitState] = useState<TempUnit>(initialLocal.temp_unit ?? 'C');
+  const [displayTimeZone, setDisplayTimeZoneState] = useState<string>(
+    initialLocal.display_timezone ?? DEFAULT_DISPLAY_TIMEZONE
+  );
+  const [dateFormat, setDateFormatState] = useState<DateFormatStyle>(
+    initialLocal.date_format ?? DEFAULT_DATE_FORMAT
+  );
+
+  const skipPersistRef = useRef(false);
+  const userIdRef = useRef<string | null>(null);
+  const prefsRef = useRef<ResolvedUiPreferences>({
+    language: initialLocal.language ?? 'es',
+    theme: initialLocal.theme ?? 'light',
+    temp_unit: initialLocal.temp_unit ?? 'C',
+    display_timezone: initialLocal.display_timezone ?? DEFAULT_DISPLAY_TIMEZONE,
+    date_format: initialLocal.date_format ?? DEFAULT_DATE_FORMAT,
+  });
 
   useEffect(() => {
-    const savedLang = localStorage.getItem('app_language') as Language;
-    const savedTheme = localStorage.getItem('app_theme') as Theme;
-    const savedUnit = localStorage.getItem('app_temp_unit') as TempUnit;
-    const savedTz = localStorage.getItem('app_display_timezone')?.trim();
+    prefsRef.current = {
+      language,
+      theme,
+      temp_unit: tempUnit,
+      display_timezone: displayTimeZone,
+      date_format: dateFormat,
+    };
+  }, [language, theme, tempUnit, displayTimeZone, dateFormat]);
 
-    if (savedLang && (savedLang === 'es' || savedLang === 'en')) {
-      setLanguageState(savedLang);
-    }
-
-    if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
-      setThemeState(savedTheme);
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-       setThemeState('dark');
-    }
-
-    if (savedUnit && (savedUnit === 'C' || savedUnit === 'F')) {
-      setTempUnit(savedUnit);
-    }
-
-    if (savedTz) {
-      setDisplayTimeZoneState(savedTz);
+  useEffect(() => {
+    if (initialLocal.theme) return;
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      setThemeState('dark');
     }
   }, []);
 
+  const persistSnapshot = useCallback((snapshot: ResolvedUiPreferences) => {
+    if (skipPersistRef.current) return;
+    writeLocalUiPreferences(snapshot);
+    const uid = userIdRef.current ?? getStoredUser()?.id;
+    if (!uid || !getToken()) return;
+    void persistUserUiPreferences(uid, snapshot).catch(() => {});
+  }, []);
+
+  const applyResolved = useCallback((prefs: ResolvedUiPreferences) => {
+    skipPersistRef.current = true;
+    setLanguageState(prefs.language);
+    setThemeState(prefs.theme);
+    setTempUnitState(prefs.temp_unit);
+    setDisplayTimeZoneState(prefs.display_timezone);
+    setDateFormatState(prefs.date_format);
+    writeLocalUiPreferences(prefs);
+    prefsRef.current = prefs;
+    skipPersistRef.current = false;
+  }, []);
+
+  const applyUserPreferences = useCallback(
+    async (serverPrefs?: UiPreferences | null, userId?: string) => {
+      userIdRef.current = userId ?? getStoredUser()?.id ?? null;
+      const resolved = resolveUiPreferences(serverPrefs);
+      applyResolved(resolved);
+      if (userIdRef.current && !hasServerUiPreferences(serverPrefs)) {
+        try {
+          await persistUserUiPreferences(userIdRef.current, resolved);
+        } catch {
+          /* ignore seed failure */
+        }
+      }
+    },
+    [applyResolved]
+  );
+
+  const getResolvedPreferences = useCallback(
+    (): ResolvedUiPreferences => ({
+      language,
+      theme,
+      temp_unit: tempUnit,
+      display_timezone: displayTimeZone,
+      date_format: dateFormat,
+    }),
+    [language, theme, tempUnit, displayTimeZone, dateFormat]
+  );
+
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem('app_language', lang);
+    persistSnapshot({ ...prefsRef.current, language: lang });
   };
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem('app_theme', newTheme);
+    persistSnapshot({ ...prefsRef.current, theme: newTheme });
+  };
+
+  const setTempUnit = (unit: TempUnit) => {
+    setTempUnitState(unit);
+    persistSnapshot({ ...prefsRef.current, temp_unit: unit });
   };
 
   const toggleTempUnit = () => {
     const newUnit = tempUnit === 'C' ? 'F' : 'C';
     setTempUnit(newUnit);
-    localStorage.setItem('app_temp_unit', newUnit);
+  };
+
+  const setDisplayTimeZone = (iana: string) => {
+    setDisplayTimeZoneState(iana);
+    persistSnapshot({ ...prefsRef.current, display_timezone: iana });
+  };
+
+  const setDateFormat = (fmt: DateFormatStyle) => {
+    setDateFormatState(fmt);
+    persistSnapshot({ ...prefsRef.current, date_format: fmt });
   };
 
   const convertTemp = (celsius: number): number => {
@@ -2005,25 +2132,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return `${convertTemp(celsius)}°${tempUnit}`;
   };
 
-  const setDisplayTimeZone = (iana: string) => {
-    setDisplayTimeZoneState(iana);
-    try {
-      localStorage.setItem('app_display_timezone', iana);
-    } catch {
-      /* ignore */
-    }
-  };
-
   const formatDateTime = useCallback(
     (input: string | number | Date | null | undefined, withSeconds = false) =>
-      formatInDisplayTimeZone(input, displayTimeZone, language, withSeconds),
-    [displayTimeZone, language]
+      formatInDisplayTimeZone(input, displayTimeZone, language, withSeconds, dateFormat),
+    [displayTimeZone, language, dateFormat]
   );
 
   const formatDateShort = useCallback(
     (input: string | number | Date | null | undefined) =>
-      formatDateShortInDisplayTimeZone(input, displayTimeZone, language),
-    [displayTimeZone, language]
+      formatDateShortInDisplayTimeZone(input, displayTimeZone, language, dateFormat),
+    [displayTimeZone, language, dateFormat]
   );
 
   const formatFileTimestamp = useCallback(
@@ -2065,9 +2183,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         theme,
         setTheme,
         tempUnit,
+        setTempUnit,
         toggleTempUnit,
         displayTimeZone,
         setDisplayTimeZone,
+        dateFormat,
+        setDateFormat,
+        applyUserPreferences,
+        getResolvedPreferences,
         formatDateTime,
         formatDateShort,
         formatFileTimestamp,

@@ -16,6 +16,14 @@ export interface AuthUser {
   active?: boolean;
   /** Identificador empresa (API Madurador); opcional */
   identificador?: string | null;
+  /** Preferencias de interfaz guardadas en perfil */
+  ui_preferences?: {
+    language?: 'es' | 'en';
+    theme?: 'light' | 'dark';
+    temp_unit?: 'C' | 'F';
+    display_timezone?: string;
+    date_format?: 'dmy' | 'mdy';
+  };
 }
 
 function apiRoot() {

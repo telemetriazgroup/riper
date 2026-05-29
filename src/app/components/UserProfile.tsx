@@ -1,17 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
-import { User, Mail, Building, Save, Loader2, Shield } from 'lucide-react';
+import { User, Mail, Building, Save, Loader2, Shield, Clock, Thermometer, Languages, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
 import { fetchMe, type AuthUser } from '@/app/lib/auth';
 import { updateUser, uploadUserAvatar } from '@/app/lib/usersApi';
 import { UserAvatar } from '@/app/components/UserAvatar';
+import { useSettings } from '@/app/contexts/SettingsContext';
+import { gmtTimezoneOptionsForSelect } from '@/app/lib/displayTimeZone';
+import { toUiPreferencesPayload } from '@/app/lib/userPreferences';
 
 interface UserProfileProps {
   onProfileUpdated?: () => void;
 }
 
 export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) => {
+  const {
+    t,
+    language,
+    setLanguage,
+    theme,
+    setTheme,
+    tempUnit,
+    setTempUnit,
+    displayTimeZone,
+    setDisplayTimeZone,
+    dateFormat,
+    setDateFormat,
+    getResolvedPreferences,
+    applyUserPreferences,
+  } = useSettings();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -28,28 +46,31 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
         setUser(u);
         setFullName(u.name);
         setCompany(u.company === 'sin empresa' ? '' : u.company);
+        await applyUserPreferences(u.ui_preferences, u.id);
       } catch {
-        toast.error('Error al cargar perfil');
+        toast.error(t('error') || 'Error al cargar perfil');
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [applyUserPreferences, t]);
 
   const updateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     setSaving(true);
     try {
+      const ui_preferences = toUiPreferencesPayload(getResolvedPreferences());
       const payload: Parameters<typeof updateUser>[1] = {
         name: fullName,
         company: company.trim() || 'sin empresa',
+        ui_preferences,
       };
       if (password.trim()) {
         payload.password = password;
       }
       const updated = await updateUser(user.id, payload);
-      setUser(updated);
+      setUser({ ...updated, ui_preferences: updated.ui_preferences ?? ui_preferences });
       if (photoFile) {
         await uploadUserAvatar(user.id, photoFile);
         setPhotoFile(null);
@@ -57,10 +78,14 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
         setUser(u);
       }
       setPassword('');
-      toast.success('Perfil actualizado correctamente');
+      toast.success(t('profile_saved') || 'Perfil actualizado correctamente');
       onProfileUpdated?.();
     } catch (error: unknown) {
-      toast.error('Error al actualizar: ' + (error instanceof Error ? error.message : String(error)));
+      toast.error(
+        (t('profile_save_error') || 'Error al actualizar') +
+          ': ' +
+          (error instanceof Error ? error.message : String(error))
+      );
     } finally {
       setSaving(false);
     }
@@ -77,8 +102,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Mi Perfil</h1>
-        <p className="text-gray-500 text-sm">Administre su información personal y preferencias.</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('profile') || 'Mi Perfil'}</h1>
+        <p className="text-gray-500 text-sm">{t('section_profile_desc')}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -113,27 +138,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
           </Card>
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-6">
           <Card className="border-gray-200">
             <CardHeader>
-              <CardTitle>Información Personal</CardTitle>
+              <CardTitle>{t('personal_info') || 'Información Personal'}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={updateProfile} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Foto de perfil</label>
+                  <label className="text-sm font-medium text-gray-700">{t('profile_photo') || 'Foto de perfil'}</label>
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
                     className="text-sm w-full"
                   />
-                  <p className="text-xs text-gray-500">Si no sube imagen, se muestra avatar genérico o inicial del nombre.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Nombre completo</label>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-sm font-medium text-gray-700">{t('full_name') || 'Nombre completo'}</label>
                     <div className="relative">
                       <User className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                       <input
@@ -147,7 +171,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">Empresa / Organización</label>
+                    <label className="text-sm font-medium text-gray-700">
+                      {t('company') || 'Empresa / Organización'}
+                    </label>
                     <div className="relative">
                       <Building className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                       <input
@@ -161,33 +187,121 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
                   </div>
 
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-medium text-gray-700">Nueva contraseña (opcional)</label>
+                    <label className="text-sm font-medium text-gray-700">
+                      {t('new_password_optional') || 'Nueva contraseña (opcional)'}
+                    </label>
                     <input
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Dejar vacío para no cambiar"
+                      placeholder={t('password_leave_blank') || 'Dejar vacío para no cambiar'}
                       autoComplete="new-password"
                     />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100 space-y-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{t('profile_preferences')}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{t('profile_pref_hint')}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <Languages className="h-4 w-4" />
+                        {t('profile_pref_language')}
+                      </label>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value as 'es' | 'en')}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="es">Español</option>
+                        <option value="en">English</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                        {t('profile_pref_theme')}
+                      </label>
+                      <select
+                        value={theme}
+                        onChange={(e) => setTheme(e.target.value as 'light' | 'dark')}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="light">{t('profile_pref_theme_light')}</option>
+                        <option value="dark">{t('profile_pref_theme_dark')}</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <Thermometer className="h-4 w-4" />
+                        {t('profile_pref_temp')}
+                      </label>
+                      <select
+                        value={tempUnit}
+                        onChange={(e) => setTempUnit(e.target.value as 'C' | 'F')}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="C">°C (Celsius)</option>
+                        <option value="F">°F (Fahrenheit)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        {t('profile_pref_timezone')}
+                      </label>
+                      <select
+                        value={displayTimeZone}
+                        onChange={(e) => setDisplayTimeZone(e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        {gmtTimezoneOptionsForSelect(displayTimeZone).map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {t('profile_pref_date_format')}
+                      </label>
+                      <select
+                        value={dateFormat}
+                        onChange={(e) => setDateFormat(e.target.value as 'dmy' | 'mdy')}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                      >
+                        <option value="dmy">{t('profile_pref_date_dmy')}</option>
+                        <option value="mdy">{t('profile_pref_date_mdy')}</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 <div className="pt-4 flex justify-end">
                   <Button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Guardar cambios
+                    {t('save_changes') || 'Guardar cambios'}
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
 
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 flex items-start gap-3">
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 flex items-start gap-3">
             <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-bold mb-1">Seguridad</h4>
-              <p>El acceso al sistema se valida contra el módulo de usuarios. Use una contraseña segura.</p>
+              <h4 className="font-bold mb-1">{t('security') || 'Seguridad'}</h4>
+              <p>{t('profile_note')}</p>
             </div>
           </div>
         </div>

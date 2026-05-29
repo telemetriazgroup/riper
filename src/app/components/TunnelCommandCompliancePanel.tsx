@@ -80,7 +80,10 @@ function JobRow({
               Objetivo: {formatTarget(job, convertTemp, tempUnit)}
               {readVal != null && (
                 <span className="ml-2">
-                  · Lectura: {job.kind === 'temperature' ? `${convertTemp(readVal).toFixed(1)}°${tempUnit}` : readVal}
+                  · Lectura:{' '}
+                  {job.kind === 'temperature'
+                    ? `${convertTemp(readVal).toFixed(1)}°${tempUnit}`
+                    : readVal}
                 </span>
               )}
             </p>
@@ -104,17 +107,23 @@ function JobRow({
       <p className="text-[11px] text-gray-400">
         {formatDateTime(job.created_at)}
         {job.completed_at ? ` → ${formatDateTime(job.completed_at)}` : ''}
-        {job.attempts > 0 ? ` · intentos ${job.attempts}` : ''}
       </p>
     </div>
   );
+}
+
+/** Solo el último lote de comandos manuales (historial en Control de dispositivos). */
+function latestBatchJobs(jobs: TunnelCommandJob[]): TunnelCommandJob[] {
+  if (jobs.length === 0) return [];
+  const batchId = jobs[0].batch_id;
+  return jobs.filter((j) => j.batch_id === batchId);
 }
 
 export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
   const { t, convertTemp, tempUnit, formatDateTime } = useSettings();
   const { jobs, isLoading, error, refresh, hasActive } = useTunnelCommandJobs(deviceId, true);
 
-  const recent = useMemo(() => jobs.slice(0, 8), [jobs]);
+  const latestJobs = useMemo(() => latestBatchJobs(jobs), [jobs]);
 
   if (isLoading && jobs.length === 0) {
     return (
@@ -125,7 +134,7 @@ export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
     );
   }
 
-  if (jobs.length === 0) {
+  if (latestJobs.length === 0) {
     return null;
   }
 
@@ -133,13 +142,8 @@ export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
     <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 to-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
-          <h3 className="font-semibold text-gray-900">
-            {t('tunnel_cmd_compliance_title') || 'Cumplimiento de comandos túnel'}
-          </h3>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {t('tunnel_cmd_compliance_hint') ||
-              'Seguimiento de temperatura (°C), humedad, etileno y ventilación enviados al upstream Tunel.'}
-          </p>
+          <h3 className="font-semibold text-gray-900">{t('tunnel_cmd_states_title')}</h3>
+          <p className="text-sm text-gray-500 mt-0.5">{t('tunnel_cmd_states_hint')}</p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => void refresh()} title={t('refresh') || 'Actualizar'}>
           <RefreshCw className={cn('h-4 w-4', hasActive && 'animate-spin')} />
@@ -147,7 +151,7 @@ export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
       </div>
       {error && <p className="text-sm text-red-600 mb-2">{error}</p>}
       <div className="space-y-2">
-        {recent.map((job) => (
+        {latestJobs.map((job) => (
           <JobRow
             key={job.id}
             job={job}

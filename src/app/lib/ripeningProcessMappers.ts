@@ -1,4 +1,5 @@
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { formatStoredCelsius, type TempDisplayOpts } from '@/app/lib/temperatureUnits';
 
 function inferPhase(payload: RipeningProcessRow['payload']): string {
   const raw = (payload.recipe as { phases?: { enabled?: boolean; name?: string; type?: string }[] } | undefined)
@@ -284,13 +285,21 @@ export function inferCurrentNextPhase(
 /** Líneas de texto para parámetros de una fase (temperatura, HR, etileno, etc.). */
 export function formatRecipePhaseParamLines(
   raw: Record<string, unknown>,
-  t: (key: string, replacements?: Record<string, string> | string) => string
+  t: (key: string, replacements?: Record<string, string> | string) => string,
+  tempDisplay?: TempDisplayOpts
 ): string[] {
   const type = String(raw.type ?? '');
   const dur = raw.duration != null ? Number(raw.duration) : NaN;
   const lines: string[] = [];
   if (raw.temp != null && Number.isFinite(Number(raw.temp))) {
-    lines.push(`${t('temperature')}: ${Number(raw.temp).toFixed(1)} °C`);
+    const c = Number(raw.temp);
+    if (tempDisplay) {
+      lines.push(
+        `${t('temperature')}: ${formatStoredCelsius(c, tempDisplay.convertTemp, tempDisplay.tempUnit)}`
+      );
+    } else {
+      lines.push(`${t('temperature')}: ${c.toFixed(1)} °C`);
+    }
   }
   if (raw.humidity != null && Number.isFinite(Number(raw.humidity))) {
     lines.push(`${t('humidity')}: ${Number(raw.humidity)}%`);
@@ -346,7 +355,8 @@ export type RecipeModalPhaseRow = {
 /** Horarios por fase (fin programado acumulado desde scheduleSummary.startedAt). */
 export function buildPhaseScheduleForModal(
   payload: RipeningProcessRow['payload'],
-  t: (key: string, replacements?: Record<string, string> | string) => string
+  t: (key: string, replacements?: Record<string, string> | string) => string,
+  tempDisplay?: TempDisplayOpts
 ): {
   startedAt: string | null;
   estimatedFullEndAt: string | null;
@@ -382,7 +392,7 @@ export function buildPhaseScheduleForModal(
       label: phaseRowLabel(pr, idx, t),
       type: String(pr.type ?? ''),
       plannedEndAt,
-      paramLines: formatRecipePhaseParamLines(pr, t),
+      paramLines: formatRecipePhaseParamLines(pr, t, tempDisplay),
     };
   });
 

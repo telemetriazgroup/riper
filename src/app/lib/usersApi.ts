@@ -13,6 +13,13 @@ export interface AppUser {
   is_superuser?: boolean;
   has_photo?: boolean;
   identificador?: string | null;
+  ui_preferences?: {
+    language?: 'es' | 'en';
+    theme?: 'light' | 'dark';
+    temp_unit?: 'C' | 'F';
+    display_timezone?: string;
+    date_format?: 'dmy' | 'mdy';
+  };
   created_at: string;
   updated_at: string;
 }
@@ -73,7 +80,7 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  payload: Partial<Pick<AppUser, 'name' | 'email' | 'role' | 'active' | 'company' | 'identificador'>> & {
+  payload: Partial<Pick<AppUser, 'name' | 'email' | 'role' | 'active' | 'company' | 'identificador' | 'ui_preferences'>> & {
     password?: string;
   }
 ): Promise<AppUser> {

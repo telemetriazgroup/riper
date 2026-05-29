@@ -29,7 +29,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { t } = useSettings();
+  const { t, applyUserPreferences } = useSettings();
   const [session, setSession] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeView, setActiveView] = useState('dashboard');
@@ -58,6 +58,11 @@ function AppContent() {
       setLoading(false);
     })();
   }, [refreshSession]);
+
+  useEffect(() => {
+    if (!session) return;
+    void applyUserPreferences(session.ui_preferences, session.id);
+  }, [session?.id, session?.ui_preferences, applyUserPreferences]);
 
   const isRestrictedDemoUser =
     session?.email?.toLowerCase() === gourmetTradingLoginEmail() ||

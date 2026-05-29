@@ -25,9 +25,13 @@ export const ProcessRecipeDetailModal: React.FC<ProcessRecipeDetailModalProps> =
   onOpenChange,
   view,
 }) => {
-  const { t, formatDateTime } = useSettings();
+  const { t, formatDateTime, convertTemp, tempUnit } = useSettings();
   const payload = useMemo(() => payloadForRecipeModal(view), [view]);
-  const schedule = useMemo(() => buildPhaseScheduleForModal(payload, t), [payload, t]);
+  const tempDisplay = useMemo(() => ({ convertTemp, tempUnit }), [convertTemp, tempUnit]);
+  const schedule = useMemo(
+    () => buildPhaseScheduleForModal(payload, t, tempDisplay),
+    [payload, t, tempDisplay]
+  );
   const st = String(view.status || 'active').toLowerCase();
   const tg = view.recipe.targets;
 
