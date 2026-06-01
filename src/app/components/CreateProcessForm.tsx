@@ -7,6 +7,7 @@ import { RecipeBuilder, type Recipe } from './recipes/RecipeBuilder';
 import { ProductCombobox, type ProductRow } from './recipes/ProductCombobox';
 import { PERUVIAN_RECIPES } from '@/app/data/recipes';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { localizeRecipe, localizedProductName } from '@/app/lib/catalogI18n';
 import { fetchProducts, type AppProduct } from '@/app/lib/productsApi';
 import { fetchCompanies } from '@/app/lib/companiesApi';
 import { canManageCompanies } from '@/app/lib/permissions';
@@ -206,17 +207,33 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   }, []);
 
   const productOptions = useMemo(
-    () => productRows.map((p) => ({ id: p.id, name: p.name })),
-    [productRows]
+    () =>
+      productRows.map((p) => ({
+        id: p.id,
+        name: p.name,
+        label: localizedProductName(p.name, language, p.name_en),
+      })),
+    [productRows, language]
   );
 
   const fruitOptionRows: ProductRow[] = useMemo(() => {
-    const base = productOptions.map((o) => ({ id: o.id, name: o.name }));
+    const base = productOptions.map((o) => ({ id: o.id, name: o.name, label: o.label }));
     if (productName && !base.some((b) => b.name === productName)) {
-      return [...base, { id: `__x-${productName}`, name: productName }];
+      return [
+        ...base,
+        {
+          id: `__x-${productName}`,
+          name: productName,
+          label: localizedProductName(
+            productName,
+            language,
+            productRows.find((p) => p.name === productName)?.name_en
+          ),
+        },
+      ];
     }
     return base;
-  }, [productOptions, productName]);
+  }, [productOptions, productName, language, productRows]);
 
   const filteredRecipes = useMemo(
     () => filterRecipesByProduct(recipesCatalog, productName),
@@ -796,17 +813,22 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   >
                     <option value="">{t('select_recipe_option')}</option>
                     {customRecipe && <option value="custom">★ {t('custom_recipe_current')}</option>}
-                    {filteredRecipes.map((r) => (
+                    {filteredRecipes.map((r) => {
+                      const d = localizeRecipe(r, language);
+                      return (
                       <option key={r.id} value={r.id}>
-                        {r.name} ({r.fruit})
+                        {d.name} ({d.fruit})
                       </option>
-                    ))}
+                      );
+                    })}
                   </select>
                 </div>
-                {activeRecipe && (
+                {activeRecipe && (() => {
+                  const d = localizeRecipe(activeRecipe, language);
+                  return (
                   <div className="bg-blue-50/80 p-3 rounded-md border border-blue-100 text-sm">
-                    <p className="font-semibold text-blue-900 mb-1">{activeRecipe.name}</p>
-                    <p className="text-gray-600 text-xs mb-2">{activeRecipe.description}</p>
+                    <p className="font-semibold text-blue-900 mb-1">{d.name}</p>
+                    <p className="text-gray-600 text-xs mb-2">{d.description}</p>
                     <div className="flex flex-wrap gap-2">
                       {activeRecipe.phases
                         .filter((p) => p.enabled)
@@ -840,7 +862,8 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                       </div>
                     )}
                   </div>
-                )}
+                  );
+                })()}
                 <div className="space-y-2">
                   <span className="text-sm font-medium text-gray-800">{t('process_start_time')}</span>
                   <div className="flex flex-wrap items-center gap-3">

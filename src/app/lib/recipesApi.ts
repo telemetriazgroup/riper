@@ -28,8 +28,11 @@ async function handle<T>(res: Response): Promise<T> {
 function toRecipe(row: {
   id: string;
   name: string;
+  name_en?: string | null;
   fruit: string;
+  fruit_en?: string | null;
   description: string;
+  description_en?: string | null;
   phases: Recipe['phases'];
   is_system?: boolean;
   archived?: boolean;
@@ -42,8 +45,11 @@ function toRecipe(row: {
   return {
     id: row.id,
     name: row.name,
+    name_en: row.name_en ?? null,
     fruit: row.fruit,
+    fruit_en: row.fruit_en ?? null,
     description: row.description ?? '',
+    description_en: row.description_en ?? null,
     phases: row.phases ?? [],
     is_system: row.is_system === true,
     archived: row.archived === true || Boolean(row.archived_at),

@@ -12,8 +12,11 @@ function rowToRecipe(row) {
   return {
     id: row.id,
     name: row.name,
+    name_en: row.name_en ?? null,
     fruit: row.fruit,
+    fruit_en: row.fruit_en ?? null,
     description: row.description ?? '',
+    description_en: row.description_en ?? null,
     phases: Array.isArray(phases) ? phases : [],
     is_system: row.is_system === true,
     iconKey: row.icon_key != null && String(row.icon_key).trim() ? String(row.icon_key).trim() : null,
@@ -61,12 +64,12 @@ recipesRouter.get('/', async (req, res) => {
     const scoped = isScopedRecipeDemoUser(req);
     const { rows } = await pool.query(
       scoped
-        ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+        ? `SELECT id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
              AND ${recipeScopeSql(2)}
            ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`
-        : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+        : `SELECT id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
            ORDER BY deleted_at NULLS FIRST, is_system DESC, name ASC, updated_at DESC`,
@@ -86,7 +89,7 @@ recipesRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
       `UPDATE app_recipes
        SET deleted_at = NULL, updated_at = now()
        WHERE id = $1 AND deleted_at IS NOT NULL AND (is_system IS NOT TRUE)
-       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at`,
+       RETURNING id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at`,
       [id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -109,11 +112,11 @@ recipesRouter.get('/:id', async (req, res) => {
     const scoped = isScopedRecipeDemoUser(req);
     const { rows } = await pool.query(
       scoped
-        ? `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+        ? `SELECT id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)
              AND ${recipeScopeSql(3)}`
-        : `SELECT id, name, fruit, description, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
+        : `SELECT id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, deleted_at, created_at, updated_at, created_by_user_id
            FROM app_recipes
            WHERE id = $1 AND ($2::boolean = TRUE OR deleted_at IS NULL)`,
       scoped ? [req.params.id, superadmin, req.user.id] : [req.params.id, superadmin]
@@ -147,7 +150,7 @@ recipesRouter.post('/', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO app_recipes (id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_by_user_id)
        VALUES ($1, $2, $3, $4, $5::jsonb, false, $6, $7, $8::uuid)
-       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
+       RETURNING id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
       [id, n, f, String(description), JSON.stringify(phases), ik === undefined ? null : ik, img === undefined ? null : img, req.user.id]
     );
     await writeAudit(req, {
@@ -228,7 +231,7 @@ recipesRouter.patch('/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE app_recipes SET ${updates.join(', ')}
        WHERE id = $${i} AND deleted_at IS NULL AND (is_system IS NOT TRUE)
-       RETURNING id, name, fruit, description, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
+       RETURNING id, name, name_en, fruit, fruit_en, description, description_en, phases, is_system, icon_key, custom_image_url, created_at, updated_at, created_by_user_id`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });

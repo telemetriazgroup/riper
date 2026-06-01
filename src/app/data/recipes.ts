@@ -9,9 +9,13 @@ export const PERUVIAN_RECIPES: Recipe[] = [
     id: 'std-aguacate',
     iconKey: 'palta',
     name: 'Aguacate — Maduración estándar (tipo Hass)',
+    name_en: 'Avocado — Standard ripening (Hass type)',
     fruit: 'Aguacate',
+    fruit_en: 'Avocado',
     description:
       'Parámetros típicos cámara: T 18–20 °C, HR 88–95 %, etileno de disparo ~100 ppm, CO₂ en sala controlado bajo 1 % durante maduración; purga a menor fracción en ventilación.',
+    description_en:
+      'Typical chamber parameters: T 18–20 °C, RH 88–95%, trigger ethylene ~100 ppm, room CO₂ kept below 1% during ripening; purge to a lower fraction during venting.',
     is_system: true,
     phases: [
       { id: 'ph-agu-h', type: 'homogenization', enabled: true, temp: 19, duration: 20, humidity: 90 },
@@ -33,9 +37,13 @@ export const PERUVIAN_RECIPES: Recipe[] = [
     id: 'std-mango',
     iconKey: 'mango',
     name: 'Mango — Maduración estándar',
+    name_en: 'Mango — Standard ripening',
     fruit: 'Mango',
+    fruit_en: 'Mango',
     description:
       'Típico operación: 20–22 °C en etapa caliente, HR 90–95 %, etileno 100–150 ppm para inducción; CO₂ máximo de trabajo en sala con ventilación periódica.',
+    description_en:
+      'Typical operation: 20–22 °C in the hot stage, RH 90–95%, ethylene 100–150 ppm for induction; maximum working CO₂ in the room with periodic ventilation.',
     is_system: true,
     phases: [
       { id: 'ph-man-h', type: 'homogenization', enabled: true, temp: 20, duration: 24, humidity: 92 },
@@ -57,9 +65,13 @@ export const PERUVIAN_RECIPES: Recipe[] = [
     id: 'std-banano',
     iconKey: 'banana',
     name: 'Banano / Plátano — Maduración estándar',
+    name_en: 'Banana / Plantain — Standard ripening',
     fruit: 'Banano',
+    fruit_en: 'Banana',
     description:
       'Esquemas comerciales frecuentes: 15–18 °C, HR 90–95 %, etileno 100–200 ppm; CO₂ bajo estricto en banano. Tiempos variables 3–5 días según verde y color.',
+    description_en:
+      'Common commercial schemes: 15–18 °C, RH 90–95%, ethylene 100–200 ppm; strict low CO₂ for banana (ventilate more often). Variable times 3–5 days depending on greenness and required color profile.',
     is_system: true,
     phases: [
       { id: 'ph-ban-h', type: 'homogenization', enabled: true, temp: 16, duration: 24, humidity: 95 },

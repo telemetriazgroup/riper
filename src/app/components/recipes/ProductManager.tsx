@@ -12,6 +12,7 @@ import {
 import type { AppProduct } from '@/app/lib/productsApi';
 import { createProduct, deleteProduct, restoreProduct, updateProduct } from '@/app/lib/productsApi';
 import { useSettings } from '../../contexts/SettingsContext';
+import { productDisplayName } from '@/app/lib/catalogI18n';
 
 interface ProductManagerProps {
   products: AppProduct[];
@@ -21,7 +22,7 @@ interface ProductManagerProps {
 }
 
 export function ProductManager({ products, onChanged, isSuperAdmin = false }: ProductManagerProps) {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AppProduct | null>(null);
   const [name, setName] = useState('');
@@ -119,7 +120,7 @@ export function ProductManager({ products, onChanged, isSuperAdmin = false }: Pr
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className={`text-sm font-medium truncate ${archived ? 'text-slate-600' : 'text-gray-900'}`}>
-                      {p.name}
+                      {productDisplayName(p, language)}
                     </span>
                     {archived && (
                       <span className="text-[10px] uppercase font-semibold shrink-0 px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">

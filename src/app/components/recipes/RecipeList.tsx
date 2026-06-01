@@ -33,6 +33,7 @@ import {
   updateRecipe,
 } from '@/app/lib/recipesApi';
 import { RecipeFruitAvatar } from '@/app/lib/recipeFruitPresets';
+import { localizeRecipe, productDisplayName } from '@/app/lib/catalogI18n';
 import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 
@@ -66,7 +67,7 @@ function recipesAppliedOnThermoKingDevice(catalog: Recipe[], processRows: Ripeni
 }
 
 export const RecipeList = () => {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
   const [view, setView] = useState<'list' | 'builder'>('list');
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [products, setProducts] = useState<AppProduct[]>([]);
@@ -131,20 +132,27 @@ export const RecipeList = () => {
       const sa = a.is_system ? 0 : 1;
       const sb = b.is_system ? 0 : 1;
       if (sa !== sb) return sa - sb;
-      return a.name.localeCompare(b.name, 'es');
+      const la = localizeRecipe(a, language).name;
+      const lb = localizeRecipe(b, language).name;
+      return la.localeCompare(lb, language === 'en' ? 'en' : 'es');
     });
-  }, [recipes]);
+  }, [recipes, language]);
 
   const filteredRecipes = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return sortedRecipes;
-    return sortedRecipes.filter(
-      (r) =>
+    return sortedRecipes.filter((r) => {
+      const d = localizeRecipe(r, language);
+      return (
+        d.name.toLowerCase().includes(q) ||
+        d.fruit.toLowerCase().includes(q) ||
+        (d.description || '').toLowerCase().includes(q) ||
         r.name.toLowerCase().includes(q) ||
         r.fruit.toLowerCase().includes(q) ||
         (r.description || '').toLowerCase().includes(q)
-    );
-  }, [sortedRecipes, searchQuery]);
+      );
+    });
+  }, [sortedRecipes, searchQuery, language]);
 
   const productOptions = useMemo(
     () => products.map((p) => ({ id: p.id, name: p.name })),
@@ -397,7 +405,9 @@ export const RecipeList = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredRecipes.map((recipe) => (
+        {filteredRecipes.map((recipe) => {
+          const display = localizeRecipe(recipe, language);
+          return (
           <Card
             key={recipe.id}
             role="button"
@@ -416,7 +426,7 @@ export const RecipeList = () => {
           >
             <CardContent className="p-6 flex-1 flex flex-col">
               <div className="flex justify-between items-start mb-4">
-                <RecipeFruitAvatar recipe={recipe} sizeClass="w-14 h-14" className="ring-1 ring-gray-200" title={recipe.fruit} />
+                <RecipeFruitAvatar recipe={recipe} sizeClass="w-14 h-14" className="ring-1 ring-gray-200" title={display.fruit} />
                 <div
                   ref={kebabForId === recipe.id ? kebabRef : undefined}
                   className="relative z-20"
@@ -482,7 +492,7 @@ export const RecipeList = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h3 className="font-bold text-gray-900 text-lg leading-tight">{recipe.name}</h3>
+                <h3 className="font-bold text-gray-900 text-lg leading-tight">{display.name}</h3>
                 {recipe.archived && (
                   <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-200 text-slate-800 border border-slate-300">
                     {t('archived_badge')}
@@ -494,10 +504,10 @@ export const RecipeList = () => {
                   </span>
                 )}
               </div>
-              <p className="text-sm text-blue-600 font-medium mb-2">{recipe.fruit}</p>
+              <p className="text-sm text-blue-600 font-medium mb-2">{display.fruit}</p>
 
               <p className="text-sm text-gray-500 line-clamp-2 mb-4 h-10">
-                {recipe.description || t('no_description')}
+                {display.description || t('no_description')}
               </p>
 
               <div className="mb-4">{renderPhaseBadges(recipe.phases)}</div>
@@ -586,7 +596,8 @@ export const RecipeList = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
       )}

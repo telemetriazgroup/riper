@@ -701,7 +701,7 @@ const HomogenizationControl = ({
         setPoint: temp,
         humiditySetPoint: humidity,
         durationHours: duration,
-        name: 'Homogenización',
+        name: t('homogenization'),
         tempUnit: tempUnitKey,
       },
       durationHours: duration,
@@ -712,7 +712,13 @@ const HomogenizationControl = ({
     <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
       <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex gap-2">
         <Thermometer className="h-5 w-5 shrink-0" />
-        <p>La homogenización eleva gradualmente la temperatura del producto para prepararlo para la maduración. Mantenga humedad alta (90–98%). Típico: {convertTemp(8)}°{tempUnit} a {convertTemp(18)}°{tempUnit}.</p>
+        <p>
+          {t('homogenization_control_desc', {
+            tempMin: convertTemp(8).toFixed(1),
+            tempMax: convertTemp(18).toFixed(1),
+            unit: tempUnit,
+          })}
+        </p>
       </div>
       
       <ControlGroup title={t('settings')}>
@@ -741,12 +747,20 @@ const HomogenizationControl = ({
           decimals={0}
           step={1}
         />
-        <RangeControl label={t('estimated_duration')} value={duration} unit="Horas" min={1} max={24} onChange={setDuration} disabled={disabled} decimals={0} />
+        <RangeControl label={t('estimated_duration')} value={duration} unit={t('unit_hours')} min={1} max={24} onChange={setDuration} disabled={disabled} decimals={0} />
       </ControlGroup>
 
       <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
         <p className="text-sm text-gray-500 mb-1">{t('preview')}</p>
-        <p className="font-medium text-gray-900">De ~{convertTemp(8)}°{tempUnit} a {convertTemp(temp)}°{tempUnit}, humedad {humidity}%, en {duration} h</p>
+        <p className="font-medium text-gray-900">
+          {t('homogenization_control_preview', {
+            tempFrom: convertTemp(8).toFixed(1),
+            tempTo: convertTemp(temp).toFixed(1),
+            unit: tempUnit,
+            humidity: String(humidity),
+            hours: String(duration),
+          })}
+        </p>
       </div>
 
       <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleStart} disabled={disabled}>
@@ -785,7 +799,7 @@ const RipeningControl = ({
         durationHours: duration,
         ethylene,
         co2,
-        name: 'Maduración',
+        name: t('ripening'),
         tempUnit: tempUnitKey,
       },
       durationHours: duration,
@@ -812,13 +826,13 @@ const RipeningControl = ({
         <RangeControl label={t('relative_humidity')} value={humidity} unit="%" min={80} max={99} onChange={(v) => setHumidity(Math.round(clamp(v, 80, 99)))} disabled={disabled} decimals={0} step={1} />
       </ControlGroup>
 
-      <ControlGroup title="Gases">
+      <ControlGroup title={t('control_gases')}>
         <RangeControl label={t('ethylene_injection')} value={ethylene} unit="PPM" min={0} max={250} onChange={(v) => setEthylene(Math.round(clamp(v, 0, 250)))} disabled={disabled} decimals={0} step={1} />
         <RangeControl label={t('co2_limit')} value={co2} unit="%" min={1} max={10} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
       </ControlGroup>
 
       <ControlGroup title={t('duration')}>
-        <RangeControl label={t('process_time')} value={duration} unit="Horas" min={24} max={120} onChange={setDuration} disabled={disabled} decimals={0} />
+        <RangeControl label={t('process_time')} value={duration} unit={t('unit_hours')} min={24} max={120} onChange={setDuration} disabled={disabled} decimals={0} />
       </ControlGroup>
 
       <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleStart} disabled={disabled}>
@@ -850,7 +864,7 @@ const VentilationControl = ({
       params: {
         targetCo2: co2,
         durationMin,
-        name: 'Ventilación',
+        name: t('ventilation'),
       },
       durationHours,
     });
@@ -859,9 +873,9 @@ const VentilationControl = ({
   <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
     <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 flex gap-2">
       <Fan className="h-5 w-5 shrink-0" />
-      <p>Evacuación rápida de gases (Etileno/CO2) post-maduración.</p>
+      <p>{t('ventilation_control_desc')}</p>
     </div>
-    <ControlGroup title="Parámetros">
+    <ControlGroup title={t('control_parameters')}>
        <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
        <RangeControl label={t('max_duration')} value={durationMin} unit="min" min={10} max={180} onChange={setDurationMin} disabled={disabled} decimals={0} />
     </ControlGroup>
@@ -892,7 +906,7 @@ const CoolingControl = ({
       params: {
         setPoint: target,
         durationHours: rampHours,
-        name: 'Enfriamiento',
+        name: t('cooling'),
         tempUnit: tempUnitKey,
       },
       durationHours: rampHours,
@@ -903,7 +917,7 @@ const CoolingControl = ({
   <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
     <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex gap-2">
       <Snowflake className="h-5 w-5 shrink-0" />
-      <p>Reducción de temperatura para conservación y transporte.</p>
+      <p>{t('cooling_control_desc')}</p>
     </div>
     <ControlGroup title={t('settings')}>
       <RangeControl 
@@ -920,7 +934,7 @@ const CoolingControl = ({
         step={0.1}
         decimals={1}
       />
-      <RangeControl label={t('cooling_ramp')} value={rampHours} unit="Horas" min={2} max={24} onChange={setRampHours} disabled={disabled} decimals={0} />
+      <RangeControl label={t('cooling_ramp')} value={rampHours} unit={t('unit_hours')} min={2} max={24} onChange={setRampHours} disabled={disabled} decimals={0} />
     </ControlGroup>
     <Button className="w-full bg-blue-600" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>
   </div>

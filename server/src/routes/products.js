@@ -10,6 +10,7 @@ function rowToProduct(row) {
   return {
     id: row.id,
     name: row.name,
+    name_en: row.name_en ?? null,
     sort_order: row.sort_order,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -30,7 +31,7 @@ productsRouter.get('/', async (req, res) => {
       return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
     }
     const { rows } = await pool.query(
-      `SELECT id, name, sort_order, deleted_at, created_at, updated_at
+      `SELECT id, name, name_en, sort_order, deleted_at, created_at, updated_at
        FROM app_products
        WHERE ($1::boolean = TRUE OR deleted_at IS NULL)
        ORDER BY deleted_at NULLS FIRST, sort_order ASC, name ASC`,
@@ -54,7 +55,7 @@ productsRouter.post('/', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO app_products (name, sort_order)
        VALUES ($1, $2)
-       RETURNING id, name, sort_order, created_at, updated_at`,
+       RETURNING id, name, name_en, sort_order, created_at, updated_at`,
       [n, sort_order]
     );
     await writeAudit(req, {
@@ -80,7 +81,7 @@ productsRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => {
       `UPDATE app_products
        SET deleted_at = NULL, updated_at = now()
        WHERE id = $1::uuid AND deleted_at IS NOT NULL
-       RETURNING id, name, sort_order, deleted_at, created_at, updated_at`,
+       RETURNING id, name, name_en, sort_order, deleted_at, created_at, updated_at`,
       [id]
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });
@@ -122,7 +123,7 @@ productsRouter.patch('/:id', requireAdmin, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE app_products SET ${updates.join(', ')}
        WHERE id = $${i} AND deleted_at IS NULL
-       RETURNING id, name, sort_order, created_at, updated_at`,
+       RETURNING id, name, name_en, sort_order, created_at, updated_at`,
       vals
     );
     if (!rows.length) return res.status(404).json({ error: 'not_found' });

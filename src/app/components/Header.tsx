@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Menu, Search, User, LogOut, Sun, Moon, Languages, Thermometer, Clock } from 'lucide-react';
+import { Bell, Menu, User, LogOut, Sun, Moon, Languages, Thermometer, Clock } from 'lucide-react';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { gmtTimezoneOptionsForSelect } from '@/app/lib/displayTimeZone';
@@ -52,15 +52,6 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
-        <div className="relative hidden md:block">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder={t('search_placeholder')}
-            className="pl-9 pr-4 py-2 bg-muted/50 border-none rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64 text-foreground placeholder:text-muted-foreground"
-          />
-        </div>
-
         <div className="flex items-center gap-1 border-r border-border pr-2 mr-2">
           <div
             className="hidden sm:flex items-center gap-0.5 text-muted-foreground"

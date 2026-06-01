@@ -12,6 +12,7 @@ import {
 import { Button } from '../ui/Button';
 import { Label } from '../ui/label';
 import { useSettings } from '../../contexts/SettingsContext';
+import { localizeRecipe, localizedProductName } from '@/app/lib/catalogI18n';
 import type { PhaseConfig, PhaseType, Recipe } from './RecipeBuilder';
 import { ChefHat, Copy, Thermometer, FlaskConical, Wind, Droplets } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -59,9 +60,10 @@ export const DuplicateRecipeDialog: React.FC<DuplicateRecipeDialogProps> = ({
   onProductCreated,
   createSortOrder,
 }) => {
-  const { t } = useSettings();
+  const { t, language } = useSettings();
+  const sourceDisplay = useMemo(() => localizeRecipe(source, language), [source, language]);
   const [name, setName] = useState(
-    () => `${source.name} ${t('recipe_dup_suffix')}`.trim()
+    () => `${sourceDisplay.name} ${t('recipe_dup_suffix')}`.trim()
   );
   const [fruit, setFruit] = useState(() => source.fruit);
   const [description, setDescription] = useState(() => source.description || '');
@@ -84,8 +86,13 @@ export const DuplicateRecipeDialog: React.FC<DuplicateRecipeDialogProps> = ({
       fruitOptions.map((n) => ({
         name: n,
         id: products.find((p) => p.name === n)?.id ?? `__extra__-${n}`,
+        label: localizedProductName(
+          n,
+          language,
+          products.find((p) => p.name === n)?.name_en
+        ),
       })),
-    [fruitOptions, products]
+    [fruitOptions, products, language]
   );
 
   const handleConfirm = () => {
@@ -133,7 +140,7 @@ export const DuplicateRecipeDialog: React.FC<DuplicateRecipeDialogProps> = ({
 
         <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
           <span className="font-medium">{t('source_recipe')}: </span>
-          {source.name}
+          {sourceDisplay.name}
           {source.is_system ? ` · ${t('recipe_standard_badge')}` : ''}
         </div>
 

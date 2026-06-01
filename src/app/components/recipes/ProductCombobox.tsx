@@ -12,7 +12,7 @@ import { Button } from '../ui/Button';
 import { useSettings } from '../../contexts/SettingsContext';
 import { clsx } from 'clsx';
 
-export type ProductRow = { id: string; name: string };
+export type ProductRow = { id: string; name: string; label?: string };
 
 type ProductComboboxProps = {
   value: string;
@@ -46,14 +46,25 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
+  const rowLabel = (row: ProductRow) => row.label ?? row.name;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return items;
-    return items.filter((i) => i.name.toLowerCase().includes(q));
+    return items.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        rowLabel(i).toLowerCase().includes(q)
+    );
   }, [items, query]);
 
   const exactInCatalog = useMemo(
-    () => items.some((i) => i.name.toLowerCase() === query.trim().toLowerCase()),
+    () =>
+      items.some(
+        (i) =>
+          i.name.toLowerCase() === query.trim().toLowerCase() ||
+          rowLabel(i).toLowerCase() === query.trim().toLowerCase()
+      ),
     [items, query]
   );
 
@@ -63,13 +74,18 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
   const createIndex = canShowCreate ? filtered.length : -1;
   const totalListOptions = filtered.length + (canShowCreate ? 1 : 0);
 
+  const selectedLabel = useMemo(() => {
+    const row = items.find((i) => i.name === value);
+    return row ? rowLabel(row) : value;
+  }, [items, value]);
+
   const syncQueryFromValue = useCallback(() => {
-    setQuery(value);
-  }, [value]);
+    setQuery(selectedLabel);
+  }, [selectedLabel]);
 
   useEffect(() => {
     if (!open) syncQueryFromValue();
-  }, [value, open, syncQueryFromValue]);
+  }, [value, selectedLabel, open, syncQueryFromValue]);
 
   useEffect(() => {
     if (!open) return;
@@ -90,7 +106,8 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
 
   const pick = (name: string) => {
     onChange(name);
-    setQuery(name);
+    const row = items.find((i) => i.name === name);
+    setQuery(row ? rowLabel(row) : name);
     setOpen(false);
   };
 
@@ -122,7 +139,7 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
       <input
         type="text"
         readOnly
-        value={value}
+        value={selectedLabel}
         className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
       />
     );
@@ -139,14 +156,14 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
             aria-expanded={open}
             aria-controls={open ? listId : undefined}
             aria-autocomplete="list"
-            value={open ? query : value}
+            value={open ? query : selectedLabel}
             onChange={(e) => {
               const v = e.target.value;
               setQuery(v);
               setOpen(true);
             }}
             onFocus={() => {
-              setQuery(value);
+              setQuery(selectedLabel);
               setOpen(true);
             }}
             onKeyDown={(e) => {
@@ -193,7 +210,7 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               if (inputRef.current) {
-                setQuery(value);
+                setQuery(selectedLabel);
                 setOpen((o) => !o);
                 inputRef.current.focus();
               }
@@ -227,7 +244,7 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
                 onClick={() => pick(row.name)}
                 onMouseEnter={() => setHighlight(i)}
               >
-                {row.name}
+                {rowLabel(row)}
               </button>
             ))}
             {canShowCreate && createIndex >= 0 && (

@@ -4,6 +4,7 @@ import { authHeaders, clearAuth } from '@/app/lib/auth';
 export interface AppProduct {
   id: string;
   name: string;
+  name_en?: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;

@@ -27,35 +27,7 @@ import {
   postProcessHistoricalChartRows,
 } from '@/app/lib/historySeriesSanitize';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
-
-/** Etiquetas en español para cada campo de la gráfica histórica */
-export const CHART_METRIC_LABELS: Record<string, string> = {
-  temp_supply_1: 'Suministro',
-  return_air: 'Retorno',
-  evaporation_coil: 'Evaporador',
-  condensation_coil: 'Condensador',
-  compress_coil_1: 'Compresor',
-  ambient_air: 'Ambiente Externo',
-  cargo_1_temp: 'Sensor 1',
-  cargo_2_temp: 'Sensor 2',
-  cargo_3_temp: 'Sensor 3',
-  cargo_4_temp: 'Sensor 4',
-  relative_humidity: 'Humedad',
-  avl_pct: 'Ventilación %',
-  line_voltage: 'Voltaje',
-  line_frequency: 'Frecuencia',
-  co2_reading: 'CO2',
-  o2_reading: 'O2',
-  set_point: 'Set Temperatura',
-  capacity_load: 'Capacidad',
-  humidity_set_point: 'Set Humedad',
-  set_point_o2: 'Set O2',
-  set_point_co2: 'Set CO2',
-  sp_ethyleno: 'Set Etileno',
-  ethylene: 'Etileno',
-};
-
-const CHART_METRIC_KEYS = Object.keys(CHART_METRIC_LABELS);
+import { CHART_METRIC_KEYS, buildChartMetricLabels } from '@/app/lib/chartMetricLabels';
 
 /** Modal Datos históricos: ejes Y1–Y4 y orden de variables en panel. */
 const HISTORICAL_Y1_TEMP_KEYS = [
@@ -146,7 +118,7 @@ function joinDateTimeLocal(date: string, time: string): string {
   return `${date}T${t}`;
 }
 
-/** Segmentos contiguos donde value === 1 para sombreado (power_state / iCtrlRip). Incluye índices para recortar al rango visible. */
+/** Segmentos contiguos donde value === 1 (p. ej. power_state encendido). Incluye índices para recortar al rango visible. */
 function computeOnSegments(
   data: { timeStr: string }[],
   getValue: (i: number) => number
@@ -168,44 +140,11 @@ function computeOnSegments(
   return segments;
 }
 
-/** Tipo de sombreado: solo encendido (power_state=1), solo inyección (iCtrlRip=1), o ambos en 1. */
-type ShadingSegmentType = 'power' | 'injection' | 'both';
-
-/** Segmentos combinados por estado: encendido = verde, inyección = azul, ambos = violeta. Solo se sombrea donde el valor es 1. */
-function computeCombinedShadingSegments(
-  data: { timeStr: string; power_state?: number; iCtrlRip?: number }[]
-): { startIndex: number; endIndex: number; type: ShadingSegmentType }[] {
-  const segments: { startIndex: number; endIndex: number; type: ShadingSegmentType }[] = [];
-  if (!data.length) return segments;
-  const getType = (i: number): ShadingSegmentType | null => {
-    const p = data[i].power_state === 1 ? 1 : 0;
-    const inj = data[i].iCtrlRip === 1 ? 1 : 0;
-    if (p && inj) return 'both';
-    if (p) return 'power';
-    if (inj) return 'injection';
-    return null;
-  };
-  let start: number | null = null;
-  let currentType: ShadingSegmentType | null = null;
-  for (let i = 0; i < data.length; i++) {
-    const t = getType(i);
-    if (currentType !== null && start !== null && t !== currentType) {
-      segments.push({ startIndex: start, endIndex: i - 1, type: currentType });
-    }
-    if (t !== null) {
-      if (t !== currentType) {
-        start = i;
-        currentType = t;
-      }
-    } else {
-      start = null;
-      currentType = null;
-    }
-  }
-  if (currentType !== null && start !== null) {
-    segments.push({ startIndex: start, endIndex: data.length - 1, type: currentType });
-  }
-  return segments;
+/** Segmentos contiguos donde power_state === 1 para sombreado verde. */
+function computePowerShadingSegments(
+  data: { timeStr: string; power_state?: number }[]
+): { x1: string; x2: string; startIndex: number; endIndex: number }[] {
+  return computeOnSegments(data, (i) => (data[i].power_state === 1 ? 1 : 0));
 }
 
 /** Colores por métrica para la leyenda */
@@ -242,7 +181,8 @@ interface TelemetryChartsProps {
 }
 
 export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) => {
-  const { t, convertTemp, tempUnit } = useSettings();
+  const { t, convertTemp, tempUnit, language } = useSettings();
+  const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
   
@@ -339,7 +279,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         yAxisId="left"
                         type="monotone"
                         dataKey="temp_return"
-                        name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`}
+                        name={`${metricLabels.return_air} (°${tempUnit})`}
                         stroke="#ef4444"
                         strokeWidth={2}
                         dot={false}
@@ -351,7 +291,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         yAxisId="left"
                         type="monotone"
                         dataKey="temp_supply"
-                        name={`${CHART_METRIC_LABELS.temp_supply_1} (°${tempUnit})`}
+                        name={`${metricLabels.temp_supply_1} (°${tempUnit})`}
                         stroke="#f97316"
                         strokeWidth={2}
                         dot={false}
@@ -395,7 +335,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         tickFormatter={(val) => Number(val).toFixed(1)}
                         width={44}
                         label={{
-                          value: `${t('co2')} / ${CHART_METRIC_LABELS.o2_reading} (%)`,
+                          value: `${t('co2')} / ${metricLabels.o2_reading} (%)`,
                           angle: 90,
                           position: 'insideRight',
                           fill: '#0ea5e9',
@@ -446,7 +386,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         yAxisId="right"
                         type="monotone"
                         dataKey="o2"
-                        name={`${CHART_METRIC_LABELS.o2_reading} (%)`}
+                        name={`${metricLabels.o2_reading} (%)`}
                         stroke="#054ffa"
                         strokeWidth={2}
                         dot={false}
@@ -480,7 +420,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         axisLine={false}
                         tickFormatter={(val) => Number(val).toFixed(1)}
                         width={44}
-                        label={{ value: `${CHART_METRIC_LABELS.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
+                        label={{ value: `${metricLabels.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
                       />
                       <YAxis
                         yAxisId="right"
@@ -504,7 +444,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
                       />
                       <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                      <Line yAxisId="left" type="monotone" dataKey="temp" name={`${CHART_METRIC_LABELS.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="left" type="monotone" dataKey="temp" name={`${metricLabels.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                       <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
@@ -583,6 +523,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 
 const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, onClose: () => void, deviceId?: string }) => {
   const { t, tempUnit, displayTimeZone, language, dateFormat } = useSettings();
+  const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   
   // Initialize range to last 12 hours
   const [dateRange, setDateRange] = useState({ 
@@ -602,7 +543,6 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
   const [zoomRange, setZoomRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>({});
   const [showPowerShading, setShowPowerShading] = useState(false);
-  const [showInjectionShading, setShowInjectionShading] = useState(false);
   const [historicalTempUnit, setHistoricalTempUnit] = useState<'C' | 'F'>('C');
   const [variablesColorSearch, setVariablesColorSearch] = useState('');
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -655,10 +595,10 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     const q = variablesColorSearch.trim().toLowerCase();
     if (!q) return sidebarMetricKeys;
     return sidebarMetricKeys.filter((key) => {
-      const label = (CHART_METRIC_LABELS[key] ?? key).toLowerCase();
+      const label = (metricLabels[key] ?? key).toLowerCase();
       return label.includes(q) || key.toLowerCase().includes(q);
     });
-  }, [sidebarMetricKeys, variablesColorSearch]);
+  }, [sidebarMetricKeys, variablesColorSearch, metricLabels]);
 
   const generateData = async () => {
     if (!deviceId) return;
@@ -701,18 +641,18 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
     }
   };
 
-  const combinedShadingSegments = useMemo(
-    () => (chartDataLabeled.length ? computeCombinedShadingSegments(chartDataLabeled) : []),
+  const powerShadingSegments = useMemo(
+    () => (chartDataLabeled.length ? computePowerShadingSegments(chartDataLabeled) : []),
     [chartDataLabeled]
   );
 
   /** Recorta segmentos al rango visible y usa timeStr del slice para que ReferenceArea dibuje (x1/x2 deben existir en data del chart). */
   const clipSegmentsToVisible = useCallback(
     (
-      segments: { startIndex: number; endIndex: number; type: ShadingSegmentType }[],
+      segments: { startIndex: number; endIndex: number }[],
       brushStart: number,
       brushEnd: number
-    ): { x1: string; x2: string; type: ShadingSegmentType }[] => {
+    ): { x1: string; x2: string }[] => {
       if (!chartDataLabeled.length) return [];
       return segments
         .map((seg) => {
@@ -722,10 +662,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
           return {
             x1: chartDataLabeled[vStart].timeStr,
             x2: chartDataLabeled[vEnd].timeStr,
-            type: seg.type,
           };
         })
-        .filter((s): s is { x1: string; x2: string; type: ShadingSegmentType } => s != null);
+        .filter((s): s is { x1: string; x2: string } => s != null);
     },
     [chartDataLabeled]
   );
@@ -844,40 +783,24 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
 
   const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (!active || !payload?.length) return null;
-    const row = payload?.[0]?.payload as { power_state?: number; iCtrlRip?: number } | undefined;
+    const row = payload?.[0]?.payload as { power_state?: number } | undefined;
     const powerOn = row && row.power_state === 1;
-    const injOn = row && row.iCtrlRip === 1;
-    const shadingReason =
-      powerOn && injOn
-        ? 'Encendido + Inyección'
-        : powerOn
-          ? 'Encendido'
-          : injOn
-            ? 'Inyección'
-            : null;
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[180px]">
         <p className="text-xs font-semibold text-gray-700 border-b pb-2 mb-2">{label}</p>
-        {shadingReason && (
+        {powerOn && (
           <p className="text-xs text-gray-600 mb-2 flex items-center gap-1.5">
             <span
               className="inline-block w-2.5 h-2.5 rounded shrink-0"
-              style={{
-                backgroundColor:
-                  shadingReason === 'Encendido + Inyección'
-                    ? '#7c3aed'
-                    : shadingReason === 'Encendido'
-                      ? '#86efac'
-                      : '#93c5fd',
-              }}
+              style={{ backgroundColor: '#86efac' }}
             />
-            {shadingReason}
+            {t('chart_shading_power_on')}
           </p>
         )}
         <ul className="space-y-1">
           {(Array.isArray(payload) ? payload : []).map((entry) => (
             <li key={entry.dataKey} className="flex justify-between gap-4 text-sm">
-              <span style={{ color: entry.color }}>{CHART_METRIC_LABELS[String(entry.dataKey)] ?? entry.dataKey}</span>
+              <span style={{ color: entry.color }}>{metricLabels[String(entry.dataKey)] ?? entry.dataKey}</span>
               <span className="font-mono font-medium">{entry.value != null ? Number(entry.value).toFixed(2) : '—'}</span>
             </li>
           ))}
@@ -1165,7 +1088,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
               </div>
             </div>
             <div className="rounded bg-gray-50 border border-gray-100 p-1.5 sm:p-2 text-xs text-gray-600">
-              <p className="font-medium text-gray-700 mb-0.5 sm:mb-1">Sombreados</p>
+              <p className="font-medium text-gray-700 mb-0.5 sm:mb-1">{t('chart_shading_section')}</p>
               <label className="flex items-center gap-2 cursor-pointer py-0.5">
                 <input
                   type="checkbox"
@@ -1174,26 +1097,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                   className="rounded border-gray-300 text-green-600"
                 />
                 <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-green-300/60 shrink-0" />
-                <span>Encendido</span>
+                <span>{t('chart_shading_power_on')}</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                <input
-                  type="checkbox"
-                  checked={showInjectionShading}
-                  onChange={() => setShowInjectionShading((v) => !v)}
-                  className="rounded border-gray-300 text-blue-600"
-                />
-                <span className="inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 rounded bg-blue-300/60 shrink-0" />
-                <span>Inyección</span>
-              </label>
-              {showPowerShading && showInjectionShading && (
-                <>
-                  <p className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">
-                    <span className="inline-block w-2 h-2 rounded bg-violet-400 shrink-0" />
-                    Ambos activos = violeta
-                  </p>
-                </>
-              )}
             </div>
             <div className="min-h-0 flex flex-col">
               <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
@@ -1223,35 +1128,35 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                       checked={selectedMetrics.includes(key)}
                       onChange={() => toggleMetric(key)}
                       className="rounded border-gray-300 text-blue-600 shrink-0"
-                      aria-label={CHART_METRIC_LABELS[key]}
+                      aria-label={metricLabels[key]}
                     />
                     <span
                       className="truncate flex-1 cursor-pointer min-w-0 select-none"
                       style={{ color: getLineColor(key) }}
-                      title={`${CHART_METRIC_LABELS[key]} — ${t('historical_solo_doubleclick')}`}
+                      title={`${metricLabels[key]} — ${t('historical_solo_doubleclick')}`}
                       onDoubleClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         soloHistoricalMetric(key);
                       }}
                     >
-                      {CHART_METRIC_LABELS[key]}
+                      {metricLabels[key]}
                     </span>
-                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Mostrar/ocultar valores en la línea">
+                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title={t('historical_show_values_title')}>
                       <input
                         type="checkbox"
                         checked={!!showLabelsByMetric[key]}
                         onChange={() => toggleLabels(key)}
                         className="rounded border-gray-300 text-blue-600"
                       />
-                      <span className="text-[10px] text-gray-500">Valores</span>
+                      <span className="text-[10px] text-gray-500">{t('historical_show_values')}</span>
                     </label>
                     <input
                       type="color"
                       value={getLineColor(key)}
                       onChange={(e) => setMetricColors((prev) => ({ ...prev, [key]: e.target.value }))}
                       className="w-6 h-6 rounded border border-gray-200 cursor-pointer shrink-0"
-                      title={`Color de ${CHART_METRIC_LABELS[key]}`}
+                      title={t('historical_color_of', { label: metricLabels[key] })}
                     />
                   </div>
                 ))
@@ -1271,9 +1176,9 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                     size="sm"
                     onClick={resetZoom}
                     className="text-xs"
-                    title="Ver la gráfica completa"
+                    title={t('chart_reset_zoom_title')}
                   >
-                    Restablecer zoom
+                    {t('chart_reset_zoom')}
                   </Button>
                 </div>
                 <div
@@ -1371,47 +1276,20 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                         }}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={(value) => CHART_METRIC_LABELS[value] ?? value} iconSize={8} fontSize={10} />
-                      {(() => {
-                        const visible = clipSegmentsToVisible(combinedShadingSegments, brushStart, brushEnd);
-                        const getFill = (type: ShadingSegmentType) => {
-                          if (type === 'both') return { fill: '#7c3aed', opacity: 0.2 };
-                          if (type === 'power') return { fill: '#86efac', opacity: 0.35 };
-                          return { fill: '#93c5fd', opacity: 0.3 };
-                        };
-                        return visible
-                          .filter((seg) => {
-                            if (seg.type === 'power') return showPowerShading;
-                            if (seg.type === 'injection') return showInjectionShading;
-                            return showPowerShading || showInjectionShading;
-                          })
-                          .map((seg, idx) => {
-                            const bothToggles = showPowerShading && showInjectionShading;
-                            const fill =
-                              seg.type === 'both'
-                                ? bothToggles
-                                  ? '#7c3aed'
-                                  : showPowerShading
-                                    ? '#86efac'
-                                    : '#93c5fd'
-                                : seg.type === 'power'
-                                  ? '#86efac'
-                                  : '#93c5fd';
-                            const opacity = seg.type === 'both' ? (bothToggles ? 0.2 : 0.35) : seg.type === 'power' ? 0.35 : 0.3;
-                            return (
-                              <ReferenceArea
-                                key={`shade-${idx}-${seg.x1}-${seg.x2}-${seg.type}`}
-                                x1={seg.x1}
-                                x2={seg.x2}
-                                y1={0}
-                                y2={100}
-                                yAxisId="pct"
-                                fill={fill}
-                                fillOpacity={opacity}
-                              />
-                            );
-                          });
-                      })()}
+                      <Legend wrapperStyle={{ paddingTop: '4px' }} formatter={(value) => metricLabels[value] ?? value} iconSize={8} fontSize={10} />
+                      {showPowerShading &&
+                        clipSegmentsToVisible(powerShadingSegments, brushStart, brushEnd).map((seg, idx) => (
+                          <ReferenceArea
+                            key={`shade-${idx}-${seg.x1}-${seg.x2}`}
+                            x1={seg.x1}
+                            x2={seg.x2}
+                            y1={0}
+                            y2={100}
+                            yAxisId="pct"
+                            fill="#86efac"
+                            fillOpacity={0.35}
+                          />
+                        ))}
                       {historicalChartLineKeys.map((key, lineIndex) => {
                         const color = getLineColor(key);
                         const showLabels = !!showLabelsByMetric[key];
@@ -1439,7 +1317,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                             dot={false}
                             connectNulls
                             activeDot={{ r: 4 }}
-                            name={CHART_METRIC_LABELS[key]}
+                            name={metricLabels[key]}
                           >
                             {showLabels && (
                               <LabelList
@@ -1474,8 +1352,8 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
             ) : (
               <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 p-4">
                 <History className="h-12 w-12 sm:h-14 sm:w-14 mb-2 sm:mb-3 opacity-30" />
-                <p className="text-sm sm:text-base font-medium text-center">Sin datos en el rango seleccionado</p>
-                <p className="text-xs sm:text-sm mt-1 text-center">Elija fechas y pulse «Generar gráfico»</p>
+                <p className="text-sm sm:text-base font-medium text-center">{t('no_data_in_range')}</p>
+                <p className="text-xs sm:text-sm mt-1 text-center">{t('generate_chart_to_load')}</p>
               </div>
             )}
           </div>
@@ -1505,7 +1383,8 @@ function tableModalDefaultPresetColumns(): string[] {
 }
 
 const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean; onClose: () => void; deviceId?: string }) => {
-  const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp } = useSettings();
+  const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp, language } = useSettings();
+  const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [dateRange, setDateRange] = useState({
     start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
     end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
@@ -1605,7 +1484,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
   };
 
   const exportRows = [...tableDataLabeled].reverse();
-  const exportHeader = ['Fecha / Hora', ...selectedColumns.map((k) => CHART_METRIC_LABELS[k])];
+  const exportHeader = [t('chart_export_datetime'), ...selectedColumns.map((k) => metricLabels[k])];
 
   const downloadPDF = () => {
     const pdf = new jsPDF('l', 'mm', 'a4');
@@ -1674,7 +1553,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
               </h4>
               <div className="space-y-2">
                 <div>
-                  <label className="text-xs text-gray-500">Inicio</label>
+                  <label className="text-xs text-gray-500">{t('historical_start')}</label>
                   <input
                     type="datetime-local"
                     value={dateRange.start}
@@ -1683,7 +1562,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">Fin</label>
+                  <label className="text-xs text-gray-500">{t('historical_end')}</label>
                   <input
                     type="datetime-local"
                     value={dateRange.end}
@@ -1698,7 +1577,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
               {t('generate_table')}
             </Button>
             <div>
-              <h4 className="font-medium text-sm text-gray-900 mb-2">Vistas predefinidas</h4>
+              <h4 className="font-medium text-sm text-gray-900 mb-2">{t('table_preset_views')}</h4>
               <div className="space-y-1">
                 {TABLE_PRESETS.map((p) => (
                   <button
@@ -1723,7 +1602,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                       onChange={() => toggleColumn(key)}
                       className="rounded border-gray-300 text-blue-600"
                     />
-                    <span className="truncate">{CHART_METRIC_LABELS[key]}</span>
+                    <span className="truncate">{metricLabels[key]}</span>
                   </label>
                 ))}
               </div>
@@ -1747,10 +1626,10 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                 <table className="w-full text-sm border-collapse">
                   <thead className="sticky top-0 bg-gray-100 border-b border-gray-200">
                     <tr>
-                      <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">Fecha / Hora</th>
+                      <th className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">{t('chart_export_datetime')}</th>
                       {selectedColumns.map((key) => (
                         <th key={key} className="text-right px-3 py-2 font-semibold text-gray-700 whitespace-nowrap">
-                          {CHART_METRIC_LABELS[key]}
+                          {metricLabels[key]}
                         </th>
                       ))}
                     </tr>
@@ -1781,7 +1660,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
             ) : (
               <div className="flex-1 min-h-[300px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50">
                 <Table2 className="h-14 w-14 mb-3 opacity-30" />
-                <p className="text-base font-medium">Sin datos en el rango seleccionado</p>
+                <p className="text-base font-medium">{t('no_data_in_range')}</p>
                 <p className="text-sm mt-1">{t('generate_table_to_load')}</p>
               </div>
             )}

@@ -24,6 +24,7 @@ import {
   RecipeFruitAvatar,
   iconKeyFromFruitName,
 } from '@/app/lib/recipeFruitPresets';
+import { localizeRecipe, localizedProductName } from '@/app/lib/catalogI18n';
 
 // --- Types ---
 export type PhaseType = 'homogenization' | 'ripening' | 'venting' | 'cooling';
@@ -45,8 +46,11 @@ export interface PhaseConfig {
 export interface Recipe {
   id: string;
   name: string;
+  name_en?: string | null;
   fruit: string;
+  fruit_en?: string | null;
   description: string;
+  description_en?: string | null;
   phases: PhaseConfig[]; // Ordered list of configured phases
   /** Icono predeterminado (clave de preset); la imagen personalizada tiene prioridad. */
   iconKey?: string | null;
@@ -176,7 +180,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
   canCreateProduct = false,
   onProductCreated,
 }) => {
-  const { t, tempUnit, convertTemp } = useSettings();
+  const { t, tempUnit, convertTemp, language } = useSettings();
   const [name, setName] = useState(initialData?.name || '');
   const [fruit, setFruit] = useState(initialData?.fruit || '');
   const [description, setDescription] = useState(initialData?.description || '');
@@ -284,9 +288,22 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
       fruitOptions.map((name) => ({
         name,
         id: products.find((p) => p.name === name)?.id ?? `__extra__-${name}`,
+        label: localizedProductName(
+          name,
+          language,
+          products.find((p) => p.name === name)?.name_en
+        ),
       })),
-    [fruitOptions, products]
+    [fruitOptions, products, language]
   );
+
+  const localizedView = React.useMemo(
+    () => (readOnly && initialData ? localizeRecipe(initialData, language) : null),
+    [readOnly, initialData, language]
+  );
+  const displayName = localizedView?.name ?? name;
+  const displayFruit = localizedView?.fruit ?? fruit;
+  const displayDescription = localizedView?.description ?? description;
 
   React.useEffect(() => {
     if (!fruitOptions.length) return;
@@ -340,7 +357,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
             }}
             sizeClass="w-12 h-12"
             className="shrink-0 ring-2 ring-white shadow"
-            title={fruit}
+            title={displayFruit}
           />
           <div className="min-w-0">
             <h1 className="text-xl font-bold text-gray-900">
@@ -404,7 +421,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('protocol_name')}</label>
              <input 
                type="text" 
-               value={name}
+               value={readOnly ? displayName : name}
                disabled={readOnly}
                onChange={e => setName(e.target.value)}
                placeholder={t('protocol_placeholder')}
@@ -417,7 +434,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                <input
                  type="text"
                  readOnly
-                 value={fruit}
+                 value={displayFruit}
                  className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
                />
              ) : (products.length > 0 || canCreateProduct) ? (
@@ -439,7 +456,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
           <div className="col-span-full">
              <label className="block text-sm font-medium text-gray-700 mb-1">{t('description_notes')}</label>
              <textarea 
-               value={description}
+               value={readOnly ? displayDescription : description}
                disabled={readOnly}
                onChange={e => setDescription(e.target.value)}
                rows={2}

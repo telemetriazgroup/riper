@@ -70,6 +70,13 @@ ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS created_by_user_id UUID NULL RE
 CREATE INDEX IF NOT EXISTS idx_app_recipes_created_by ON app_recipes (created_by_user_id);
 `;
 
+const SQL_CATALOG_I18N = `
+ALTER TABLE app_products ADD COLUMN IF NOT EXISTS name_en VARCHAR(255) NULL;
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS name_en VARCHAR(500) NULL;
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS fruit_en VARCHAR(255) NULL;
+ALTER TABLE app_recipes ADD COLUMN IF NOT EXISTS description_en TEXT NULL;
+`;
+
 const SQL_DEVICE_NAMES = `
 CREATE TABLE IF NOT EXISTS app_user_device_names (
   user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -279,6 +286,7 @@ export async function runMigrate() {
     await client.query(SQL_RECIPE_SYSTEM);
     await client.query(SQL_RECIPE_VISUAL);
     await client.query(SQL_RECIPE_OWNER);
+    await client.query(SQL_CATALOG_I18N);
     await client.query(SQL_DEVICE_NAMES);
     await client.query(SQL_PROCESS_FOLLOW);
     await client.query(SQL_RIPENING_PROCESSES);

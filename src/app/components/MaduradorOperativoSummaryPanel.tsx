@@ -33,10 +33,12 @@ function TramosTable({
   title,
   rows,
   fmtDate,
+  t,
 }: {
   title: string;
   rows?: MaduradorHistorialTramo[];
   fmtDate: (iso: string | undefined) => string;
+  t: (key: string) => string;
 }) {
   const safe = asTramoRows(rows);
   if (!safe.length) return null;
@@ -47,10 +49,10 @@ function TramosTable({
         <table className="w-full">
           <thead className="bg-gray-50 sticky top-0">
             <tr>
-              <th className="text-left p-2">Valor</th>
-              <th className="text-left p-2">Desde</th>
-              <th className="text-left p-2">Hasta</th>
-              <th className="text-left p-2">Estado</th>
+              <th className="text-left p-2">{t('tramo_col_value')}</th>
+              <th className="text-left p-2">{t('tramo_col_from')}</th>
+              <th className="text-left p-2">{t('tramo_col_to')}</th>
+              <th className="text-left p-2">{t('tramo_col_state')}</th>
             </tr>
           </thead>
           <tbody>
@@ -97,6 +99,15 @@ function formatUltimaAlarmas(entries: unknown, fmtDate: (iso: string | undefined
   });
 }
 
+/** Etiqueta traducible del modo ventilación (fresh_air_ex_mode). */
+function ventModeLabel(mode: number | undefined, t: (key: string) => string): string {
+  const m = mode ?? 0;
+  if (m === 0) return t('gas_ex_off');
+  if (m === 1) return t('gas_ex_manual');
+  if (m === 2) return t('gas_ex_auto');
+  return `${t('operativo_code')} ${m}`;
+}
+
 interface MaduradorOperativoSummaryPanelProps {
   summary: MaduradorOperativoSummary;
   ultimaFechaEncendido?: string | null;
@@ -106,7 +117,7 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
   summary: s,
   ultimaFechaEncendido,
 }) => {
-  const { formatDateTime } = useSettings();
+  const { formatDateTime, t } = useSettings();
   const fmtDate = (iso: string | undefined) => (iso == null || iso === '' ? '—' : formatDateTime(iso));
   const alarmas = s.alarmas as {
     numero_alarma?: number;
@@ -120,28 +131,28 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
 
   return (
     <div className="bg-white p-6 rounded-lg border shadow-sm md:col-span-2">
-      <h3 className="font-semibold mb-4 text-gray-800">Resumen operativo</h3>
+      <h3 className="font-semibold mb-4 text-gray-800">{t('operativo_summary_title')}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
         <div className="sm:col-span-2 lg:col-span-3 border-b border-gray-100 pb-3 mb-1">
-          <span className="text-gray-500 block text-xs uppercase tracking-wide">Modo ventilación</span>
+          <span className="text-gray-500 block text-xs uppercase tracking-wide">{t('operativo_vent_mode')}</span>
           <p className="font-medium text-gray-900 mt-0.5">
-            {s.modoVentilacionLabel ?? '—'}
+            {ventModeLabel(s.modoVentilacion, t)}
             {s.modoVentilacion != null ? (
-              <span className="text-gray-400 font-normal text-xs ml-2">(código {s.modoVentilacion})</span>
+              <span className="text-gray-400 font-normal text-xs ml-2">({t('operativo_code')} {s.modoVentilacion})</span>
             ) : null}
           </p>
         </div>
         <div className="border-b border-gray-50 pb-2">
-          <span className="text-gray-500 text-xs">Última fecha encendido</span>
+          <span className="text-gray-500 text-xs">{t('madurador_last_on')}</span>
           <p className="font-mono text-xs mt-0.5">{fmtDate(ultimaFechaEncendido ?? undefined)}</p>
         </div>
         <div className="border-b border-gray-50 pb-2">
-          <span className="text-gray-500 text-xs">Última fecha apagado</span>
+          <span className="text-gray-500 text-xs">{t('madurador_last_off')}</span>
           <p className="font-mono text-xs mt-0.5">{fmtDate(s.ultima_fecha_apagado ?? undefined)}</p>
         </div>
         {cc && (
           <div className="border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-1">
-            <span className="text-gray-500 text-xs">Salud compresor (compress_coil_1)</span>
+            <span className="text-gray-500 text-xs">{t('operativo_compressor_health')}</span>
             <p className="font-mono text-xs mt-0.5">
               <span className="font-semibold capitalize">{String(cc.estado ?? '—')}</span>
               {cc.valor_actual != null ? (
@@ -154,28 +165,31 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
 
       {alarmas ? (
         <div className="mt-4 border-t border-gray-100 pt-4">
-          <h4 className="text-xs font-semibold text-gray-600 uppercase mb-2">Alarmas</h4>
+          <h4 className="text-xs font-semibold text-gray-600 uppercase mb-2">{t('operativo_alarms')}</h4>
           <p className="text-xs text-gray-600 mb-2">
-            Número alarma (API): <span className="font-mono">{alarmas.numero_alarma ?? '—'}</span>
+            {t('operativo_alarm_api_number')}{' '}
+            <span className="font-mono">{alarmas.numero_alarma ?? '—'}</span>
           </p>
-          <p className="text-xs font-medium text-red-800 mb-1">Activas: {activasCount}</p>
+          <p className="text-xs font-medium text-red-800 mb-1">
+            {t('operativo_alarms_active')} {activasCount}
+          </p>
           {activasCount > 0 ? (
             <pre className="text-xs bg-red-50/80 border border-red-100 p-2 rounded overflow-x-auto max-h-28 mb-3">
               {JSON.stringify(alarmas.activas, null, 2)}
             </pre>
           ) : null}
-          <p className="text-xs font-medium text-gray-800 mb-1">Últimas alarmas</p>
+          <p className="text-xs font-medium text-gray-800 mb-1">{t('operativo_last_alarms')}</p>
           <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
             {formatUltimaAlarmas(alarmas.ultima_alarmas, fmtDate)}
           </ul>
         </div>
       ) : null}
 
-      <TramosTable title="Historial SP etileno" rows={s.historial_sp_etileno} fmtDate={fmtDate} />
-      <TramosTable title="Histórico set point (temperatura)" rows={s.historico_set_point} fmtDate={fmtDate} />
-      <TramosTable title="Historial humidity set point" rows={historialHumiditySetPointVisible(s.historial_humidity_set_point)} fmtDate={fmtDate} />
-      <TramosTable title="Historial set point CO₂" rows={historialSetPointCo2Visible(s.historial_set_point_co2)} fmtDate={fmtDate} />
-      <TramosTable title="Historial power state" rows={s.historial_power_state} fmtDate={fmtDate} />
+      <TramosTable title={t('operativo_hist_ethylene_sp')} rows={s.historial_sp_etileno} fmtDate={fmtDate} t={t} />
+      <TramosTable title={t('operativo_hist_temp_sp')} rows={s.historico_set_point} fmtDate={fmtDate} t={t} />
+      <TramosTable title={t('operativo_hist_humidity_sp')} rows={historialHumiditySetPointVisible(s.historial_humidity_set_point)} fmtDate={fmtDate} t={t} />
+      <TramosTable title={t('operativo_hist_co2_sp')} rows={historialSetPointCo2Visible(s.historial_set_point_co2)} fmtDate={fmtDate} t={t} />
+      <TramosTable title={t('operativo_hist_power')} rows={s.historial_power_state} fmtDate={fmtDate} t={t} />
     </div>
   );
 };
