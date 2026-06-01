@@ -33,10 +33,16 @@ import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActive
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
+import {
+  MANUAL_TARGET_TEMP_EXTENDED_MIN_C,
+  MANUAL_TARGET_TEMP_MAX_C,
+  clampManualTargetTempC,
+  deviceNeedsExtendedTempRange,
+  formatManualTempRangeDual,
+  manualTargetTempBoundsC,
+} from '@/app/lib/manualControlTemp';
 
-/** Objetivos manual en °C / % / ppm (telemetría). */
-const MANUAL_TEMP_MIN_C = 5;
-const MANUAL_TEMP_MAX_C = 30;
+/** Objetivos manual en % / ppm (telemetría). Temperatura: ver manualControlTemp.ts */
 const MANUAL_RH_MIN = 80;
 const MANUAL_RH_MAX = 99;
 const MANUAL_ETH_MIN = 0;
@@ -293,8 +299,20 @@ const ManualControl = ({
   const { t, convertTemp, tempUnit } = useSettings();
   const { mutate: sessionMutate } = useDeviceControlSession(deviceId);
   const md = device?.madurador;
+  const isMadurador = Boolean(md);
+  const [extendedTempRange, setExtendedTempRange] = useState(false);
+  const tempBounds = useMemo(() => manualTargetTempBoundsC(extendedTempRange), [extendedTempRange]);
+  const tempRangeDual = useMemo(
+    () => formatManualTempRangeDual(tempBounds.minC, tempBounds.maxC),
+    [tempBounds.minC, tempBounds.maxC]
+  );
+  const extendedRangeDual = useMemo(
+    () =>
+      formatManualTempRangeDual(MANUAL_TARGET_TEMP_EXTENDED_MIN_C, MANUAL_TARGET_TEMP_MAX_C),
+    []
+  );
   const [temp, setTemp] = useState(() =>
-    clamp(device?.telemetry.set_point ?? 19, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C)
+    clampManualTargetTempC(device?.telemetry.set_point ?? 19, false)
   );
   const [humidity, setHumidity] = useState(() =>
     clamp(
@@ -323,7 +341,10 @@ const ManualControl = ({
 
   useEffect(() => {
     if (device) {
-      setTemp(clamp(device.telemetry.set_point, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C));
+      const sp = device.telemetry.set_point;
+      const needsExtended = deviceNeedsExtendedTempRange(sp);
+      setExtendedTempRange(needsExtended);
+      setTemp(clampManualTargetTempC(sp, needsExtended));
       setHumidity(
         clamp(
           device.madurador?.humidity_set_point ?? device.telemetry.relative_humidity ?? 90,
@@ -336,7 +357,10 @@ const ManualControl = ({
     }
   }, [device]);
 
-  const originalTemp = clamp(device?.telemetry.set_point ?? 19, MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C);
+  const originalTemp = clampManualTargetTempC(
+    device?.telemetry.set_point ?? 19,
+    deviceNeedsExtendedTempRange(device?.telemetry.set_point)
+  );
   const originalHumidity = clamp(
     device?.madurador?.humidity_set_point ?? device?.telemetry.relative_humidity ?? 90,
     MANUAL_RH_MIN,
@@ -353,6 +377,11 @@ const ManualControl = ({
   let connectionStatus = 'online';
   if (minsSinceLastSeen > 720) connectionStatus = 'offline';
   else if (minsSinceLastSeen > 30) connectionStatus = 'standby';
+
+  const handleExtendedTempRangeToggle = (checked: boolean) => {
+    setExtendedTempRange(checked);
+    setTemp((prev) => clampManualTargetTempC(prev, checked));
+  };
 
   const changes = [];
   if (temp !== originalTemp) changes.push({ name: t('target_temperature'), from: `${convertTemp(originalTemp)}°${tempUnit}`, to: `${convertTemp(temp)}°${tempUnit}` });
@@ -570,17 +599,33 @@ const ManualControl = ({
             label={t('target_temperature')}
             value={convertTemp(temp)} 
             unit={`°${tempUnit}`}
-            min={convertTemp(MANUAL_TEMP_MIN_C)} 
-            max={convertTemp(MANUAL_TEMP_MAX_C)} 
+            min={convertTemp(tempBounds.minC)} 
+            max={convertTemp(tempBounds.maxC)} 
             onChange={(val: number) => {
                 const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-                setTemp(clamp(Number(cVal.toFixed(1)), MANUAL_TEMP_MIN_C, MANUAL_TEMP_MAX_C));
+                setTemp(clampManualTargetTempC(Number(cVal.toFixed(1)), extendedTempRange));
             }} 
             originalValue={convertTemp(originalTemp)}
             disabled={controlsDisabledPanel}
             step={0.1}
             decimals={1}
             />
+            <p className="text-xs text-gray-500 -mt-2 mb-2">{t('manual_temp_range_hint', tempRangeDual)}</p>
+            <label className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer mb-2">
+              <input
+                type="checkbox"
+                checked={extendedTempRange}
+                onChange={(e) => handleExtendedTempRangeToggle(e.target.checked)}
+                disabled={controlsDisabledPanel}
+                className="mt-0.5 rounded border-gray-300 text-blue-600"
+              />
+              <span>{t('manual_temp_extended_unlock', extendedRangeDual)}</span>
+            </label>
+            {extendedTempRange && isMadurador && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-3">
+                {t('manual_temp_extended_warning')}
+              </p>
+            )}
             <RangeControl 
             label={t('relative_humidity')} 
             value={humidity} 

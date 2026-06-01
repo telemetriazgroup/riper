@@ -1,20 +1,34 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { motion } from 'motion/react';
-import { Loader2, Lock, Mail } from 'lucide-react';
+import { Clock, Loader2, Lock, Mail } from 'lucide-react';
 import { ImageWithFallback } from '@/app/components/figma/ImageWithFallback';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { loginRequest } from '@/app/lib/auth';
+import { formatInDisplayTimeZone } from '@/app/lib/displayTimeZone';
+import { formatColloquialGmtLabel } from '@/app/lib/systemLocale';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { t } = useSettings();
+  const { t, language, displayTimeZone } = useSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const deviceTime = useMemo(
+    () => formatInDisplayTimeZone(now, displayTimeZone, language, true),
+    [now, displayTimeZone, language]
+  );
+  const deviceGmt = useMemo(() => formatColloquialGmtLabel(displayTimeZone), [displayTimeZone]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +78,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             />
             <h2 className="text-2xl font-bold text-gray-900">{t('welcome_back')}</h2>
             <p className="mt-2 text-sm text-gray-600 text-center">{t('enter_credentials')}</p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-slate-900 font-semibold">
+                <Clock className="h-4 w-4 shrink-0 text-blue-600" />
+                {t('login_device_time')}
+              </div>
+              <p className="font-mono text-sm sm:text-base font-semibold text-slate-900 tabular-nums">
+                {deviceGmt} · {deviceTime}
+              </p>
+            </div>
           </div>
 
           <form className="mt-8 space-y-6" onSubmit={handleLogin}>

@@ -121,6 +121,13 @@ const translations: Record<Language, Record<string, string>> = {
     'password': 'Contraseña',
     'login_button': 'Iniciar Sesión',
     'login_subtitle': 'Sistema de gestión y monitoreo en tiempo real para soluciones refrigeradas de ZGROUP.',
+    'login_device_time': 'Hora del dispositivo',
+    'login_timezone_title': 'Hora del sistema',
+    'login_timezone_local': 'Su hora ({{gmt}})',
+    'login_timezone_server': 'Telemetría del servidor ({{gmt}})',
+    'login_timezone_server_note': 'Los timestamps sin zona de la API se interpretan en GMT-5 (Perú).',
+    'login_timezone_equivalence': 'Equivalencia: {{note}}',
+    'login_timezone_auto': 'Zona detectada automáticamente desde su equipo.',
     'configuring': 'Configurando...',
     'init_admin': 'Inicializar cuenta Admin (Dev)',
     'session_success': 'Sesión iniciada correctamente',
@@ -322,6 +329,10 @@ const translations: Record<Language, Record<string, string>> = {
     'controls_available_when_on': 'Los controles de temperatura, humedad y gases están disponibles con el equipo encendido.',
     'climatization': 'Climatización',
     'target_temperature': 'Temperatura Objetivo',
+    'manual_temp_range_hint': 'Rango permitido: {{minC}}–{{maxC}} °C ({{minF}}–{{maxF}} °F)',
+    'manual_temp_extended_unlock': 'Permitir rango extendido ({{minC}} a {{maxC}} °C / {{minF}} a {{maxF}} °F)',
+    'manual_temp_extended_warning':
+      'Advertencia: en equipos maduradores, temperaturas por debajo de 0 °C pueden dañar los sensores de etileno y CO₂.',
     'relative_humidity': 'Humedad Relativa',
     'gases_ventilation': 'Gases y Ventilación',
     'ethylene_injection': 'Inyección Etileno',
@@ -1177,6 +1188,13 @@ const translations: Record<Language, Record<string, string>> = {
     'password': 'Password',
     'login_button': 'Log In',
     'login_subtitle': 'Real-time management and monitoring system for refrigerated containers.',
+    'login_device_time': 'Device time',
+    'login_timezone_title': 'System time',
+    'login_timezone_local': 'Your time ({{gmt}})',
+    'login_timezone_server': 'Server telemetry ({{gmt}})',
+    'login_timezone_server_note': 'API timestamps without a time zone are interpreted as GMT-5 (Peru).',
+    'login_timezone_equivalence': 'Offset: {{note}}',
+    'login_timezone_auto': 'Time zone detected automatically from your device.',
     'configuring': 'Configuring...',
     'init_admin': 'Initialize Admin Account (Dev)',
     'session_success': 'Session started successfully',
@@ -1377,6 +1395,10 @@ const translations: Record<Language, Record<string, string>> = {
     'controls_available_when_on': 'Temperature, humidity and gas controls are available when the equipment is on.',
     'climatization': 'Climatization',
     'target_temperature': 'Target Temperature',
+    'manual_temp_range_hint': 'Allowed range: {{minC}}–{{maxC}} °C ({{minF}}–{{maxF}} °F)',
+    'manual_temp_extended_unlock': 'Allow extended range ({{minC}} to {{maxC}} °C / {{minF}} to {{maxF}} °F)',
+    'manual_temp_extended_warning':
+      'Warning: on ripening chambers, temperatures below 0 °C may damage ethylene and CO₂ sensors.',
     'relative_humidity': 'Relative Humidity',
     'gases_ventilation': 'Gases & Ventilation',
     'ethylene_injection': 'Ethylene Injection',
@@ -2193,25 +2215,23 @@ const defaultContext: SettingsContextType = {
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const initialLocal = readLocalUiPreferences();
-  const [language, setLanguageState] = useState<Language>(initialLocal.language ?? 'es');
-  const [theme, setThemeState] = useState<Theme>(initialLocal.theme ?? 'light');
-  const [tempUnit, setTempUnitState] = useState<TempUnit>(initialLocal.temp_unit ?? 'C');
-  const [displayTimeZone, setDisplayTimeZoneState] = useState<string>(
-    initialLocal.display_timezone ?? DEFAULT_DISPLAY_TIMEZONE
-  );
-  const [dateFormat, setDateFormatState] = useState<DateFormatStyle>(
-    initialLocal.date_format ?? DEFAULT_DATE_FORMAT
-  );
+  const resolvedBoot = resolveUiPreferences(null, initialLocal);
+
+  const [language, setLanguageState] = useState<Language>(resolvedBoot.language);
+  const [theme, setThemeState] = useState<Theme>(resolvedBoot.theme);
+  const [tempUnit, setTempUnitState] = useState<TempUnit>(resolvedBoot.temp_unit);
+  const [displayTimeZone, setDisplayTimeZoneState] = useState<string>(resolvedBoot.display_timezone);
+  const [dateFormat, setDateFormatState] = useState<DateFormatStyle>(resolvedBoot.date_format);
 
   const skipPersistRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
-  const prefsRef = useRef<ResolvedUiPreferences>({
-    language: initialLocal.language ?? 'es',
-    theme: initialLocal.theme ?? 'light',
-    temp_unit: initialLocal.temp_unit ?? 'C',
-    display_timezone: initialLocal.display_timezone ?? DEFAULT_DISPLAY_TIMEZONE,
-    date_format: initialLocal.date_format ?? DEFAULT_DATE_FORMAT,
-  });
+  const prefsRef = useRef<ResolvedUiPreferences>(resolvedBoot);
+
+  useEffect(() => {
+    if (!initialLocal.language && !initialLocal.display_timezone) {
+      writeLocalUiPreferences(resolvedBoot);
+    }
+  }, []);
 
   useEffect(() => {
     prefsRef.current = {
