@@ -221,6 +221,42 @@ CREATE INDEX IF NOT EXISTS idx_app_companies_active_name ON app_companies (lower
 CREATE INDEX IF NOT EXISTS idx_app_companies_created ON app_companies (created_at DESC) WHERE deleted_at IS NULL;
 `;
 
+const SQL_EMAIL_NOTIFICATIONS = `
+CREATE TABLE IF NOT EXISTS app_email_config (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  from_email VARCHAR(255) NOT NULL DEFAULT '',
+  api_key TEXT NOT NULL DEFAULT '',
+  provider VARCHAR(32) NOT NULL DEFAULT 'resend',
+  enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO app_email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS app_email_groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(255) NOT NULL,
+  events JSONB NOT NULL DEFAULT '["manual_control","process_start","tracking_start","phase_complete","tracking_complete","sampling"]'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS app_email_group_recipients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES app_email_groups(id) ON DELETE CASCADE,
+  email VARCHAR(255) NOT NULL,
+  UNIQUE (group_id, email)
+);
+
+CREATE TABLE IF NOT EXISTS app_email_group_devices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES app_email_groups(id) ON DELETE CASCADE,
+  device_id VARCHAR(64) NOT NULL,
+  UNIQUE (group_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_app_email_group_devices_device ON app_email_group_devices (device_id);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -252,6 +288,7 @@ export async function runMigrate() {
     await client.query(SQL_TUNNEL_COMMAND_JOBS);
     await client.query(SQL_AUDIT);
     await client.query(SQL_COMPANIES);
+    await client.query(SQL_EMAIL_NOTIFICATIONS);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

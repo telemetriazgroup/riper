@@ -1,5 +1,6 @@
 import express from 'express';
 import { writeAudit } from '../auditLog.js';
+import { fireEmailNotification } from '../emailNotifications.js';
 import { isPinnedFleetDeviceId, isPinnedFleetDemoEmail } from '../demoFleetFilter.js';
 import { isGourmetDeviceId, isGourmetTradingFleetEmail } from '../gourmetFleet.js';
 import {
@@ -67,6 +68,13 @@ tunnelCommandsRouter.post('/apply-manual', async (req, res) => {
       entityType: 'tunnel_command_batch',
       entityId: batchId,
       meta: { deviceId, commands, jobCount: jobs.length },
+    });
+
+    fireEmailNotification({
+      deviceId,
+      eventType: 'manual_control',
+      actorEmail: req.user?.email,
+      meta: { commands, batchId, source: 'tunnel_api' },
     });
 
     return res.status(201).json({ batchId, jobs });

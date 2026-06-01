@@ -1,4 +1,5 @@
 import { pool } from './db.js';
+import { fireEmailNotification } from './emailNotifications.js';
 
 /** Fin programado UTC (ms) desde scheduleSummary del seguimiento, o null si no se puede inferir fin. */
 export function getRipeningEstimatedEndMs(payload) {
@@ -32,16 +33,17 @@ const DEBOUNCE_MS = 4000;
  */
 export async function finalizeDueRipeningProcesses() {
   const { rows } = await pool.query(
-    `SELECT id, payload FROM app_ripening_processes
+    `SELECT id, payload, display_name FROM app_ripening_processes
      WHERE deleted_at IS NULL AND status = 'active'`
   );
   const now = Date.now();
-  const ids = [];
+  const toFinalize = [];
   for (const row of rows) {
     const end = getRipeningEstimatedEndMs(row.payload);
-    if (end != null && now >= end) ids.push(row.id);
+    if (end != null && now >= end) toFinalize.push(row);
   }
-  if (!ids.length) return 0;
+  if (!toFinalize.length) return 0;
+  const ids = toFinalize.map((r) => r.id);
   const result = await pool.query(
     `UPDATE app_ripening_processes
         SET status = 'completed',
@@ -50,11 +52,33 @@ export async function finalizeDueRipeningProcesses() {
         AND status = 'active'`,
     [ids]
   );
+  for (const row of toFinalize) {
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const deviceId = payload.deviceId ? String(payload.deviceId).trim() : '';
+    if (deviceId) {
+      fireEmailNotification({
+        deviceId,
+        eventType: 'tracking_complete',
+        meta: {
+          display_name: row.display_name,
+          processId: row.id,
+          source: 'auto_finalize',
+        },
+      });
+    }
+  }
   return result.rowCount ?? ids.length;
 }
 
 /** Sesiones de control de dispositivo vencidas → `completed`. */
 export async function finalizeDueDeviceControlSessions() {
+  const { rows: due } = await pool.query(
+    `SELECT id, device_id, process_type, display_label FROM app_device_control_sessions
+     WHERE archived_at IS NULL
+       AND status = 'active'
+       AND estimated_end_at <= now()`
+  );
+  if (!due.length) return 0;
   const result = await pool.query(
     `UPDATE app_device_control_sessions
         SET status = 'completed',
@@ -63,7 +87,20 @@ export async function finalizeDueDeviceControlSessions() {
         AND status = 'active'
         AND estimated_end_at <= now()`
   );
-  return result.rowCount ?? 0;
+  for (const row of due) {
+    if (row.device_id) {
+      fireEmailNotification({
+        deviceId: row.device_id,
+        eventType: 'phase_complete',
+        meta: {
+          processType: row.process_type,
+          displayLabel: row.display_label,
+          source: 'auto_finalize',
+        },
+      });
+    }
+  }
+  return result.rowCount ?? due.length;
 }
 
 export async function maybeFinalizeRipeningDebounced() {

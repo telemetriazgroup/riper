@@ -11,6 +11,7 @@ import { UserProfile } from '@/app/components/UserProfile';
 import { DetailedUserManual } from '@/app/components/DetailedUserManual';
 import { CompaniesPage } from '@/app/components/CompaniesPage';
 import { AuditLog } from '@/app/components/AuditLog';
+import { EmailNotificationsPage } from '@/app/components/EmailNotificationsPage';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LoginPage } from '@/app/components/LoginPage';
@@ -164,6 +165,15 @@ function AppContent() {
           );
         }
         return <AuditLog />;
+      case 'email-notifications':
+        if (session.role !== 'superadmin') {
+          return (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-8 text-center text-amber-950">
+              <p className="font-medium">{t('email_access_denied')}</p>
+            </div>
+          );
+        }
+        return <EmailNotificationsPage />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-96 text-gray-500">

@@ -11,6 +11,7 @@ import {
   Activity,
   Shield,
   Building2,
+  Mail,
 } from 'lucide-react';
 import { getStoredUser } from '@/app/lib/auth';
 import { cn } from '@/app/lib/utils';
@@ -44,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOp
     ...(!restrictedDemo ? [{ id: 'companies', label: t('nav_companies'), icon: Building2 }] : []),
     ...(!restrictedDemo ? [{ id: 'users', label: t('users'), icon: Users }] : []),
     ...(isSuperAdmin ? [{ id: 'audit', label: t('audit'), icon: Shield }] : []),
+    ...(isSuperAdmin ? [{ id: 'email-notifications', label: t('email_notifications'), icon: Mail }] : []),
     ...(!restrictedDemo ? [{ id: 'settings', label: t('settings'), icon: Settings }] : []),
     { id: 'manual', label: t('help'), icon: HelpCircle },
   ];

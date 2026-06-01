@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
+import { fireEmailNotification } from '../emailNotifications.js';
 import { maybeFinalizeRipeningDebounced } from '../autoFinalizeDueProcesses.js';
 import {
   filterRowsByPinnedFleetDeviceIds,
@@ -487,6 +488,15 @@ ripeningProcessesRouter.post(
           deviceId: pOut.deviceId || null,
         },
       });
+      const ripDeviceId = pOut.deviceId ? String(pOut.deviceId).trim() : '';
+      if (ripDeviceId) {
+        fireEmailNotification({
+          deviceId: ripDeviceId,
+          eventType: 'tracking_start',
+          actorEmail: req.user?.email,
+          meta: { display_name: out.display_name, processId: out.id },
+        });
+      }
       return res.status(201).json({ data: out });
     } catch (e) {
       await client.query('ROLLBACK');
@@ -621,6 +631,21 @@ ripeningProcessesRouter.post(
         title: newEvent.title,
       },
     });
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const sampDeviceId = payload.deviceId ? String(payload.deviceId).trim() : '';
+    if (sampDeviceId) {
+      fireEmailNotification({
+        deviceId: sampDeviceId,
+        eventType: 'sampling',
+        actorEmail: req.user?.email,
+        meta: {
+          samplingType: type,
+          display_name: row.display_name,
+          title: newEvent.title,
+          processId: row.id,
+        },
+      });
+    }
     res.json({ data: updated });
   }
 );

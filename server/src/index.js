@@ -28,6 +28,7 @@ import { deviceControlRouter } from './routes/deviceControl.js';
 import { auditRouter } from './routes/audit.js';
 import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
+import { emailNotificationsRouter } from './routes/emailNotifications.js';
 import {
   finalizeDueRipeningProcesses,
   finalizeDueDeviceControlSessions,
@@ -83,6 +84,7 @@ async function main() {
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/companies', authMiddleware, companiesRouter);
   app.use('/api/v1/tunnel-commands', authMiddleware, tunnelCommandsRouter);
+  app.use('/api/v1/email-notifications', authMiddleware, emailNotificationsRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

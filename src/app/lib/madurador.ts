@@ -19,6 +19,7 @@ import {
   isSimulatedInkapackingDevice,
   shouldShowSimulatedInkapackingFleet,
 } from '@/app/lib/simulatedInkapackingFleet';
+import { resolvePowerState } from '@/app/lib/powerState';
 
 export type MaduradorRangoFetchOptions = FetchHistoryOptions & {
   /** Incluye filas crudos `datos[]` para métricas (avl CFM, fresh_air_ex_mode). */
@@ -314,7 +315,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   if (nAct > 0 || (numAl != null && numAl > 0)) status = 'alarm';
 
   const rawPs = toNum(flat.power_state ?? row.ultimo_power_state);
-  const power_state: 0 | 1 = rawPs === 1 ? 1 : 0;
+  const power_state = resolvePowerState(flat, rawPs);
 
   const setPointNested = nestedValor(row.set_point);
   const set_point =
@@ -667,7 +668,7 @@ export function mapMaduradorDatoMuestraToHistoryPoint(row: Record<string, unknow
   const lf = inRange(toNum(flat.line_frequency), 0, 100) ?? 60;
   const cap = inRange(toNum(flat.capacity_load), 0, 100) ?? 0;
   const ps = toNum(flat.power_state);
-  const power_state: 0 | 1 = ps === 1 ? 1 : 0;
+  const power_state = resolvePowerState(flat, ps);
   const hsp = inRange(toNum(flat.humidity_set_point), 0, 100) ?? 0;
   const sp = inRange(toNum(flat.set_point), -40, 40) ?? 0;
   const spO2 = inRange(toNum(flat.set_point_o2), 0, 100);
