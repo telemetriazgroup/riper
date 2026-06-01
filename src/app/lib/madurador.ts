@@ -445,10 +445,15 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
 
   const maduradorSummary = extractMaduradorOperativoSummary(row);
 
-  const endProcess = row.hasta != null ? String(row.hasta) : lastSeen;
+  const processStartIso =
+    maduradorServerTimestampToIso(row.fecha_inicio) ??
+    maduradorServerTimestampToIso(row.fecha_procesada) ??
+    maduradorServerTimestampToIso(flat.fecha) ??
+    lastSeen;
+  const processEndIso = maduradorServerTimestampToIso(row.hasta) ?? lastSeen;
 
   const hasProcessInfo =
-    row.fecha_inicio != null || (Boolean(procesoRaw) && !isManual);
+    isManual || row.fecha_inicio != null || Boolean(procesoRaw);
 
   return {
     id: imei,
@@ -466,12 +471,10 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
       ? {
           name: procesoLabel,
           progress: computeMaduradorProcessProgress(row, isManual),
-          startTime: String(
-            row.fecha_inicio ?? row.fecha_procesada ?? (parseMaduradorMongoDate(flat.fecha) ?? lastSeen)
-          ),
-          endTime: endProcess,
+          startTime: isManual ? lastSeen : processStartIso,
+          endTime: isManual ? lastSeen : processEndIso,
           currentPhase: procesoLabel,
-          timeLeft: formatProcessTimeLeft(row),
+          timeLeft: isManual ? undefined : formatProcessTimeLeft(row),
           showProgressBar: row.fecha_inicio != null && !isManual,
         }
       : undefined,

@@ -36,6 +36,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
+import { isManualProcesoLabel } from '@/app/lib/madurador';
 
 interface DeviceCardProps {
   device: Device;
@@ -155,6 +156,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isPoweredOff = device.telemetry.power_state === 0;
 
   const isFleetAlarm = qualifiesForFleetAlarmHighlight(device);
+  const isManualFleetProcess = isManualProcesoLabel(device.procesoApi);
 
   const getStatusColor = () => {
     if (connectionStatus === 'offline') return 'border-l-4 border-l-gray-400 bg-gray-50';
@@ -191,6 +193,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const formatLastSeen = () => {
     if (!isDateValid) return '-';
+    if (isManualFleetProcess) {
+      return formatDateTime(lastSeenDate);
+    }
     try {
       return formatDistanceToNow(lastSeenDate, { addSuffix: true, locale: language === 'es' ? es : enUS });
     } catch (error) {
@@ -336,25 +341,35 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <span className="text-xs font-medium text-blue-600">
                     {getFleetProcesoMaduradorLabel(device.procesoApi, t)}
                   </span>
-                  <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
-                    <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
-                  </span>
+                  {!isManualFleetProcess && (
+                    <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                      <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
-                  <div>
-                    {t('start')}: {formatDateTime(device.process.startTime)}
+                {isManualFleetProcess ? (
+                  <div className="text-[10px] text-gray-500">
+                    {t('last_data')}: {isDateValid ? formatDateTime(lastSeenDate) : '—'}
                   </div>
-                  <div>
-                    {t('end')}: {formatDateTime(device.process.endTime)}
-                  </div>
-                </div>
-                {device.process.showProgressBar !== false && (
-                  <div className="w-full bg-gray-200 rounded-full h-1.5">
-                    <div
-                      className="bg-blue-600 h-1.5 rounded-full transition-all"
-                      style={{ width: `${device.process.progress}%` }}
-                    />
-                  </div>
+                ) : (
+                  <>
+                    <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
+                      <div>
+                        {t('start')}: {formatDateTime(device.process.startTime)}
+                      </div>
+                      <div>
+                        {t('end')}: {formatDateTime(device.process.endTime)}
+                      </div>
+                    </div>
+                    {device.process.showProgressBar !== false && (
+                      <div className="w-full bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className="bg-blue-600 h-1.5 rounded-full transition-all"
+                          style={{ width: `${device.process.progress}%` }}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             ) : null}
