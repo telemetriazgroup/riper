@@ -108,6 +108,28 @@ export function etcGmtToOffsetMinutes(etcTz: string): number | null {
   return m[1] === '+' ? -h * 60 : h * 60;
 }
 
+/** Etiqueta GMT según el reloj del sistema operativo (coincide con la hora local del SO). */
+export function formatBrowserOffsetGmtLabel(at: Date = new Date()): string {
+  const offsetMinEastOfUtc = -at.getTimezoneOffset();
+  if (offsetMinEastOfUtc === 0) return 'GMT+0';
+  const sign = offsetMinEastOfUtc < 0 ? '-' : '+';
+  const abs = Math.abs(offsetMinEastOfUtc);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  if (m === 0) return `GMT${sign}${h}`;
+  return `GMT${sign}${h}:${String(m).padStart(2, '0')}`;
+}
+
+/** Hora civil del dispositivo (zona IANA del SO, independiente de preferencias guardadas). */
+export function formatBrowserWallClock(
+  at: Date,
+  language: Language,
+  dateFormat: DateFormatStyle = 'dmy',
+  withSeconds = true
+): string {
+  return formatInDisplayTimeZone(at, detectBrowserIanaTimeZone(), language, withSeconds, dateFormat);
+}
+
 /**
  * Idioma inicial del login según región:
  * — Estados Unidos → inglés
@@ -119,7 +141,10 @@ export function detectDefaultLoginLanguage(country: string | null = detectCountr
 
 export function detectSystemLocalePreferences(): {
   language: Language;
+  /** Zona IANA del navegador (respeta DST). */
   display_timezone: string;
+  /** Equivalente Etc/GMT del offset actual. */
+  display_timezone_etc: string;
   date_format: DateFormatStyle;
   country: string | null;
   browser_iana: string;
@@ -128,11 +153,23 @@ export function detectSystemLocalePreferences(): {
   const browser_iana = detectBrowserIanaTimeZone();
   return {
     language: detectDefaultLoginLanguage(country),
-    display_timezone: browserOffsetToEtcGmtTimezone(),
+    display_timezone: browser_iana,
+    display_timezone_etc: browserOffsetToEtcGmtTimezone(),
     date_format: country === 'US' ? 'mdy' : 'dmy',
     country,
     browser_iana,
   };
+}
+
+export function isDefaultServerDisplayTimezone(tz: string | undefined | null): boolean {
+  const v = String(tz || '').trim();
+  return !v || v === DEFAULT_DISPLAY_TIMEZONE || v === SERVER_TELEMETRY_IANA;
+}
+
+/** Perfil con huso distinto al default GMT-5 del servidor. */
+export function hasExplicitServerDisplayTimezone(raw?: { display_timezone?: string | null } | null): boolean {
+  const tz = raw?.display_timezone?.trim();
+  return Boolean(tz && !isDefaultServerDisplayTimezone(tz));
 }
 
 /** Diferencia en horas entre dos husos Etc/GMT fijos (positivo = usuario adelantado vs referencia). */

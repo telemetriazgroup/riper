@@ -1,5 +1,9 @@
 import { DEFAULT_DATE_FORMAT, DEFAULT_DISPLAY_TIMEZONE, type DateFormatStyle } from '@/app/lib/displayTimeZone';
-import { detectSystemLocalePreferences } from '@/app/lib/systemLocale';
+import {
+  detectSystemLocalePreferences,
+  hasExplicitServerDisplayTimezone,
+  isDefaultServerDisplayTimezone,
+} from '@/app/lib/systemLocale';
 import { updateUser } from '@/app/lib/usersApi';
 import { getStoredUser, setStoredUser } from '@/app/lib/auth';
 
@@ -79,15 +83,29 @@ export function resolveUiPreferences(
   const s = fromServer ?? {};
   const bootstrap = detectSystemLocalePreferences();
   const df = s.date_format ?? (s as { dateFormat?: string }).dateFormat;
+
+  const serverTz = typeof s.display_timezone === 'string' ? s.display_timezone.trim() : '';
+  const localTz = local.display_timezone?.trim() ?? '';
+  let display_timezone = DEFAULT_DISPLAY_TIMEZONE;
+
+  if (hasExplicitServerDisplayTimezone(s)) {
+    display_timezone = serverTz;
+  } else if (localTz && !isDefaultServerDisplayTimezone(localTz)) {
+    display_timezone = localTz;
+  } else if (bootstrap.display_timezone) {
+    display_timezone = bootstrap.display_timezone;
+  } else if (localTz) {
+    display_timezone = localTz;
+  } else if (serverTz) {
+    display_timezone = serverTz;
+  }
+
   return {
     language:
       s.language === 'en' ? 'en' : s.language === 'es' ? 'es' : local.language ?? bootstrap.language,
     theme: s.theme === 'dark' ? 'dark' : s.theme === 'light' ? 'light' : local.theme ?? 'light',
     temp_unit: s.temp_unit === 'F' ? 'F' : s.temp_unit === 'C' ? 'C' : local.temp_unit ?? 'C',
-    display_timezone:
-      typeof s.display_timezone === 'string' && s.display_timezone.trim()
-        ? s.display_timezone.trim()
-        : local.display_timezone ?? bootstrap.display_timezone ?? DEFAULT_DISPLAY_TIMEZONE,
+    display_timezone,
     date_format:
       df === 'mdy' ? 'mdy' : df === 'dmy' ? 'dmy' : local.date_format ?? bootstrap.date_format,
   };

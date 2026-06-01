@@ -28,13 +28,14 @@ export function buildAllGmtTimezoneOptions(): GmtTimezoneOption[] {
 
 export const ALL_GMT_TIMEZONE_OPTIONS = buildAllGmtTimezoneOptions();
 
-/** Incluye el valor guardado si no está en la lista estándar (p. ej. migración desde zonas regionales). */
+/** Incluye el valor guardado si no está en la lista estándar (p. ej. zona IANA del navegador). */
 export function gmtTimezoneOptionsForSelect(currentValue?: string): GmtTimezoneOption[] {
   const v = String(currentValue || '').trim();
   if (!v || ALL_GMT_TIMEZONE_OPTIONS.some((o) => o.value === v)) {
     return ALL_GMT_TIMEZONE_OPTIONS;
   }
-  return [{ value: v, label: v }, ...ALL_GMT_TIMEZONE_OPTIONS];
+  const label = isValidDisplayTimeZone(v) ? `${formatGmtLabelForTimeZone(v)} (${v})` : v;
+  return [{ value: v, label }, ...ALL_GMT_TIMEZONE_OPTIONS];
 }
 
 /** @deprecated Usar ALL_GMT_TIMEZONE_OPTIONS */
@@ -47,7 +48,61 @@ export const DISPLAY_TIMEZONE_PRESETS = ALL_GMT_TIMEZONE_OPTIONS.map((o) => ({
 export function isValidDisplayTimeZone(tz: string): boolean {
   const v = String(tz || '').trim();
   if (!v) return false;
-  return ALL_GMT_TIMEZONE_OPTIONS.some((o) => o.value === v);
+  if (ALL_GMT_TIMEZONE_OPTIONS.some((o) => o.value === v)) return true;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: v });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Offset fijo Etc/GMT o UTC en minutos al este de UTC. */
+export function etcGmtToOffsetMinutes(etcTz: string): number | null {
+  const v = String(etcTz || '').trim();
+  if (v === 'UTC') return 0;
+  const m = /^Etc\/GMT([+-])(\d+)$/.exec(v);
+  if (!m) return null;
+  const h = Number(m[2]);
+  return m[1] === '+' ? -h * 60 : h * 60;
+}
+
+/** Offset en minutos al este de UTC para cualquier zona IANA o Etc/GMT. */
+export function getOffsetMinutesEastOfUtc(timeZone: string, at: Date = new Date()): number | null {
+  const v = String(timeZone || '').trim();
+  if (!v) return null;
+  const etc = etcGmtToOffsetMinutes(v);
+  if (etc != null) return etc;
+  try {
+    const part = new Intl.DateTimeFormat('en-US', {
+      timeZone: v,
+      timeZoneName: 'longOffset',
+    })
+      .formatToParts(at)
+      .find((p) => p.type === 'timeZoneName')?.value;
+    if (!part) return null;
+    const m = /(?:GMT|UTC)([+-])(\d{1,2})(?::(\d{2}))?/.exec(part);
+    if (!m) return part.includes('0') ? 0 : null;
+    const sign = m[1] === '+' ? 1 : -1;
+    const hours = Number(m[2]);
+    const mins = m[3] ? Number(m[3]) : 0;
+    return sign * (hours * 60 + mins);
+  } catch {
+    return null;
+  }
+}
+
+/** Etiqueta coloquial GMT±N (respeta DST en zonas IANA regionales). */
+export function formatGmtLabelForTimeZone(timeZone: string, at: Date = new Date()): string {
+  const offset = getOffsetMinutesEastOfUtc(timeZone, at);
+  if (offset == null) return timeZone;
+  if (offset === 0) return 'GMT+0';
+  const sign = offset < 0 ? '-' : '+';
+  const abs = Math.abs(offset);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  if (m === 0) return `GMT${sign}${h}`;
+  return `GMT${sign}${h}:${String(m).padStart(2, '0')}`;
 }
 
 export function dateFormatLocale(style: DateFormatStyle, language: 'es' | 'en'): string {

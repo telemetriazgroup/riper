@@ -5,15 +5,14 @@ import { Clock, Loader2, Lock, Mail } from 'lucide-react';
 import { ImageWithFallback } from '@/app/components/figma/ImageWithFallback';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { loginRequest } from '@/app/lib/auth';
-import { formatInDisplayTimeZone } from '@/app/lib/displayTimeZone';
-import { formatColloquialGmtLabel } from '@/app/lib/systemLocale';
+import { formatBrowserOffsetGmtLabel, formatBrowserWallClock } from '@/app/lib/systemLocale';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
-  const { t, language, displayTimeZone } = useSettings();
+  const { t, language, dateFormat } = useSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,10 +24,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   }, []);
 
   const deviceTime = useMemo(
-    () => formatInDisplayTimeZone(now, displayTimeZone, language, true),
-    [now, displayTimeZone, language]
+    () => formatBrowserWallClock(now, language, dateFormat, true),
+    [now, language, dateFormat]
   );
-  const deviceGmt = useMemo(() => formatColloquialGmtLabel(displayTimeZone), [displayTimeZone]);
+  const deviceGmt = useMemo(() => formatBrowserOffsetGmtLabel(now), [now]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

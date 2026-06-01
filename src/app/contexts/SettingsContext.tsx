@@ -16,6 +16,7 @@ import {
   type ResolvedUiPreferences,
   type UiPreferences,
 } from '@/app/lib/userPreferences';
+import { hasExplicitServerDisplayTimezone } from '@/app/lib/systemLocale';
 import { getStoredUser, getToken } from '@/app/lib/auth';
 
 type Language = 'es' | 'en';
@@ -2273,11 +2274,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const applyUserPreferences = useCallback(
     async (serverPrefs?: UiPreferences | null, userId?: string) => {
       userIdRef.current = userId ?? getStoredUser()?.id ?? null;
-      const resolved = resolveUiPreferences(serverPrefs);
+      const local = readLocalUiPreferences();
+      const resolved = resolveUiPreferences(serverPrefs, local);
       applyResolved(resolved);
-      if (userIdRef.current && !hasServerUiPreferences(serverPrefs)) {
+      const uid = userIdRef.current;
+      if (!uid) return;
+      const shouldPersistTz = !hasExplicitServerDisplayTimezone(serverPrefs);
+      if (!hasServerUiPreferences(serverPrefs) || shouldPersistTz) {
         try {
-          await persistUserUiPreferences(userIdRef.current, resolved);
+          await persistUserUiPreferences(uid, resolved);
         } catch {
           /* ignore seed failure */
         }
