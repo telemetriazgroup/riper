@@ -1,5 +1,5 @@
 import type { HistoryPoint } from '@/app/lib/api';
-import { parseMaduradorMongoDate } from '@/app/lib/madurador';
+import { maduradorServerTimestampToMs } from '@/app/lib/maduradorTimestamps';
 
 function toNum(v: unknown): number | null {
   if (v == null) return null;
@@ -13,8 +13,9 @@ function toNum(v: unknown): number | null {
 
 export function rawRowTimestampMs(row: Record<string, unknown>): number {
   const f = row.fecha;
-  const s =
-    parseMaduradorMongoDate(f) ?? (typeof f === 'string' && f.trim() ? f.trim() : null);
+  const ms = maduradorServerTimestampToMs(f);
+  if (ms != null) return ms;
+  const s = typeof f === 'string' && f.trim() ? f.trim() : null;
   const t = s ? new Date(s).getTime() : NaN;
   return Number.isFinite(t) ? t : 0;
 }

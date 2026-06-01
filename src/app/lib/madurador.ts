@@ -20,6 +20,12 @@ import {
   shouldShowSimulatedInkapackingFleet,
 } from '@/app/lib/simulatedInkapackingFleet';
 import { resolvePowerState } from '@/app/lib/powerState';
+import {
+  connectionStateFromAgeMinutes,
+  maduradorServerTimestampToIso,
+  maduradorServerTimestampToMs,
+  minutesSinceUtcMs,
+} from '@/app/lib/maduradorTimestamps';
 
 export type MaduradorRangoFetchOptions = FetchHistoryOptions & {
   /** Incluye filas crudos `datos[]` para métricas (avl CFM, fresh_air_ex_mode). */
@@ -91,7 +97,7 @@ function nestedValor(obj: unknown): number | null {
   return null;
 }
 
-/** Fecha en API: ISO string o `{ $date: "..." }`. */
+/** Fecha en API: ISO string o `{ $date: "..." }`. Para antigüedad/conexión usar `maduradorServerTimestampToMs`. */
 export function parseMaduradorMongoDate(v: unknown): string | null {
   if (v == null) return null;
   if (typeof v === 'string' && v.trim()) return v.trim();
@@ -172,8 +178,8 @@ export function isManualProcesoLabel(raw: string | null | undefined): boolean {
 
 function computeMaduradorProcessProgress(row: Record<string, unknown>, isManual: boolean): number {
   if (isManual) return 0;
-  const fi = row.fecha_inicio ? new Date(String(row.fecha_inicio)).getTime() : NaN;
-  const h = row.hasta ? new Date(String(row.hasta)).getTime() : NaN;
+  const fi = maduradorServerTimestampToMs(row.fecha_inicio) ?? NaN;
+  const h = maduradorServerTimestampToMs(row.hasta) ?? NaN;
   const now = Date.now();
   if (Number.isFinite(fi) && Number.isFinite(h) && h > fi) {
     const p = ((now - fi) / (h - fi)) * 100;
@@ -183,7 +189,7 @@ function computeMaduradorProcessProgress(row: Record<string, unknown>, isManual:
 }
 
 function formatProcessTimeLeft(row: Record<string, unknown>): string | undefined {
-  const h = row.hasta ? new Date(String(row.hasta)).getTime() : NaN;
+  const h = maduradorServerTimestampToMs(row.hasta) ?? NaN;
   if (!Number.isFinite(h)) return undefined;
   const ms = h - Date.now();
   if (ms <= 0) return '0 min';
@@ -290,24 +296,30 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const imei = String(flat.imei ?? row.imei ?? 'unknown').trim() || 'unknown';
   const name = String(flat.device ?? row.device ?? imei);
 
-  const lastSample =
-    parseMaduradorMongoDate(flat.fecha) ??
-    (flat.fecha != null && typeof flat.fecha === 'string' ? String(flat.fecha) : null) ??
-    (row.hasta != null ? String(row.hasta) : null) ??
-    (row.fecha_procesada != null ? String(row.fecha_procesada) : null) ??
-    new Date().toISOString();
-  const lastSeen = lastSample;
+  const lastSampleRaw =
+    flat.fecha ??
+    row.hasta ??
+    row.fecha_procesada ??
+    null;
+  const lastSeenMs =
+    maduradorServerTimestampToMs(flat.fecha) ??
+    maduradorServerTimestampToMs(row.hasta) ??
+    maduradorServerTimestampToMs(row.fecha_procesada) ??
+    null;
+  const lastSeen =
+    lastSeenMs != null
+      ? new Date(lastSeenMs).toISOString()
+      : maduradorServerTimestampToIso(lastSampleRaw) ?? new Date().toISOString();
 
   const procesoRaw = row.proceso != null ? String(row.proceso).trim() : '';
   const isManualProceso = !procesoRaw || isManualProcesoLabel(procesoRaw);
   const stateProcess = procesoToStateProcess(procesoRaw || 'Manual');
 
-  const lastMs = new Date(lastSeen).getTime();
-  const mins = Number.isFinite(lastMs) ? (Date.now() - lastMs) / 60000 : 9999;
+  const mins = lastSeenMs != null ? minutesSinceUtcMs(lastSeenMs) : 9999;
 
   let status: Device['status'] = 'active';
-  if (!Number.isFinite(mins) || mins > 720) status = 'offline';
-  else if (mins > 30) status = 'warning';
+  const connBase = connectionStateFromAgeMinutes(mins);
+  status = connBase.status;
 
   const alarmas = row.alarmas as { numero_alarma?: unknown; activas?: unknown[] } | undefined;
   const nAct = Array.isArray(alarmas?.activas) ? alarmas!.activas!.length : 0;
@@ -377,6 +389,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
         : null;
 
   const lastSampleDisplay =
+    maduradorServerTimestampToIso(flat.fecha) ??
     parseMaduradorMongoDate(flat.fecha) ??
     (flat.fecha != null && typeof flat.fecha !== 'object' ? String(flat.fecha) : null);
 
@@ -440,7 +453,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     nombreApi: name,
     name,
     status,
-    estado_conexion: status === 'offline' ? 'offline' : mins > 30 ? 'wait' : 'online',
+    estado_conexion: connBase.estado_conexion,
     last_seen: lastSeen,
     telemetry,
     operational,
@@ -648,10 +661,7 @@ function parseBuscarDatosRangoJson(json: unknown): { cantidad_datos: number; dat
  */
 export function mapMaduradorDatoMuestraToHistoryPoint(row: Record<string, unknown>): HistoryPoint {
   const flat = flatMaduradorRow(row);
-  const ts =
-    parseMaduradorMongoDate(flat.fecha) ??
-    (typeof flat.fecha === 'string' && flat.fecha.trim() ? flat.fecha.trim() : null) ??
-    new Date().toISOString();
+  const ts = maduradorServerTimestampToIso(flat.fecha) ?? new Date().toISOString();
 
   const return_air = inRange(toNum(flat.return_air), -40, 120) ?? 0;
   const temp_supply_1 = inRange(toNum(flat.temp_supply_1), -40, 120) ?? return_air;

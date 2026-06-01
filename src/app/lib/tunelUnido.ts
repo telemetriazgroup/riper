@@ -1,6 +1,11 @@
 import type { Device, TunnelTelemetryGroup, TunnelUnitTelemetry } from '@/app/data';
 import { RIPENER_API_URL, VITE_TUNEL_GRUPO_URL_RAW } from '@/app/config';
 import { authHeaders } from '@/app/lib/auth';
+import {
+  connectionStateFromAgeMinutes,
+  maduradorServerTimestampToMs,
+  minutesSinceUtcMs,
+} from '@/app/lib/maduradorTimestamps';
 
 export const GOURMET_TUNEL_DEVICE_ID = 'tunel:TUNEL_GREAT';
 
@@ -161,13 +166,12 @@ function buildTunnelGroupFromBloque(
   };
 }
 
-function connectionAndStatus(lastSeenIso: string | null): Pick<Device, 'status' | 'estado_conexion'> {
-  if (!lastSeenIso) return { status: 'offline', estado_conexion: 'offline' };
-  const last = new Date(lastSeenIso);
-  const mins = (Date.now() - last.getTime()) / 60000;
-  if (!Number.isFinite(mins) || mins > 720) return { status: 'offline', estado_conexion: 'offline' };
-  if (mins > 30) return { status: 'warning', estado_conexion: 'wait' };
-  return { status: 'active', estado_conexion: 'online' };
+function connectionAndStatus(lastSeenRaw: string | null): Pick<Device, 'status' | 'estado_conexion'> {
+  if (!lastSeenRaw) return { status: 'offline', estado_conexion: 'offline' };
+  const ms = maduradorServerTimestampToMs(lastSeenRaw) ?? new Date(lastSeenRaw).getTime();
+  const mins = minutesSinceUtcMs(ms);
+  const conn = connectionStateFromAgeMinutes(mins);
+  return { status: conn.status, estado_conexion: conn.estado_conexion };
 }
 
 export function buildTunnelDeviceFromJson(json: unknown): Device {
@@ -196,8 +200,10 @@ export function buildTunnelDeviceFromJson(json: unknown): Device {
         })),
       } satisfies TunnelTelemetryGroup);
 
-  const lastSeen = tunnel.muestraFecha ?? j.fecha ?? new Date().toISOString();
-  const { status, estado_conexion } = connectionAndStatus(tunnel.muestraFecha ?? j.fecha ?? null);
+  const lastSeenRaw = tunnel.muestraFecha ?? j.fecha ?? null;
+  const lastSeenMs = lastSeenRaw ? maduradorServerTimestampToMs(lastSeenRaw) : null;
+  const lastSeen = lastSeenMs != null ? new Date(lastSeenMs).toISOString() : new Date().toISOString();
+  const { status, estado_conexion } = connectionAndStatus(lastSeenRaw);
 
   const b = bloque;
   const avgTemp = tunnel.averageSupplyTemp ?? 0;
