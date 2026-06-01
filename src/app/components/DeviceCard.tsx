@@ -6,6 +6,7 @@ import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getFleetProcesoMaduradorLabel, getPanelControlProcessTitle } from '@/app/lib/fleetProcessLabels';
 import { getFleetCardTemperatureDisplay } from '@/app/lib/fleetTemperatureDisplay';
+import { qualifiesForFleetAlarmHighlight } from '@/app/lib/fleetKpi';
 import { getRipeningRecipePhaseLabels, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import {
@@ -153,12 +154,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
   const isPoweredOff = device.telemetry.power_state === 0;
 
+  const isFleetAlarm = qualifiesForFleetAlarmHighlight(device);
+
   const getStatusColor = () => {
     if (connectionStatus === 'offline') return 'border-l-4 border-l-gray-400 bg-gray-50';
     if (connectionStatus === 'standby') return 'border-l-4 border-l-orange-400 bg-orange-50/30';
     
     // Online
-    if (device.status === 'alarm') return 'border-l-4 border-l-red-500';
+    if (isFleetAlarm) return 'border-l-4 border-l-red-500';
     if (device.status === 'warning') return 'border-l-4 border-l-yellow-500';
     
     if (isPoweredOff) return 'border-l-4 border-l-gray-300';
@@ -177,7 +180,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
     if (isPoweredOff) {
       return <span className={cn(base, 'bg-gray-200 text-gray-700')}><Power className="w-3 h-3 shrink-0"/> APAGADO</span>;
     }
-    if (device.status === 'alarm') {
+    if (isFleetAlarm) {
       return <span className={cn(base, 'bg-red-100 text-red-700')}>ALARMA</span>;
     }
     if (device.status === 'warning') {

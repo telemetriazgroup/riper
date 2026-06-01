@@ -20,6 +20,7 @@ import {
   shouldShowSimulatedInkapackingFleet,
 } from '@/app/lib/simulatedInkapackingFleet';
 import { resolvePowerState } from '@/app/lib/powerState';
+import { FLEET_ALARM_RED_MIN_COUNT } from '@/app/lib/fleetKpi';
 import {
   connectionStateFromAgeMinutes,
   maduradorServerTimestampToIso,
@@ -324,7 +325,8 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const alarmas = row.alarmas as { numero_alarma?: unknown; activas?: unknown[] } | undefined;
   const nAct = Array.isArray(alarmas?.activas) ? alarmas!.activas!.length : 0;
   const numAl = toNum(alarmas?.numero_alarma ?? flat.numero_alarma);
-  if (nAct > 0 || (numAl != null && numAl > 0)) status = 'alarm';
+  const alertCount = Math.max(nAct, Math.max(0, Math.round(numAl ?? 0)));
+  if (alertCount >= FLEET_ALARM_RED_MIN_COUNT) status = 'alarm';
 
   const rawPs = toNum(flat.power_state ?? row.ultimo_power_state);
   const power_state = resolvePowerState(flat, rawPs);
@@ -439,7 +441,7 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     Object.prototype.hasOwnProperty.call(row, 'id_proceso') ||
     Object.prototype.hasOwnProperty.call(flat, 'id_proceso');
   const idProcesoVal = hasIdProcesoField ? toNum(flat.id_proceso !== undefined ? flat.id_proceso : row.id_proceso) : null;
-  const numAlRounded = Math.max(0, Math.round(numAl ?? 0));
+  const numAlRounded = alertCount;
 
   const maduradorSummary = extractMaduradorOperativoSummary(row);
 

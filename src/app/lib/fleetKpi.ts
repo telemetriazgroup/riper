@@ -1,9 +1,24 @@
 import type { Device } from '@/app/data';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
 
+/** Mínimo de mensajes/alertas para marcar equipo en rojo en Estado de Flota. */
+export const FLEET_ALARM_RED_MIN_COUNT = 2;
+
+/** Cuenta alertas del dispositivo (máximo entre activas API y numero_alarma). */
+export function deviceAlertCount(device: Pick<Device, 'numeroAlarmaTotal'>): number {
+  return Math.max(0, Math.round(device.numeroAlarmaTotal ?? 0));
+}
+
+/** true si el equipo debe mostrarse como alarma crítica (borde rojo) en la flota. */
+export function qualifiesForFleetAlarmHighlight(
+  device: Pick<Device, 'status' | 'numeroAlarmaTotal'>
+): boolean {
+  return deviceAlertCount(device) >= FLEET_ALARM_RED_MIN_COUNT;
+}
+
 /** Suma de `numero_alarma` por dispositivo (API Madurador / telemetría). */
 export function totalNumeroAlarmaFleet(devices: Device[]): number {
-  return devices.reduce((acc, d) => acc + (d.numeroAlarmaTotal ?? 0), 0);
+  return devices.reduce((acc, d) => acc + deviceAlertCount(d), 0);
 }
 
 /**
