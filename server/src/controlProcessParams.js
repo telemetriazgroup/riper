@@ -19,6 +19,81 @@ export function parseSessionParams(raw) {
   return p ?? {};
 }
 
+/** Extrae snapshot guardado al iniciar el proceso (recuperación si params se corrompieron). */
+export function extractControlSnapshotFromLog(params) {
+  const p = asObject(params) ?? {};
+  const log = Array.isArray(p.tunnelEventLog) ? p.tunnelEventLog : [];
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const ev = log[i];
+    if (ev && typeof ev === 'object' && ev.action === 'process_started' && ev.controlSnapshot) {
+      const snap = asObject(ev.controlSnapshot);
+      if (snap) return snap;
+    }
+  }
+  return null;
+}
+
+/** Recupera setpoints desde programmedSummary del evento process_started (sesiones antiguas corruptas). */
+export function parseProgrammedSummary(summary) {
+  const text = String(summary || '').trim();
+  if (!text) return null;
+  const out = {};
+  const temp = text.match(/Temp\s+([\d.]+)\s*°C/i);
+  if (temp) out.setPoint = Number(temp[1]);
+  const rh = text.match(/HR\s+([\d.]+)\s*%/i);
+  if (rh) out.humiditySetPoint = Math.round(Number(rh[1]));
+  const eth = text.match(/Etileno\s+([\d.]+)\s*ppm/i);
+  if (eth) out.ethylene = Math.round(Number(eth[1]));
+  const co2 = text.match(/CO₂\s+([\d.]+)\s*%/i);
+  if (co2) out.co2 = Number(co2[1]);
+  const dur = text.match(/([\d.]+)\s*h\b/i);
+  if (dur) out.durationHours = Number(dur[1]);
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function repairFromProcessStartedLog(params) {
+  const p = asObject(params) ?? {};
+  const log = Array.isArray(p.tunnelEventLog) ? p.tunnelEventLog : [];
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const ev = log[i];
+    if (ev && typeof ev === 'object' && ev.action === 'process_started' && ev.programmedSummary) {
+      return parseProgrammedSummary(ev.programmedSummary);
+    }
+  }
+  return null;
+}
+
+/** Params efectivos de una sesión (normalizados + snapshot + controlProgram). */
+export function effectiveSessionParams(sessionRow) {
+  const processType = String(sessionRow?.process_type || '').trim();
+  const durationHours = Number(sessionRow?.duration_hours);
+  const parsed = parseSessionParams(sessionRow?.params);
+  const snapshot = extractControlSnapshotFromLog(parsed);
+  const repaired = repairFromProcessStartedLog(parsed);
+  const cp = asObject(parsed.controlProgram) ?? {};
+  const merged = {
+    ...parsed,
+    ...(repaired ?? {}),
+    ...(snapshot ?? {}),
+    controlProgram: { ...cp, ...(repaired ?? {}), ...(snapshot ?? {}) },
+  };
+  return normalizeControlProcessParams(processType, merged, durationHours);
+}
+
+export function buildControlSnapshot(params) {
+  const p = asObject(params) ?? {};
+  const cp = asObject(p.controlProgram) ?? {};
+  const snap = { ...cp };
+  if (p.setPoint != null) snap.setPoint = Number(p.setPoint);
+  if (p.humiditySetPoint != null) snap.humiditySetPoint = Number(p.humiditySetPoint);
+  if (p.durationHours != null) snap.durationHours = Number(p.durationHours);
+  if (p.ethylene != null) snap.ethylene = Number(p.ethylene);
+  if (p.co2 != null) snap.co2 = Number(p.co2);
+  if (p.targetCo2 != null) snap.targetCo2 = Number(p.targetCo2);
+  if (p.durationMin != null) snap.durationMin = Number(p.durationMin);
+  return snap;
+}
+
 export function controlParamNumber(params, ...keys) {
   const p = asObject(params) ?? {};
   for (const key of keys) {

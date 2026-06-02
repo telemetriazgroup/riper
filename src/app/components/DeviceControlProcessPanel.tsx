@@ -42,8 +42,8 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   const automation = (session?.params?.processAutomation ?? null) as Record<string, unknown> | null;
   const autoActive = isAutomatedControlProcess(session);
   const phaseLabel = useMemo(
-    () => (autoActive ? processAutomationPhaseLabel(automation, t) : null),
-    [autoActive, automation, t]
+    () => (autoActive ? processAutomationPhaseLabel(automation, t, deviceId) : null),
+    [autoActive, automation, t, deviceId]
   );
   const lastAction = useMemo(
     () => (autoActive ? lastProcessEventSummary(session?.params, t) : null),
@@ -68,9 +68,9 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   const trackingAutoPhaseLabel = useMemo(
     () =>
       trackingAutomation
-        ? processAutomationPhaseLabel(trackingAutomation, t)
+        ? processAutomationPhaseLabel(trackingAutomation, t, deviceId)
         : null,
-    [trackingAutomation, t]
+    [trackingAutomation, t, deviceId]
   );
 
   const onCancel = async (row: DeviceControlSessionRow) => {

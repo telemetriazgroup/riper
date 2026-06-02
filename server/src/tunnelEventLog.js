@@ -1,6 +1,6 @@
 /** Historial unificado de acciones de control (túnel / automatización). */
 
-import { controlParamNumber } from './controlProcessParams.js';
+import { controlParamNumber, parseSessionParams } from './controlProcessParams.js';
 
 export function programmedSummaryFromParams(params, processType) {
   const p = params && typeof params === 'object' ? params : {};
@@ -35,7 +35,7 @@ export async function appendSessionTunnelEvent(client, sessionId, entry) {
     [sessionId]
   );
   if (!rows.length) return;
-  const prev = rows[0].params && typeof rows[0].params === 'object' ? rows[0].params : {};
+  const prev = parseSessionParams(rows[0].params);
   const nextParams = {
     ...prev,
     tunnelEventLog: appendTunnelEventLog(prev, entry),

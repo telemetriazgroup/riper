@@ -1,6 +1,7 @@
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import type { EventKind, LogEvent } from '@/app/data/eventLog';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 
 /** Clave para ver detalle técnico del proceso (Gourmet). */
 export const GOURMET_PROCESS_DEBUG_PASSWORD = 'lpmp2018';
@@ -66,6 +67,64 @@ function sessionParamsObject(raw: unknown): Record<string, unknown> {
   return {};
 }
 
+function extractControlSnapshot(params: Record<string, unknown>): Record<string, unknown> | null {
+  const log = Array.isArray(params.tunnelEventLog) ? params.tunnelEventLog : [];
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const ev = log[i] as Record<string, unknown> | undefined;
+    if (ev?.action === 'process_started' && ev.controlSnapshot && typeof ev.controlSnapshot === 'object') {
+      return ev.controlSnapshot as Record<string, unknown>;
+    }
+  }
+  return null;
+}
+
+function parseProgrammedSummary(summary: unknown): Record<string, unknown> | null {
+  const text = String(summary || '').trim();
+  if (!text) return null;
+  const out: Record<string, unknown> = {};
+  const temp = text.match(/Temp\s+([\d.]+)\s*°C/i);
+  if (temp) out.setPoint = Number(temp[1]);
+  const rh = text.match(/HR\s+([\d.]+)\s*%/i);
+  if (rh) out.humiditySetPoint = Math.round(Number(rh[1]));
+  const eth = text.match(/Etileno\s+([\d.]+)\s*ppm/i);
+  if (eth) out.ethylene = Math.round(Number(eth[1]));
+  const co2 = text.match(/CO₂\s+([\d.]+)\s*%/i);
+  if (co2) out.co2 = Number(co2[1]);
+  const dur = text.match(/([\d.]+)\s*h\b/i);
+  if (dur) out.durationHours = Number(dur[1]);
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function repairFromProcessStartedLog(params: Record<string, unknown>): Record<string, unknown> | null {
+  const log = Array.isArray(params.tunnelEventLog) ? params.tunnelEventLog : [];
+  for (let i = log.length - 1; i >= 0; i -= 1) {
+    const ev = log[i] as Record<string, unknown> | undefined;
+    if (ev?.action === 'process_started' && ev.programmedSummary) {
+      return parseProgrammedSummary(ev.programmedSummary);
+    }
+  }
+  return null;
+}
+
+/** Params efectivos para UI (top-level + controlProgram + snapshot del evento process_started). */
+export function effectiveSessionParamsFromRow(session: DeviceControlSessionRow): Record<string, unknown> {
+  const base = sessionParamsObject(session.params);
+  const snapshot = extractControlSnapshot(base);
+  const repaired = repairFromProcessStartedLog(base);
+  const cp =
+    base.controlProgram && typeof base.controlProgram === 'object' && !Array.isArray(base.controlProgram)
+      ? (base.controlProgram as Record<string, unknown>)
+      : {};
+  const dur = Number(session.duration_hours);
+  return {
+    ...base,
+    ...(repaired ?? {}),
+    ...(snapshot ?? {}),
+    controlProgram: { ...cp, ...(repaired ?? {}), ...(snapshot ?? {}) },
+    ...(Number.isFinite(dur) && dur > 0 && base.durationHours == null ? { durationHours: dur } : {}),
+  };
+}
+
 function paramNum(params: Record<string, unknown>, ...keys: string[]): number | null {
   for (const key of keys) {
     const n = Number(params[key]);
@@ -87,7 +146,7 @@ export function programmedFieldsFromSession(
   t: (k: string, r?: Record<string, string>) => string,
   formatTemp: (c: number) => string
 ): ProgrammedField[] {
-  const p = sessionParamsObject(session.params);
+  const p = effectiveSessionParamsFromRow(session);
   const pt = session.process_type;
   const fields: ProgrammedField[] = [];
 
@@ -653,7 +712,8 @@ export function processActionLogEntriesFromTracking(
 }
 
 export function processEventLogFromParams(params: Record<string, unknown>): ProcessEventRow[] {
-  const raw = params.tunnelEventLog;
+  const p = params?.process_type != null ? params : sessionParamsObject(params);
+  const raw = p.tunnelEventLog ?? (Array.isArray(params) ? params : undefined);
   if (!Array.isArray(raw)) return [];
   return raw as ProcessEventRow[];
 }
@@ -678,18 +738,33 @@ export function isAutomatedControlProcess(session: DeviceControlSessionRow | nul
   );
 }
 
+export function isGourmetTunnelAggregateDeviceId(deviceId?: string | null): boolean {
+  return String(deviceId || '').trim() === GOURMET_TUNEL_DEVICE_ID;
+}
+
 export function processAutomationPhaseLabel(
   auto: Record<string, unknown> | null | undefined,
-  t: (k: string) => string
+  t: (k: string) => string,
+  deviceId?: string | null
 ): string | null {
   if (!auto) return null;
   const phase = String(auto.phase ?? '');
   const mode = String(auto.mode ?? '');
+  const tunnel = isGourmetTunnelAggregateDeviceId(deviceId);
+
+  const phaseTunnelOrUnit: Record<string, [string, string]> = {
+    temperature: ['control_auto_phase_temperature', 'control_auto_phase_temperature_unit'],
+    humidity: ['control_auto_phase_humidity', 'control_auto_phase_humidity_unit'],
+    co2: ['control_auto_phase_co2', 'control_auto_phase_co2_unit'],
+    ethylene: ['control_auto_phase_ethylene', 'control_auto_phase_ethylene_unit'],
+  };
+
+  if (phaseTunnelOrUnit[phase]) {
+    const [tunnelKey, unitKey] = phaseTunnelOrUnit[phase];
+    return t(tunnel ? tunnelKey : unitKey);
+  }
+
   const map: Record<string, string> = {
-    temperature: 'control_auto_phase_temperature',
-    humidity: 'control_auto_phase_humidity',
-    co2: 'control_auto_phase_co2',
-    ethylene: 'control_auto_phase_ethylene',
     ventilation: 'control_auto_phase_ventilation',
     maintenance: 'control_auto_phase_maintenance',
     steady: 'control_auto_phase_steady',

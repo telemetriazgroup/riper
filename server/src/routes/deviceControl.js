@@ -12,7 +12,7 @@ import {
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
 import { initGourmetProcessOnSessionStart, shouldInitAutomatedProcessControl, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
 import { appendSessionTunnelEvent, appendTunnelEventLog, programmedSummaryFromParams } from '../tunnelEventLog.js';
-import { normalizeControlProcessParams, validateControlProcessParams } from '../controlProcessParams.js';
+import { normalizeControlProcessParams, validateControlProcessParams, effectiveSessionParams, buildControlSnapshot } from '../controlProcessParams.js';
 
 function parseIncludeArchived(req) {
   const v = req.query.includeArchived ?? req.query.include_archived;
@@ -72,7 +72,9 @@ deviceControlRouter.get('/active', async (req, res) => {
        LIMIT 1`,
       [deviceId]
     );
-    return res.json({ data: rows[0] ?? null });
+    const row = rows[0] ?? null;
+    if (row) row.params = effectiveSessionParams(row);
+    return res.json({ data: row });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });
@@ -190,6 +192,7 @@ deviceControlRouter.post('/start', async (req, res) => {
         displayLabel,
         startedBy: req.user?.email ?? req.user?.id,
         programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
+        controlSnapshot: buildControlSnapshot(params),
       }),
     };
 
@@ -218,6 +221,7 @@ deviceControlRouter.post('/start', async (req, res) => {
         console.warn('[gourmet-process] kickoff', e.message)
       );
     }
+    sessionRow.params = effectiveSessionParams(sessionRow);
     const batchId =
       params && typeof params === 'object' && params.tunnelCommandBatchId != null
         ? String(params.tunnelCommandBatchId).trim()

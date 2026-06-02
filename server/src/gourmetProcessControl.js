@@ -11,7 +11,7 @@ import {
   ETHYLENE_READINGS_NEEDED,
 } from './tunnelCommandCompliance.js';
 import { appendTunnelEventLog } from './tunnelEventLog.js';
-import { controlParamNumber, normalizeControlProcessParams, parseSessionParams } from './controlProcessParams.js';
+import { controlParamNumber, normalizeControlProcessParams, parseSessionParams, effectiveSessionParams } from './controlProcessParams.js';
 import { isAutomatedControlDeviceId, resolveProcessControlAdapter } from './processControlAdapter.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
@@ -191,11 +191,7 @@ export async function initGourmetProcessOnSessionStart(sessionRow) {
   if (!shouldInitAutomatedProcessControl(sessionRow.device_id, sessionRow.process_type, false)) {
     return sessionRow;
   }
-  const params = normalizeControlProcessParams(
-    sessionRow.process_type,
-    parseSessionParams(sessionRow),
-    Number(sessionRow.duration_hours)
-  );
+  const params = effectiveSessionParams(sessionRow);
   if (params.processAutomation) return { ...sessionRow, params };
 
   const auto = initGourmetProcessAutomation(sessionRow);
@@ -704,11 +700,12 @@ async function tickVentilation(ctx, params, auto) {
 
 function controlCtxFromSession(session, persistFn) {
   const device_id = session.device_id;
+  const params = effectiveSessionParams(session);
   return {
     device_id,
     process_type: session.process_type,
     estimated_end_at: session.estimated_end_at,
-    params: parseParams(session),
+    params,
     adapter: resolveProcessControlAdapter(device_id),
     persist: persistFn,
   };
