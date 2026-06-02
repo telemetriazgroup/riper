@@ -2,6 +2,7 @@
 
 function asObject(v) {
   if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+  if (Array.isArray(v)) return { tunnelEventLog: v };
   if (typeof v === 'string') {
     try {
       const parsed = JSON.parse(v);

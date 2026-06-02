@@ -181,14 +181,17 @@ deviceControlRouter.post('/start', async (req, res) => {
       }
     }
 
-    const startParams = appendTunnelEventLog(params, {
-      action: 'process_started',
-      source: 'control_panel',
-      processType,
-      displayLabel,
-      startedBy: req.user?.email ?? req.user?.id,
-      programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
-    });
+    const startParams = {
+      ...params,
+      tunnelEventLog: appendTunnelEventLog(params, {
+        action: 'process_started',
+        source: 'control_panel',
+        processType,
+        displayLabel,
+        startedBy: req.user?.email ?? req.user?.id,
+        programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
+      }),
+    };
 
     const { rows } = await client.query(
       `INSERT INTO app_device_control_sessions

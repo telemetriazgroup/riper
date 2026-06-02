@@ -51,6 +51,21 @@ export function filterUserFacingParams(params: Record<string, unknown>): Record<
 
 export type ProgrammedField = { label: string; value: string };
 
+function sessionParamsObject(raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+  if (Array.isArray(raw)) return { tunnelEventLog: raw };
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+      if (Array.isArray(parsed)) return { tunnelEventLog: parsed };
+    } catch {
+      /* ignore */
+    }
+  }
+  return {};
+}
+
 function paramNum(params: Record<string, unknown>, ...keys: string[]): number | null {
   for (const key of keys) {
     const n = Number(params[key]);
@@ -72,7 +87,7 @@ export function programmedFieldsFromSession(
   t: (k: string, r?: Record<string, string>) => string,
   formatTemp: (c: number) => string
 ): ProgrammedField[] {
-  const p = session.params ?? {};
+  const p = sessionParamsObject(session.params);
   const pt = session.process_type;
   const fields: ProgrammedField[] = [];
 
