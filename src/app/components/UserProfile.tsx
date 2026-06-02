@@ -102,7 +102,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onProfileUpdated }) =>
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('profile') || 'Mi Perfil'}</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t('profile') || 'Mi Perfil'}</h1>
         <p className="text-gray-500 text-sm">{t('section_profile_desc')}</p>
       </div>
 

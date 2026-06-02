@@ -100,57 +100,57 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
       {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack} title={t('back')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{resolveDeviceDisplayName(device)}</h2>
-            <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
+            <h2 className="text-2xl font-bold text-foreground">{resolveDeviceDisplayName(device)}</h2>
+            <div className="text-sm text-muted-foreground flex items-center gap-2 flex-wrap">
               <span>ID: {device.id}</span>
               <span>•</span>
               <span className={
-                device.estado_conexion === 'online' ? "text-green-600 font-bold" :
-                device.estado_conexion === 'wait' ? "text-amber-600 font-bold" : "text-gray-500"
+                device.estado_conexion === 'online' ? "text-green-600 dark:text-green-400 font-bold" :
+                device.estado_conexion === 'wait' ? "text-amber-600 dark:text-amber-400 font-bold" : "text-muted-foreground"
               }>
                 {device.estado_conexion === 'online' ? 'En línea' : device.estado_conexion === 'wait' ? 'Espera' : 'Desconectado'}
               </span>
               <span>•</span>
-              <span className={device.telemetry.power_state === 1 ? "text-green-600 font-bold" : "text-gray-500"}>
+              <span className={device.telemetry.power_state === 1 ? "text-green-600 dark:text-green-400 font-bold" : "text-muted-foreground"}>
                 {device.telemetry.power_state === 1 ? 'Equipo ON' : 'Equipo OFF'}
               </span>
             </div>
             {showOfflineBanner && (
-              <p className="mt-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-2xl">
+              <p className="mt-2 text-sm text-amber-950 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-2xl dark:text-amber-100 dark:bg-amber-950/40 dark:border-amber-800">
                 <span className="font-medium">{t('last_connection')}: </span>
                 {lastCommFormatted}
-                <span className="block mt-1 text-amber-800/95">{t('last_values_registered_hint')}</span>
+                <span className="block mt-1 text-amber-800/95 dark:text-amber-200/90">{t('last_values_registered_hint')}</span>
               </p>
             )}
           </div>
         </div>
 
         <div className="flex items-center gap-6">
-           <div className="flex gap-4 text-sm text-gray-600 hidden lg:flex bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+           <div className="flex gap-4 text-sm text-muted-foreground hidden lg:flex bg-muted/50 px-4 py-2 rounded-lg border border-border">
             <div className="flex items-center gap-1">
-               <Battery className="h-4 w-4 text-gray-400" /> 
-               <span className="font-mono">{device.operational.battery_voltage}V</span>
+               <Battery className="h-4 w-4 text-muted-foreground/70" /> 
+               <span className="font-mono text-foreground">{device.operational.battery_voltage}V</span>
             </div>
-            <div className="w-px h-4 bg-gray-200"></div>
+            <div className="w-px h-4 bg-border"></div>
             <div className="flex items-center gap-1">
-               <Thermometer className="h-4 w-4 text-gray-400" /> 
-               <span className="font-mono">{convertTemp(device.operational.ambient_air)}°{tempUnit}</span>
+               <Thermometer className="h-4 w-4 text-muted-foreground/70" /> 
+               <span className="font-mono text-foreground">{convertTemp(device.operational.ambient_air)}°{tempUnit}</span>
             </div>
           </div>
 
           <Tabs.Root value={activeView} onValueChange={(v) => setActiveView(v as any)}>
-            <Tabs.List className="flex bg-gray-100 p-1 rounded-lg">
+            <Tabs.List className="flex bg-muted p-1 rounded-lg">
               <Tabs.Trigger 
                 value="operation" 
                 className={clsx(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                  activeView === 'operation' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  activeView === 'operation' ? "bg-card text-blue-700 dark:text-blue-300 shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <LayoutDashboard className="h-4 w-4" />
@@ -160,7 +160,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                 value="analysis" 
                 className={clsx(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                  activeView === 'analysis' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  activeView === 'analysis' ? "bg-card text-blue-700 dark:text-blue-300 shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <BarChart2 className="h-4 w-4" />
@@ -170,7 +170,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                 value="log" 
                 className={clsx(
                   "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
-                  activeView === 'log' ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                  activeView === 'log' ? "bg-card text-blue-700 dark:text-blue-300 shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 <ClipboardList className="h-4 w-4" />
@@ -209,136 +209,136 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
             <TelemetryCharts deviceId={deviceId} />
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="bg-white p-6 rounded-lg border shadow-sm">
-                  <h3 className="font-semibold mb-4 text-gray-800">{t('current_process_status')}</h3>
+               <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
+                  <h3 className="font-semibold mb-4 text-foreground">{t('current_process_status')}</h3>
                   {device.process ? (
                     <div className="space-y-4">
                       <div className="flex justify-between">
-                         <span className="text-gray-500">{t('recipe')}</span>
-                         <span className="font-medium text-right">{device.process.name}</span>
+                         <span className="text-muted-foreground">{t('recipe')}</span>
+                         <span className="font-medium text-right text-foreground">{device.process.name}</span>
                       </div>
                       <div className="flex justify-between">
-                         <span className="text-gray-500">{t('phase')}</span>
-                         <span className="font-medium text-blue-600">{device.process.currentPhase}</span>
+                         <span className="text-muted-foreground">{t('phase')}</span>
+                         <span className="font-medium text-blue-600 dark:text-blue-400">{device.process.currentPhase}</span>
                       </div>
                       <div className="flex justify-between">
-                         <span className="text-gray-500">{t('start')}</span>
-                         <span className="font-medium">{new Date(device.process.startTime).toLocaleDateString()}</span>
+                         <span className="text-muted-foreground">{t('start')}</span>
+                         <span className="font-medium text-foreground">{new Date(device.process.startTime).toLocaleDateString()}</span>
                       </div>
                       <div className="flex justify-between">
-                         <span className="text-gray-500">{t('estimated_end')}</span>
-                         <span className="font-medium">{new Date(device.process.endTime).toLocaleDateString()}</span>
+                         <span className="text-muted-foreground">{t('estimated_end')}</span>
+                         <span className="font-medium text-foreground">{new Date(device.process.endTime).toLocaleDateString()}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-gray-400">
+                    <div className="text-center py-8 text-muted-foreground">
                       <Calendar className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>{t('no_active_process')}</p>
                     </div>
                   )}
                </div>
 
-               <div className="bg-white p-6 rounded-lg border shadow-sm">
-                  <h3 className="font-semibold mb-4 text-gray-800">{t('operational_data')}</h3>
+               <div className="bg-card p-6 rounded-lg border border-border shadow-sm">
+                  <h3 className="font-semibold mb-4 text-foreground">{t('operational_data')}</h3>
                   <div className="space-y-3 text-sm">
                      {consumptionKwhPeriod != null && (
-                       <div className="flex justify-between border-b border-gray-50 pb-2">
-                         <span className="text-gray-500 flex items-center gap-1">
+                       <div className="flex justify-between border-b border-border pb-2">
+                         <span className="text-muted-foreground flex items-center gap-1">
                            <Zap className="h-4 w-4" /> {t('energy_consumption_period')}
                          </span>
-                         <span className="font-mono font-medium">{consumptionKwhPeriod.toFixed(1)} kWh</span>
+                         <span className="font-mono font-medium text-foreground">{consumptionKwhPeriod.toFixed(1)} kWh</span>
                        </div>
                      )}
-                     <div className="flex justify-between border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('power_consumption')}</span>
-                       <span className="font-mono">{device.operational.power_consumption} kW</span>
+                     <div className="flex justify-between border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('power_consumption')}</span>
+                       <span className="font-mono text-foreground">{device.operational.power_consumption} kW</span>
                      </div>
-                     <div className="flex justify-between border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('total_accumulated')}</span>
-                       <span className="font-mono">{device.operational.power_kwh} kWh</span>
+                     <div className="flex justify-between border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('total_accumulated')}</span>
+                       <span className="font-mono text-foreground">{device.operational.power_kwh} kWh</span>
                      </div>
-                     <div className="flex justify-between border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('defrost_interval')}</span>
-                       <span className="font-mono">{device.operational.defrost_interval}h</span>
+                     <div className="flex justify-between border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('defrost_interval')}</span>
+                       <span className="font-mono text-foreground">{device.operational.defrost_interval}h</span>
                      </div>
                      <div className="flex justify-between pb-2">
-                       <span className="text-gray-500">{t('evaporation_coil')}</span>
-                       <span className="font-mono">{convertTemp(device.operational.evaporation_coil)}°{tempUnit}</span>
+                       <span className="text-muted-foreground">{t('evaporation_coil')}</span>
+                       <span className="font-mono text-foreground">{convertTemp(device.operational.evaporation_coil)}°{tempUnit}</span>
                      </div>
                   </div>
                </div>
 
                {device.madurador && (
-                 <div className="bg-white p-6 rounded-lg border shadow-sm md:col-span-2">
-                   <h3 className="font-semibold mb-4 text-gray-800">{t('madurador_reference_title')}</h3>
-                   <p className="text-xs text-gray-500 mb-4">
+                 <div className="bg-card p-6 rounded-lg border border-border shadow-sm md:col-span-2">
+                   <h3 className="font-semibold mb-4 text-foreground">{t('madurador_reference_title')}</h3>
+                   <p className="text-xs text-muted-foreground mb-4">
                      {device.madurador.identificador_empresa
                        ? `${t('identificador_field_short')}: ${device.madurador.identificador_empresa}`
                        : null}
                    </p>
                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_estado')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_estado')}</span>
                        <span className="font-medium text-right">{device.madurador.power_state_label}</span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_supply')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_supply')}</span>
                        <span className="font-mono">{convertTemp(device.telemetry.temp_supply_1)}°{tempUnit}</span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_return')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_return')}</span>
                        <span className="font-mono">{convertTemp(device.telemetry.return_air)}°{tempUnit}</span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_evap')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_evap')}</span>
                        <span className="font-mono">{convertTemp(device.operational.evaporation_coil)}°{tempUnit}</span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_cond')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_cond')}</span>
                        <span className="font-mono">{convertTemp(device.operational.condensation_coil)}°{tempUnit}</span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_compressor')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_compressor')}</span>
                        <span className="font-mono text-right">
                          {formatMaduradorScalar(device.madurador.compress_coil_1_display)}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_avl')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_avl')}</span>
                        <span className="font-mono text-right">
                          {formatMaduradorScalar(device.madurador.avl_display)}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_voltage')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_voltage')}</span>
                        <span className="font-mono text-right">
                          {formatMaduradorScalar(device.madurador.line_voltage_display)}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_set_co2')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_set_co2')}</span>
                        <span className="font-mono text-right">
                          {formatMaduradorScalar(device.madurador.set_point_co2_display)}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_set_hum')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_set_hum')}</span>
                        <span className="font-mono">
                          {device.madurador.humidity_set_point != null
                            ? `${device.madurador.humidity_set_point}%`
                            : '—'}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2">
-                       <span className="text-gray-500">{t('madurador_detail_capacity')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2">
+                       <span className="text-muted-foreground">{t('madurador_detail_capacity')}</span>
                        <span className="font-mono">
                          {device.madurador.capacity_load != null ? `${device.madurador.capacity_load}%` : '—'}
                        </span>
                      </div>
                      {device.madurador.fecha_inicio &&
                        !isNaN(new Date(device.madurador.fecha_inicio).getTime()) && (
-                       <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
-                         <span className="text-gray-500">{t('madurador_process_start')}</span>
+                       <div className="flex justify-between gap-2 border-b border-border pb-2 sm:col-span-2 lg:col-span-3">
+                         <span className="text-muted-foreground">{t('madurador_process_start')}</span>
                          <span className="font-mono text-right text-xs">
                            {formatDateTime(device.madurador.fecha_inicio)}
                          </span>
@@ -346,23 +346,23 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                      )}
                      {device.madurador.fecha_procesada &&
                        !isNaN(new Date(device.madurador.fecha_procesada).getTime()) && (
-                       <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
-                         <span className="text-gray-500">{t('madurador_fecha_procesada')}</span>
+                       <div className="flex justify-between gap-2 border-b border-border pb-2 sm:col-span-2 lg:col-span-3">
+                         <span className="text-muted-foreground">{t('madurador_fecha_procesada')}</span>
                          <span className="font-mono text-right text-xs">
                            {formatDateTime(device.madurador.fecha_procesada)}
                          </span>
                        </div>
                      )}
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
-                       <span className="text-gray-500">{t('madurador_last_on')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2 sm:col-span-2 lg:col-span-3">
+                       <span className="text-muted-foreground">{t('madurador_last_on')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.ultima_fecha_encendido
                            ? formatDateTime(device.madurador.ultima_fecha_encendido)
                            : '—'}
                        </span>
                      </div>
-                     <div className="flex justify-between gap-2 border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-3">
-                       <span className="text-gray-500">{t('madurador_until')}</span>
+                     <div className="flex justify-between gap-2 border-b border-border pb-2 sm:col-span-2 lg:col-span-3">
+                       <span className="text-muted-foreground">{t('madurador_until')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.hasta
                            ? formatDateTime(device.madurador.hasta)
@@ -370,7 +370,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                        </span>
                      </div>
                      <div className="flex justify-between gap-2 pb-2 sm:col-span-2 lg:col-span-3">
-                       <span className="text-gray-500">{t('madurador_last_sample')}</span>
+                       <span className="text-muted-foreground">{t('madurador_last_sample')}</span>
                        <span className="font-mono text-right text-xs">
                          {device.madurador.last_sample_fecha
                            ? formatDateTime(device.madurador.last_sample_fecha)

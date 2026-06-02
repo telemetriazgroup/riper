@@ -338,12 +338,12 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm sticky top-4 z-20 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-card p-6 rounded-xl border border-border shadow-sm sticky top-4 z-20 gap-4">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             type="button"
             onClick={onCancel}
-            className="shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2.5 text-gray-600 shadow-sm transition-colors hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+            className="shrink-0 inline-flex items-center justify-center rounded-lg border border-border bg-card p-2.5 text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
             aria-label={t('back_to_recipe_list')}
             title={t('back_to_recipe_list')}
           >
@@ -360,14 +360,14 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
             title={displayFruit}
           />
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900">
+            <h1 className="text-xl font-bold text-foreground">
               {readOnly
                 ? t('recipe_view_title')
                 : initialData && initialData.id !== 'new'
                   ? t('edit_recipe')
                   : t('new_recipe')}
             </h1>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               {t('total_duration')}: <span className="font-semibold text-blue-600">{getTotalDuration().toFixed(1)} {t('hours')}</span>
             </p>
             {readOnly && initialData?.is_system && (
@@ -415,27 +415,27 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
       </div>
 
       {/* General Info */}
-      <Card className="border-gray-200 shadow-sm">
+      <Card className="border-border shadow-sm">
         <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="col-span-full md:col-span-1">
-             <label className="block text-sm font-medium text-gray-700 mb-1">{t('protocol_name')}</label>
+             <label className="block text-sm font-medium text-foreground mb-1">{t('protocol_name')}</label>
              <input 
                type="text" 
                value={readOnly ? displayName : name}
                disabled={readOnly}
                onChange={e => setName(e.target.value)}
                placeholder={t('protocol_placeholder')}
-               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-800"
+               className="app-field disabled:opacity-60"
              />
           </div>
           <div className="col-span-full md:col-span-1">
-             <label className="block text-sm font-medium text-gray-700 mb-1">{t('product_label')}</label>
+             <label className="block text-sm font-medium text-foreground mb-1">{t('product_label')}</label>
              {readOnly ? (
                <input
                  type="text"
                  readOnly
                  value={displayFruit}
-                 className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
+                 className="app-select"
                />
              ) : (products.length > 0 || canCreateProduct) ? (
                <ProductCombobox
@@ -454,20 +454,20 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
              )}
           </div>
           <div className="col-span-full">
-             <label className="block text-sm font-medium text-gray-700 mb-1">{t('description_notes')}</label>
+             <label className="block text-sm font-medium text-foreground mb-1">{t('description_notes')}</label>
              <textarea 
                value={readOnly ? displayDescription : description}
                disabled={readOnly}
                onChange={e => setDescription(e.target.value)}
                rows={2}
                placeholder={t('description_placeholder')}
-               className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50"
+               className="app-field text-sm disabled:opacity-60"
              />
           </div>
 
-          <div className="col-span-full border-t border-gray-100 pt-4 mt-2">
-            <p className="text-sm font-medium text-gray-800 mb-1">{t('recipe_icon_section_title')}</p>
-            <p className="text-xs text-gray-500 mb-3">{t('recipe_icon_presets_hint')}</p>
+          <div className="col-span-full border-t border-border pt-4 mt-2">
+            <p className="text-sm font-medium text-foreground mb-1">{t('recipe_icon_section_title')}</p>
+            <p className="text-xs text-muted-foreground mb-3">{t('recipe_icon_presets_hint')}</p>
             <div className="flex flex-wrap gap-2 mb-4">
               {RECIPE_ICON_PRESETS.map((p) => {
                 const selected = iconKey === p.key && !(customImageUrl.trim());
@@ -485,7 +485,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                       'flex h-11 min-w-[2.75rem] items-center justify-center rounded-lg border-2 text-xl transition-colors',
                       selected
                         ? 'border-blue-500 bg-blue-50 shadow-sm'
-                        : 'border-gray-200 bg-white hover:border-gray-300',
+                        : 'border-border bg-card hover:border-muted-foreground/30',
                       readOnly && 'cursor-default opacity-80'
                     )}
                   >
@@ -494,7 +494,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                 );
               })}
             </div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('recipe_icon_custom_url')}</label>
+            <label className="block text-sm font-medium text-foreground mb-1">{t('recipe_icon_custom_url')}</label>
             <div className="flex flex-col sm:flex-row gap-2">
               <input
                 type="url"
@@ -502,7 +502,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                 disabled={readOnly}
                 onChange={(e) => setCustomImageUrl(e.target.value)}
                 placeholder={t('recipe_icon_custom_url_placeholder')}
-                className="flex-1 border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50"
+                className="app-field flex-1 text-sm disabled:opacity-60"
               />
               {!readOnly && customImageUrl.trim() && (
                 <Button type="button" variant="outline" className="shrink-0" onClick={() => setCustomImageUrl('')}>
@@ -516,7 +516,7 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
 
       {/* Sequential Phase Editor */}
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider pl-1">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider pl-1">
           {t('logical_process_sequence')}
         </div>
         
@@ -716,9 +716,9 @@ function RecipeTempInput({
 
   if (inline) {
     return (
-      <div className="flex items-center bg-white rounded border border-cyan-200 px-2 py-1">
+      <div className="flex items-center bg-background rounded border border-cyan-200 dark:border-cyan-800 px-2 py-1 text-foreground">
         {input}
-        <span className="text-xs text-gray-500 font-medium ml-1">°{tempUnit}</span>
+        <span className="text-xs text-muted-foreground font-medium ml-1">°{tempUnit}</span>
       </div>
     );
   }
@@ -731,13 +731,13 @@ function RecipeTempInput({
 }
 
 const InputGroup = ({ label, icon: Icon, unit, highlight, children }: any) => (
-  <div className={clsx("bg-gray-50 p-3 rounded-lg border", highlight ? "border-blue-200 bg-blue-50" : "border-gray-200")}>
-    <label className="text-xs text-gray-500 font-medium flex items-center gap-1 mb-1">
+  <div className={clsx("bg-muted/40 p-3 rounded-lg border", highlight ? "border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30" : "border-border")}>
+    <label className="text-xs text-muted-foreground font-medium flex items-center gap-1 mb-1">
       <Icon className="w-3 h-3" /> {label}
     </label>
-    <div className="flex items-center bg-white rounded border border-gray-200 px-2 py-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+    <div className="flex items-center bg-background rounded border border-border px-2 py-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent text-foreground">
       {children}
-      <span className="text-xs text-gray-500 font-medium ml-1 select-none">{unit}</span>
+      <span className="text-xs text-muted-foreground font-medium ml-1 select-none">{unit}</span>
     </div>
   </div>
 );

@@ -159,7 +159,7 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
         type="text"
         readOnly
         value={value}
-        className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
+        className="app-field"
       />
     );
   }
@@ -219,12 +219,12 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
               }
             }}
             placeholder={t('company_search_placeholder')}
-            className="w-full border border-gray-300 rounded-lg shadow-sm pl-3 pr-10 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="app-field pl-3 pr-10"
             autoComplete="off"
           />
           <button
             type="button"
-            className="absolute right-0 top-0 h-full px-2 text-gray-400 hover:text-gray-600"
+            className="absolute right-0 top-0 h-full px-2 text-muted-foreground hover:text-foreground"
             tabIndex={-1}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
@@ -243,10 +243,10 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
           <div
             id={listId}
             role="listbox"
-            className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+            className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
           >
             {filtered.length === 0 && !canShowCreate && (
-              <p className="px-3 py-2 text-xs text-gray-500">{t('no_company_matches')}</p>
+              <p className="px-3 py-2 text-xs text-muted-foreground">{t('no_company_matches')}</p>
             )}
             {filtered.map((row, i) => (
               <button
@@ -254,7 +254,7 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="button"
                 role="option"
                 className={clsx(
-                  'flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50',
+                  'flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60',
                   highlight === i && 'bg-blue-50'
                 )}
                 onMouseDown={(e) => e.preventDefault()}
@@ -263,7 +263,7 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
               >
                 <span className="font-medium">{row.name}</span>
                 {(row.ruc_id || row.email) && (
-                  <span className="text-[11px] text-gray-500">
+                  <span className="text-[11px] text-muted-foreground">
                     {[row.ruc_id, row.email].filter(Boolean).join(' · ')}
                   </span>
                 )}
@@ -274,7 +274,7 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="button"
                 role="option"
                 className={clsx(
-                  'flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-50',
+                  'flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40',
                   highlight === createIndex && 'bg-amber-50'
                 )}
                 onMouseDown={(e) => e.preventDefault()}
@@ -290,14 +290,14 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-white border-gray-200 sm:max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('company_quick_create_title')}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500">{t('company_quick_create_hint')}</p>
+          <p className="text-sm text-muted-foreground">{t('company_quick_create_hint')}</p>
           <div className="space-y-3 text-sm">
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-name">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-name">
                 {t('company_field_name')} <span className="text-red-600">*</span>
               </label>
               <input
@@ -305,12 +305,12 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="text"
                 value={createForm.name}
                 onChange={(e) => setCreateForm((p) => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="app-field"
                 autoFocus
               />
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-ruc">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-ruc">
                 {t('company_field_ruc')}
               </label>
               <input
@@ -318,11 +318,11 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="text"
                 value={createForm.ruc_id ?? ''}
                 onChange={(e) => setCreateForm((p) => ({ ...p, ruc_id: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                className="app-field"
               />
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-addr">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-addr">
                 {t('company_field_address')}
               </label>
               <input
@@ -330,11 +330,11 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="text"
                 value={createForm.address ?? ''}
                 onChange={(e) => setCreateForm((p) => ({ ...p, address: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                className="app-field"
               />
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-email">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-email">
                 {t('company_field_email')}
               </label>
               <input
@@ -342,11 +342,11 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="email"
                 value={createForm.email ?? ''}
                 onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                className="app-field"
               />
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-contact">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-contact">
                 {t('company_field_contact')}
               </label>
               <input
@@ -354,11 +354,11 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="text"
                 value={createForm.contact_name ?? ''}
                 onChange={(e) => setCreateForm((p) => ({ ...p, contact_name: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                className="app-field"
               />
             </div>
             <div>
-              <label className="mb-1 block font-medium text-gray-700" htmlFor="co-phone">
+              <label className="mb-1 block font-medium text-foreground" htmlFor="co-phone">
                 {t('company_field_phone')}
               </label>
               <input
@@ -366,7 +366,7 @@ export const CompanyCombobox: React.FC<CompanyComboboxProps> = ({
                 type="text"
                 value={createForm.phone ?? ''}
                 onChange={(e) => setCreateForm((p) => ({ ...p, phone: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                className="app-field"
               />
             </div>
             {err && <p className="text-xs text-red-600">{err}</p>}

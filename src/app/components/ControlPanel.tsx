@@ -110,7 +110,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
 
   return (
     <Card className="h-full">
-      <div className="border-b border-gray-100">
+      <div className="border-b border-border">
         <div className="flex overflow-x-auto no-scrollbar">
           {modes.map((m) => (
             <button
@@ -119,8 +119,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
               className={cn(
                 "flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2",
                 mode === m.id
-                  ? "border-blue-600 text-blue-600 bg-blue-50/50"
-                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/40"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
               )}
             >
               <m.icon className="h-4 w-4" />
@@ -176,8 +176,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
 };
 
 const ControlGroup = ({ title, children }: { title: string, children: React.ReactNode }) => (
-  <div className="mb-6 p-4 border border-gray-100 rounded-lg bg-gray-50/50">
-    <h4 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wider">{title}</h4>
+  <div className="mb-6 p-4 border border-border rounded-lg bg-muted/30">
+    <h4 className="text-sm font-semibold text-foreground mb-4 uppercase tracking-wider">{title}</h4>
     {children}
   </div>
 );
@@ -226,12 +226,12 @@ const RangeControl = ({
     <div
       className={cn(
         'mb-4 p-3 rounded-lg transition-colors border',
-        isChanged ? 'bg-blue-50 border-blue-200' : 'border-transparent',
+        isChanged ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800' : 'border-transparent',
         disabled && 'opacity-50 pointer-events-none'
       )}
     >
       <div className="flex justify-between mb-2 gap-2 flex-wrap items-start">
-        <Label className={cn('text-sm font-medium', isChanged ? 'text-blue-700' : 'text-gray-600')}>{label}</Label>
+        <Label className={cn('text-sm font-medium', isChanged ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground')}>{label}</Label>
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-1.5">
             <input
@@ -243,17 +243,17 @@ const RangeControl = ({
               value={displayVal}
               onChange={(e) => commitNumber(e.target.value)}
               className={cn(
-                'w-[5rem] rounded-md border border-gray-200 bg-white px-2 py-1 text-sm font-mono text-right shadow-sm',
-                isChanged ? 'border-blue-300 text-blue-800' : 'text-gray-900'
+                'w-[5rem] rounded-md border border-border bg-background px-2 py-1 text-sm font-mono text-right shadow-sm text-foreground',
+                isChanged ? 'border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200' : ''
               )}
               aria-label={label}
             />
-            <span className={cn('text-sm font-bold whitespace-nowrap', isChanged ? 'text-blue-700' : 'text-gray-900')}>
+            <span className={cn('text-sm font-bold whitespace-nowrap', isChanged ? 'text-blue-700 dark:text-blue-300' : 'text-foreground')}>
               {unit}
             </span>
           </div>
           {isChanged && originalValue !== undefined && (
-            <span className="text-xs text-blue-400 line-through decoration-blue-400/50">
+            <span className="text-xs text-blue-500 dark:text-blue-400 line-through decoration-blue-400/50">
               {decimals <= 0 ? Math.round(originalValue) : Number(originalValue.toFixed(decimals))} {unit}
             </span>
           )}
@@ -275,7 +275,7 @@ const RangeControl = ({
           disabled={disabled}
           className={cn(
             'w-full h-2 rounded-lg appearance-none cursor-pointer transition-colors',
-            isChanged ? 'bg-blue-200 accent-blue-600' : 'bg-gray-200 accent-gray-500'
+            isChanged ? 'bg-blue-200 dark:bg-blue-900/60 accent-blue-600' : 'bg-muted accent-muted-foreground'
           )}
         />
       </div>
@@ -490,8 +490,8 @@ const ManualControl = ({
     if (connectionStatus === 'offline') {
       return { 
         text: t('status_offline'), 
-        color: 'text-gray-500', 
-        bg: 'bg-gray-100', 
+        color: 'text-muted-foreground', 
+        bg: 'bg-muted', 
         icon: WifiOff,
         disabled: true
       };
@@ -499,16 +499,16 @@ const ManualControl = ({
     if (connectionStatus === 'standby') {
       return { 
         text: t('status_standby'), 
-        color: 'text-orange-600', 
-        bg: 'bg-orange-100', 
+        color: 'text-orange-600 dark:text-orange-400', 
+        bg: 'bg-orange-100 dark:bg-orange-950/50', 
         icon: Timer,
         disabled: false
       };
     }
     return { 
       text: t('status_active').toUpperCase(), 
-      color: 'text-green-600', 
-      bg: 'bg-green-100', 
+      color: 'text-green-600 dark:text-green-400', 
+      bg: 'bg-green-100 dark:bg-green-950/50', 
       icon: Zap,
       disabled: false
     };
@@ -522,21 +522,21 @@ const ManualControl = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between mb-4 bg-white p-4 rounded-lg shadow-sm border border-gray-100">
+      <div className="flex items-center justify-between mb-4 bg-card p-4 rounded-lg shadow-sm border border-border">
         <div className="flex items-center gap-3">
           <div className={cn("h-10 w-10 rounded-full flex items-center justify-center", status.bg, status.color)}>
             <status.icon className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-medium text-gray-900">{t('equipo_estado_actual')}</div>
+            <div className="font-medium text-foreground">{t('equipo_estado_actual')}</div>
             <div className={cn("text-xs font-bold", status.color)}>
               {conexionLabel} • {equipoLabel}
             </div>
-            <p className="text-xs text-gray-500 mt-1">{t('controls_available_when_on')}</p>
+            <p className="text-xs text-muted-foreground mt-1">{t('controls_available_when_on')}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm font-medium text-gray-500">
+          <span className="text-sm font-medium text-muted-foreground">
             {isPoweredOn ? t('turn_off') : t('turn_on')}
           </span>
           <Switch
@@ -545,7 +545,7 @@ const ManualControl = ({
             onCheckedChange={handlePowerToggleRequest}
             className={cn(
               'w-11 h-6 rounded-full transition-colors',
-              isPoweredOn ? 'data-[state=checked]:bg-green-500' : 'bg-gray-200'
+              isPoweredOn ? 'data-[state=checked]:bg-green-500' : 'bg-muted'
             )}
           />
         </div>
@@ -610,19 +610,19 @@ const ManualControl = ({
             step={0.1}
             decimals={1}
             />
-            <p className="text-xs text-gray-500 -mt-2 mb-2">{t('manual_temp_range_hint', tempRangeDual)}</p>
-            <label className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer mb-2">
+            <p className="text-xs text-muted-foreground -mt-2 mb-2">{t('manual_temp_range_hint', tempRangeDual)}</p>
+            <label className="flex items-start gap-2 text-xs text-foreground cursor-pointer mb-2">
               <input
                 type="checkbox"
                 checked={extendedTempRange}
                 onChange={(e) => handleExtendedTempRangeToggle(e.target.checked)}
                 disabled={controlsDisabledPanel}
-                className="mt-0.5 rounded border-gray-300 text-blue-600"
+                className="mt-0.5 rounded border-border text-blue-600"
               />
               <span>{t('manual_temp_extended_unlock', extendedRangeDual)}</span>
             </label>
             {extendedTempRange && isMadurador && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mb-3">
+              <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1.5 mb-3">
                 {t('manual_temp_extended_warning')}
               </p>
             )}
@@ -682,11 +682,11 @@ const ManualControl = ({
                 </AlertDialogDescription>
                 <div className="mt-4 space-y-2">
                     {changes.map((change, i) => (
-                    <div key={i} className="flex justify-between items-center bg-gray-50 p-2 rounded border border-gray-100">
-                        <span className="font-medium text-gray-700">{change.name}</span>
+                    <div key={i} className="flex justify-between items-center bg-muted/50 p-2 rounded border border-border">
+                        <span className="font-medium text-foreground">{change.name}</span>
                         <div className="flex items-center gap-2 text-sm">
-                        <span className="text-gray-400 line-through">{change.from}</span>
-                        <span className="text-gray-400">→</span>
+                        <span className="text-muted-foreground/70 line-through">{change.from}</span>
+                        <span className="text-muted-foreground/70">→</span>
                         <span className="font-bold text-blue-600">{change.to}</span>
                         </div>
                     </div>
@@ -755,7 +755,7 @@ const HomogenizationControl = ({
 
   return (
     <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
-      <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex gap-2">
+      <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-md text-sm text-blue-800 dark:text-blue-200 flex gap-2">
         <Thermometer className="h-5 w-5 shrink-0" />
         <p>
           {t('homogenization_control_desc', {
@@ -795,9 +795,9 @@ const HomogenizationControl = ({
         <RangeControl label={t('estimated_duration')} value={duration} unit={t('unit_hours')} min={1} max={24} onChange={setDuration} disabled={disabled} decimals={0} />
       </ControlGroup>
 
-      <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
-        <p className="text-sm text-gray-500 mb-1">{t('preview')}</p>
-        <p className="font-medium text-gray-900">
+      <div className="p-4 border border-dashed border-border rounded-lg text-center bg-muted/30">
+        <p className="text-sm text-muted-foreground mb-1">{t('preview')}</p>
+        <p className="font-medium text-foreground">
           {t('homogenization_control_preview', {
             tempFrom: convertTemp(8).toFixed(1),
             tempTo: convertTemp(temp).toFixed(1),
@@ -916,7 +916,7 @@ const VentilationControl = ({
   };
   return (
   <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
-    <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 flex gap-2">
+    <div className="bg-muted/40 p-4 rounded-md text-sm text-foreground flex gap-2">
       <Fan className="h-5 w-5 shrink-0" />
       <p>{t('ventilation_control_desc')}</p>
     </div>
@@ -960,7 +960,7 @@ const CoolingControl = ({
 
   return (
   <div className={cn("space-y-6", disabled && "opacity-50 pointer-events-none")}>
-    <div className="bg-blue-50 p-4 rounded-md text-sm text-blue-800 flex gap-2">
+    <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-md text-sm text-blue-800 dark:text-blue-200 flex gap-2">
       <Snowflake className="h-5 w-5 shrink-0" />
       <p>{t('cooling_control_desc')}</p>
     </div>

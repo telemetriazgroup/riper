@@ -35,20 +35,20 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack} title={t('back')}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-2xl font-bold text-gray-900">{resolveDeviceDisplayName(device)}</h2>
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 text-xs font-semibold px-2 py-0.5">
+              <h2 className="text-2xl font-bold text-foreground">{resolveDeviceDisplayName(device)}</h2>
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200 text-xs font-semibold px-2 py-0.5">
                 <Layers className="h-3 w-3" />
                 {language === 'es' ? 'Túnel / Madurador' : 'Tunnel / Ripener'}
               </span>
             </div>
-            <div className="text-sm text-gray-500 flex flex-wrap items-center gap-2 mt-1">
+            <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-2 mt-1">
               <span className="font-mono text-xs">{tunnel.grupo}</span>
               <span>•</span>
               <span
@@ -96,7 +96,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-lg border bg-white/80 p-4">
               <div className="text-xs text-gray-500">{t('temperature')} (T_Suministro Ø)</div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">
+              <div className="text-2xl font-bold text-foreground mt-1">
                 {tunnel.averageSupplyTemp != null
                   ? `${convertTemp(tunnel.averageSupplyTemp).toFixed(1)}°${tempUnit}`
                   : '—'}
@@ -104,7 +104,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
             </div>
             <div className="rounded-lg border bg-white/80 p-4">
               <div className="text-xs text-gray-500">{t('set_temperature')}</div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">
+              <div className="text-2xl font-bold text-foreground mt-1">
                 {convertTemp(device.telemetry.set_point).toFixed(1)}°{tempUnit}
               </div>
             </div>
@@ -112,13 +112,13 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
               <div className="text-xs text-gray-500 flex items-center gap-1">
                 <Droplets className="h-3.5 w-3.5" /> {t('humidity')}
               </div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">{device.telemetry.relative_humidity}%</div>
+              <div className="text-2xl font-bold text-foreground mt-1">{device.telemetry.relative_humidity}%</div>
             </div>
             <div className="rounded-lg border bg-white/80 p-4">
               <div className="text-xs text-gray-500 flex items-center gap-1">
                 <Wind className="h-3.5 w-3.5" /> {t('co2')}
               </div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">
+              <div className="text-2xl font-bold text-foreground mt-1">
                 {device.telemetry.co2_reading != null ? `${Number(device.telemetry.co2_reading).toFixed(2)} %` : '—'}
               </div>
             </div>
@@ -126,7 +126,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
               <div className="text-xs text-gray-500 flex items-center gap-1">
                 <Activity className="h-3.5 w-3.5" /> {t('ethylene')} (campo_1)
               </div>
-              <div className="text-2xl font-bold text-gray-900 mt-1">
+              <div className="text-2xl font-bold text-foreground mt-1">
                 {device.telemetry.ethylene != null ? `${Number(device.telemetry.ethylene).toFixed(2)}` : '—'}
               </div>
             </div>

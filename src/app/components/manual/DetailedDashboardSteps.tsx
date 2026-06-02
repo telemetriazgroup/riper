@@ -53,7 +53,7 @@ export const DashboardStep2: React.FC = () => {
         <div className="max-w-6xl mx-auto space-y-6">
           <div className="opacity-20">
             <div className="rounded-lg p-6" style={{ backgroundColor: 'rgb(255, 255, 255)' }}>
-              <h1 className="text-2xl font-bold">{t('dashboard')}</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{t('dashboard')}</h1>
             </div>
           </div>
 

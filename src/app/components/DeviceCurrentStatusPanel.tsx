@@ -85,16 +85,16 @@ function StatusTile({
   return (
     <div
       className={cn(
-        'flex gap-3 rounded-xl border border-gray-200 bg-white/90 p-3 shadow-sm transition-shadow hover:shadow',
+        'flex gap-3 rounded-xl border border-border bg-card/90 p-3 shadow-sm transition-shadow hover:shadow',
         className
       )}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
         <Icon className="h-5 w-5" strokeWidth={2} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 leading-tight">{label}</p>
-        <p className={cn('mt-0.5 font-mono text-sm font-bold text-slate-900 break-words', valueClass)}>{value}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">{label}</p>
+        <p className={cn('mt-0.5 font-mono text-sm font-bold text-foreground break-words', valueClass)}>{value}</p>
       </div>
     </div>
   );
@@ -186,19 +186,19 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   }, [compTemp, compDisplay, formatTemp]);
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 sm:p-5 shadow-sm">
+    <div className="rounded-2xl border border-border bg-gradient-to-b from-muted/40 to-card p-4 sm:p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <h3 className="text-lg font-bold text-slate-900">{t('status_current_title')}</h3>
+          <h3 className="text-lg font-bold text-foreground">{t('status_current_title')}</h3>
           {lastSampleText && (
-            <span className="text-sm font-normal text-slate-500 tabular-nums">
-              <span className="text-slate-400 font-medium">{t('status_last_data_time')}</span>{' '}
+            <span className="text-sm font-normal text-muted-foreground tabular-nums">
+              <span className="text-muted-foreground/80 font-medium">{t('status_last_data_time')}</span>{' '}
               {lastSampleText}
             </span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{t('temp_unit_hint')}</span>
+          <span className="text-xs text-muted-foreground">{t('temp_unit_hint')}</span>
           <Button
             type="button"
             variant="outline"
@@ -223,7 +223,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
           type="button"
           variant="ghost"
           size="sm"
-          className="gap-1 text-slate-600"
+          className="gap-1 text-muted-foreground hover:text-foreground"
           onClick={() => setOpen((v) => !v)}
         >
           {open ? t('status_show_less') : t('status_show_more')}
@@ -232,7 +232,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
       </div>
 
       {open && (
-        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 border-t border-slate-200 pt-4 animate-in slide-in-from-top-2 duration-200">
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 border-t border-border pt-4 animate-in slide-in-from-top-2 duration-200">
           <StatusTile
             icon={Snowflake}
             label={t('status_evap')}

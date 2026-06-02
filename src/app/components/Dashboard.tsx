@@ -282,7 +282,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h2 className="text-lg font-semibold text-gray-800 hidden sm:block">{t('dashboard')}</h2>
+        <h2 className="text-lg font-semibold text-foreground hidden sm:block">{t('dashboard')}</h2>
         <Button
           variant="outline"
           size="sm"
@@ -328,21 +328,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
       <div className="space-y-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-gray-800">{t('fleet_status')}</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <h2 className="text-lg font-semibold text-foreground">{t('fleet_status')}</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
               {deviceSearch.trim()
                 ? `${filteredDevices.length} / ${devices.length}`
                 : t('of_total', { total: String(devices.length) })}
             </p>
           </div>
           <div className="relative w-full lg:max-w-md">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
               type="search"
               value={deviceSearch}
               onChange={(e) => setDeviceSearch(e.target.value)}
               placeholder={t('search_placeholder')}
-              className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               autoComplete="off"
               aria-label={t('search_placeholder')}
             />
@@ -350,7 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         </div>
 
         {filteredDevices.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 py-16 text-center text-sm text-gray-500">
+          <div className="rounded-xl border border-dashed border-border bg-muted/30 py-16 text-center text-sm text-muted-foreground">
             {deviceSearch.trim()
               ? t('language') === 'es'
                 ? 'No hay dispositivos que coincidan con la búsqueda.'
@@ -385,11 +385,11 @@ const SummaryCard = ({ title, value, icon: Icon, color, subtext }: any) => (
     <CardContent className="p-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <h3 className="text-2xl font-bold mt-1">{value}</h3>
-          <p className="text-xs text-gray-400 mt-1">{subtext}</p>
+          <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <h3 className="text-2xl font-bold mt-1 text-foreground">{value}</h3>
+          <p className="text-xs text-muted-foreground mt-1">{subtext}</p>
         </div>
-        <div className={`p-3 rounded-full bg-gray-50 ${color}`}>
+        <div className={`p-3 rounded-full bg-muted ${color}`}>
           <Icon className="h-6 w-6" />
         </div>
       </div>

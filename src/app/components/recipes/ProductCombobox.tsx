@@ -140,7 +140,7 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
         type="text"
         readOnly
         value={selectedLabel}
-        className="w-full border-gray-300 rounded-lg shadow-sm bg-gray-50 text-gray-800 px-3 py-2"
+        className="app-field"
       />
     );
   }
@@ -200,12 +200,12 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
               }
             }}
             placeholder={t('product_search_placeholder')}
-            className="w-full border border-gray-300 rounded-lg shadow-sm pl-3 pr-10 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+            className="app-field pl-3 pr-10"
             autoComplete="off"
           />
           <button
             type="button"
-            className="absolute right-0 top-0 h-full px-2 text-gray-400 hover:text-gray-600"
+            className="absolute right-0 top-0 h-full px-2 text-muted-foreground hover:text-foreground"
             tabIndex={-1}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
@@ -226,10 +226,10 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
           <div
             id={listId}
             role="listbox"
-            className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+            className="absolute z-40 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-border bg-popover py-1 shadow-lg"
           >
             {filtered.length === 0 && !canShowCreate && (
-              <p className="px-3 py-2 text-xs text-gray-500">{t('no_product_matches')}</p>
+              <p className="px-3 py-2 text-xs text-muted-foreground">{t('no_product_matches')}</p>
             )}
             {filtered.map((row, i) => (
               <button
@@ -237,8 +237,8 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
                 type="button"
                 role="option"
                 className={clsx(
-                  'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-800 hover:bg-gray-50',
-                  highlight === i && 'bg-blue-50'
+                  'flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-foreground hover:bg-muted/60',
+                  highlight === i && 'bg-blue-50 dark:bg-blue-950/50'
                 )}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(row.name)}
@@ -252,8 +252,8 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
                 type="button"
                 role="option"
                 className={clsx(
-                  'flex w-full items-center gap-2 border-t border-gray-100 px-3 py-2 text-left text-sm text-amber-800 hover:bg-amber-50',
-                  highlight === createIndex && 'bg-amber-50'
+                  'flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/40',
+                  highlight === createIndex && 'bg-amber-50 dark:bg-amber-950/40'
                 )}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={openCreate}
@@ -268,13 +268,13 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
       </div>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="bg-white border-gray-200 sm:max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t('products_add')}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500">{t('product_create_in_recipe_hint')}</p>
+          <p className="text-sm text-muted-foreground">{t('product_create_in_recipe_hint')}</p>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="new-prod-name">
+            <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-prod-name">
               {t('products_name')}
             </label>
             <input
@@ -285,7 +285,7 @@ export const ProductCombobox: React.FC<ProductComboboxProps> = ({
                 setCreateName(e.target.value);
                 setErr('');
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="app-field"
               autoFocus
             />
             {err && <p className="mt-1 text-xs text-red-600">{err}</p>}

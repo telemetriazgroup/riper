@@ -365,7 +365,7 @@ export const RecipeList = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('recipe_library')}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{t('recipe_library')}</h1>
           <p className="text-gray-500 text-sm">{t('recipe_library_desc')}</p>
         </div>
         {canEditRecipes && (

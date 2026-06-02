@@ -159,8 +159,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const isManualFleetProcess = isManualProcesoLabel(device.procesoApi);
 
   const getStatusColor = () => {
-    if (connectionStatus === 'offline') return 'border-l-4 border-l-gray-400 bg-gray-50';
-    if (connectionStatus === 'standby') return 'border-l-4 border-l-orange-400 bg-orange-50/30';
+    if (connectionStatus === 'offline') return 'border-l-4 border-l-gray-400 bg-gray-50 dark:bg-muted/40';
+    if (connectionStatus === 'standby') return 'border-l-4 border-l-orange-400 bg-orange-50/30 dark:bg-orange-950/25';
     
     // Online
     if (isFleetAlarm) return 'border-l-4 border-l-red-500';
@@ -206,8 +206,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const renderFleetProcessStrip = (variant: 'online' | 'offline') => {
     const wrap =
       variant === 'online'
-        ? 'col-span-2 mt-2 pt-2 border-t border-gray-100'
-        : 'mt-3 pt-3 border-t border-gray-100';
+        ? 'col-span-2 mt-2 pt-2 border-t border-border'
+        : 'mt-3 pt-3 border-t border-border';
 
     if (!hasTrackingProcess && !panelActiveSession && !device.process) return null;
 
@@ -342,18 +342,18 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     {getFleetProcesoMaduradorLabel(device.procesoApi, t)}
                   </span>
                   {!isManualFleetProcess && (
-                    <span className="text-xs text-gray-500 flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
                       <Clock className="h-3 w-3" /> {device.process.timeLeft ?? '—'}
                     </span>
                   )}
                 </div>
                 {isManualFleetProcess ? (
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[10px] text-muted-foreground">
                     {t('last_data')}: {isDateValid ? formatDateTime(lastSeenDate) : '—'}
                   </div>
                 ) : (
                   <>
-                    <div className="text-[10px] text-gray-500 space-y-0.5 mb-1">
+                    <div className="text-[10px] text-muted-foreground space-y-0.5 mb-1">
                       <div>
                         {t('start')}: {formatDateTime(device.process.startTime)}
                       </div>
@@ -393,7 +393,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="w-full text-sm font-bold text-gray-800 border-b-2 border-blue-500 focus:outline-none bg-transparent px-1 py-0.5"
+                className="w-full text-sm font-bold text-card-foreground border-b-2 border-blue-500 focus:outline-none bg-transparent px-1 py-0.5"
                 placeholder={t('device_name_placeholder')}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => {
@@ -410,7 +410,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
           ) : (
             <div className="group flex items-center gap-2 flex-wrap">
-              <CardTitle className="text-lg font-bold text-gray-800 truncate">{displayName}</CardTitle>
+              <CardTitle className="text-lg font-bold text-card-foreground truncate">{displayName}</CardTitle>
               {device.tunnel && (
                 <span className="inline-flex items-center gap-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold px-1.5 py-0.5 shrink-0">
                   <Layers className="h-3 w-3" />
@@ -424,7 +424,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                     setNewName(displayName);
                     setIsEditing(true);
                   }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-600"
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
                   title={t('rename_device')}
                 >
                   <Edit2 className="w-3 h-3" />
@@ -432,9 +432,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               )}
             </div>
           )}
-          <div className="text-xs text-gray-500 font-mono mt-1 flex items-center gap-2">
+          <div className="text-xs text-muted-foreground font-mono mt-1 flex items-center gap-2">
             <span>{device.id}</span>
-            <span className="text-[10px] text-gray-400">• {formatLastSeen()}</span>
+            <span className="text-[10px] text-muted-foreground/70">• {formatLastSeen()}</span>
           </div>
         </div>
         <div className="flex-shrink-0">{getStatusBadge()}</div>
@@ -456,10 +456,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                  <div className="flex items-center gap-2">
                    <Thermometer className="h-4 w-4 text-red-500" />
                    <div>
-                     <div className="text-xs text-gray-500">{t('temperature')}</div>
-                     <div className="font-bold text-gray-900">
+                     <div className="text-xs text-muted-foreground">{t('temperature')}</div>
+                     <div className="font-bold text-card-foreground">
                        {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
-                       <span className="text-gray-400 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
+                       <span className="text-muted-foreground/70 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
                      </div>
                    </div>
                  </div>
@@ -470,8 +470,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                      <Droplets className="h-4 w-4 text-blue-500" />
                    )}
                    <div>
-                     <div className="text-xs text-gray-500">{isTkCard ? t('oxygen') : t('humidity')}</div>
-                     <div className="font-bold text-gray-900">
+                     <div className="text-xs text-muted-foreground">{isTkCard ? t('oxygen') : t('humidity')}</div>
+                     <div className="font-bold text-card-foreground">
                        {isTkCard
                          ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
                            ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
@@ -485,15 +485,15 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                  <div className="flex items-center gap-2">
                    <Activity className="h-4 w-4 text-green-500" />
                    <div>
-                     <div className="text-xs text-gray-500">{t('ethylene')}</div>
-                     <div className="font-bold text-gray-900">{device.telemetry.ethylene ?? '-'} PPM</div>
+                     <div className="text-xs text-muted-foreground">{t('ethylene')}</div>
+                     <div className="font-bold text-card-foreground">{device.telemetry.ethylene ?? '-'} PPM</div>
                    </div>
                  </div>
                  <div className="flex items-center gap-2">
-                   <Wind className="h-4 w-4 text-gray-500" />
+                   <Wind className="h-4 w-4 text-muted-foreground" />
                    <div>
-                     <div className="text-xs text-gray-500">{t('co2')}</div>
-                     <div className="font-bold text-gray-900">{device.telemetry.co2_reading ?? '-'} %</div>
+                     <div className="text-xs text-muted-foreground">{t('co2')}</div>
+                     <div className="font-bold text-card-foreground">{device.telemetry.co2_reading ?? '-'} %</div>
                    </div>
                  </div>
                </div>
@@ -506,8 +506,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               <div className="flex items-center gap-2">
                 <Thermometer className="h-4 w-4 text-red-500" />
                 <div>
-                  <div className="text-xs text-gray-500">{t('temperature')}</div>
-                  <div className="font-bold text-gray-900">
+                  <div className="text-xs text-muted-foreground">{t('temperature')}</div>
+                  <div className="font-bold text-card-foreground">
                     {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
                     <span className="text-gray-400 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
                   </div>
@@ -521,8 +521,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <Droplets className="h-4 w-4 text-blue-500" />
                 )}
                 <div>
-                  <div className="text-xs text-gray-500">{isTkCard ? t('oxygen') : t('humidity')}</div>
-                  <div className="font-bold text-gray-900">
+                  <div className="text-xs text-muted-foreground">{isTkCard ? t('oxygen') : t('humidity')}</div>
+                  <div className="font-bold text-card-foreground">
                     {isTkCard
                       ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
                         ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
@@ -537,16 +537,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4 text-green-500" />
                 <div>
-                  <div className="text-xs text-gray-500">{t('ethylene')}</div>
-                  <div className="font-bold text-gray-900">{device.telemetry.ethylene ?? '-'} PPM</div>
+                  <div className="text-xs text-muted-foreground">{t('ethylene')}</div>
+                  <div className="font-bold text-card-foreground">{device.telemetry.ethylene ?? '-'} PPM</div>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Wind className="h-4 w-4 text-gray-500" />
+                <Wind className="h-4 w-4 text-muted-foreground" />
                 <div>
-                  <div className="text-xs text-gray-500">{t('co2')}</div>
-                  <div className="font-bold text-gray-900">{device.telemetry.co2_reading ?? '-'} %</div>
+                  <div className="text-xs text-muted-foreground">{t('co2')}</div>
+                  <div className="font-bold text-card-foreground">{device.telemetry.co2_reading ?? '-'} %</div>
                 </div>
               </div>
             </div>

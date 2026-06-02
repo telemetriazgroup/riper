@@ -152,7 +152,7 @@ export const DeviceControlAdmin: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20 text-gray-500 gap-2">
+      <div className="flex items-center justify-center py-20 text-muted-foreground gap-2">
         <Loader2 className="h-5 w-5 animate-spin" />
         {t('loading') || '…'}
       </div>
@@ -161,7 +161,7 @@ export const DeviceControlAdmin: React.FC = () => {
 
   if (isError) {
     return (
-      <div className="p-8 text-center text-red-600 max-w-lg mx-auto">
+      <div className="p-8 text-center text-red-600 dark:text-red-400 max-w-lg mx-auto">
         <p className="font-medium">{t('control_sessions_load_error') || 'No se pudo cargar el listado.'}</p>
         <p className="text-sm text-muted-foreground mt-2">
           {t('control_sessions_load_error_hint') || 'Compruebe la API (Ripener) y que haya sesión iniciada.'}
@@ -177,20 +177,20 @@ export const DeviceControlAdmin: React.FC = () => {
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Activity className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Activity className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             {t('control_sessions_page_title') || 'Control de dispositivos — Procesos confirmados'}
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {t('control_sessions_subtitle')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {isSuperAdmin && (
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer whitespace-nowrap">
+            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer whitespace-nowrap">
               <input
                 type="checkbox"
-                className="rounded border-gray-300"
+                className="rounded border-border"
                 checked={showArchivedSessions}
                 onChange={(e) => setShowArchivedSessions(e.target.checked)}
               />
@@ -208,10 +208,10 @@ export const DeviceControlAdmin: React.FC = () => {
         {t('control_sessions_hint_fleet') || 'Abra un dispositivo desde el panel principal para iniciar un proceso; los confirmados aparecen aquí.'}
       </p>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white shadow-sm">
-        <table className="w-full text-sm text-left min-w-[1100px]">
+      <div className="overflow-x-auto border border-border rounded-xl bg-card shadow-sm">
+        <table className="w-full text-sm text-left min-w-[1100px] text-foreground">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/80">
+            <tr className="border-b border-border bg-muted/60">
               <th className="p-3 font-semibold">IMEI / {t('device')}</th>
               <th className="p-3 font-semibold">{t('process') || 'Proceso'}</th>
               <th className="p-3 font-semibold">{t('status') || 'Estado'}</th>
@@ -232,21 +232,21 @@ export const DeviceControlAdmin: React.FC = () => {
                 <tr
                   key={r.id}
                   className={cn(
-                    'border-b border-gray-100 hover:bg-gray-50/50',
-                    isArchivedRow && 'bg-slate-50/80 border-l-4 border-l-amber-400'
+                    'border-b border-border hover:bg-muted/40',
+                    isArchivedRow && 'bg-muted/30 border-l-4 border-l-amber-400 dark:border-l-amber-500'
                   )}
                 >
                   <td className="p-3 font-mono text-xs">{r.device_id}</td>
                   <td className="p-3">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-gray-900">{r.display_label || r.process_type}</span>
+                      <span className="font-medium text-foreground">{r.display_label || r.process_type}</span>
                       {isArchivedRow && (
-                        <span className="text-[10px] font-bold uppercase px-1 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">
+                        <span className="text-[10px] font-bold uppercase px-1 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 dark:bg-amber-950 dark:text-amber-100 dark:border-amber-800">
                           {t('archived_badge')}
                         </span>
                       )}
                     </span>
-                    <div className="text-xs text-gray-500 mt-0.5 line-clamp-2 max-w-md">
+                    <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 max-w-md">
                       {Object.entries((r.params && typeof r.params === 'object' ? r.params : {}) as Record<string, unknown>)
                         .slice(0, 3)
                         .map(([k, v]) => `${k}: ${String(v)}`)
@@ -257,9 +257,9 @@ export const DeviceControlAdmin: React.FC = () => {
                     <span
                       className={cn(
                         'inline-flex px-2 py-0.5 rounded text-xs font-medium',
-                        r.status === 'active' && 'bg-green-100 text-green-800',
-                        r.status === 'cancelled' && 'bg-amber-100 text-amber-800',
-                        r.status === 'completed' && 'bg-slate-100 text-slate-700'
+                        r.status === 'active' && 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+                        r.status === 'cancelled' && 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+                        r.status === 'completed' && 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
                       )}
                     >
                       {STATUS_ES[r.status] || r.status}
@@ -275,24 +275,23 @@ export const DeviceControlAdmin: React.FC = () => {
                   <td className="p-3 text-xs align-top">
                     {r.status === 'cancelled' && r.cancelled_at ? (
                       <div>
-                        <div className="text-gray-900">
+                        <div className="text-foreground">
                           {r.cancelled_by_name || r.cancelled_by_email || '—'}
                         </div>
-                        <div className="text-gray-500 mt-0.5">{formatDateTime(r.cancelled_at)}</div>
+                        <div className="text-muted-foreground mt-0.5">{formatDateTime(r.cancelled_at)}</div>
                       </div>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-muted-foreground/60">—</span>
                     )}
                   </td>
                   {role !== 'viewer' && (
-                    <td className="p-3 text-xs text-gray-600">{r.user_name || r.user_email || '—'}</td>
+                    <td className="p-3 text-xs text-muted-foreground">{r.user_name || r.user_email || '—'}</td>
                   )}
                   <td className="p-3 text-right space-x-1">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      className="text-slate-700"
                       onClick={() => setDetailRow(r)}
                       title={t('control_session_view_detail')}
                     >
@@ -305,7 +304,7 @@ export const DeviceControlAdmin: React.FC = () => {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="text-blue-600"
+                          className="text-blue-600 dark:text-blue-400"
                           disabled={busy === r.id}
                           onClick={() => openEdit(r)}
                         >
@@ -316,7 +315,7 @@ export const DeviceControlAdmin: React.FC = () => {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="text-red-600"
+                          className="text-red-600 dark:text-red-400"
                           disabled={busy === r.id}
                           onClick={() => onCancel(r)}
                         >
@@ -330,7 +329,7 @@ export const DeviceControlAdmin: React.FC = () => {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="text-red-700 border-red-200"
+                        className="text-red-700 border-red-200 dark:text-red-400 dark:border-red-900"
                         disabled={busy === r.id}
                         onClick={() => onArchiveRecord(r)}
                       >
@@ -343,7 +342,7 @@ export const DeviceControlAdmin: React.FC = () => {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="text-emerald-800 border-emerald-200"
+                        className="text-emerald-800 border-emerald-200 dark:text-emerald-300 dark:border-emerald-800"
                         disabled={busy === r.id}
                         onClick={() => onRestoreArchived(r)}
                       >
@@ -362,7 +361,7 @@ export const DeviceControlAdmin: React.FC = () => {
           </tbody>
         </table>
         {rows.length === 0 && (
-          <div className="p-8 text-center text-gray-500">{t('no_data') || 'Sin registros'}</div>
+          <div className="p-8 text-center text-muted-foreground">{t('no_data') || 'Sin registros'}</div>
         )}
       </div>
 
@@ -379,7 +378,7 @@ export const DeviceControlAdmin: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">{t('process') || 'Nombre'}</label>
                 <input
-                  className="w-full border rounded-md px-2 py-1.5 text-sm mt-1"
+                  className="w-full border border-border rounded-md px-2 py-1.5 text-sm mt-1 bg-background text-foreground"
                   value={editLabel}
                   onChange={(e) => setEditLabel(e.target.value)}
                 />
@@ -392,7 +391,7 @@ export const DeviceControlAdmin: React.FC = () => {
                   type="number"
                   min={0.01}
                   step={0.01}
-                  className="w-full border rounded-md px-2 py-1.5 text-sm mt-1"
+                  className="w-full border border-border rounded-md px-2 py-1.5 text-sm mt-1 bg-background text-foreground"
                   value={editDuration}
                   onChange={(e) => setEditDuration(e.target.value)}
                 />
@@ -401,7 +400,7 @@ export const DeviceControlAdmin: React.FC = () => {
               <div>
                 <label className="text-xs text-muted-foreground">{t('control_process_params') || 'Parámetros (JSON)'}</label>
                 <textarea
-                  className="w-full min-h-[120px] font-mono text-xs border rounded-md p-2 mt-1"
+                  className="w-full min-h-[120px] font-mono text-xs border border-border rounded-md p-2 mt-1 bg-background text-foreground"
                   value={editParamsText}
                   onChange={(e) => setEditParamsText(e.target.value)}
                 />
@@ -425,55 +424,55 @@ export const DeviceControlAdmin: React.FC = () => {
             <DialogTitle>{t('control_session_detail_title')}</DialogTitle>
           </DialogHeader>
           {detailRow && (
-            <div className="space-y-3 text-sm text-gray-800">
+            <div className="space-y-3 text-sm text-foreground">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">IMEI</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase">IMEI</p>
                 <p className="font-mono text-xs break-all">{detailRow.device_id}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <p className="text-xs font-semibold text-gray-500">{t('process')}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{t('process')}</p>
                   <p>{detailRow.display_label || detailRow.process_type}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-gray-500">{t('status')}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{t('status')}</p>
                   <p>{STATUS_ES[detailRow.status] || detailRow.status}</p>
                 </div>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500">{t('control_session_detail_started')}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{t('control_session_detail_started')}</p>
                 <p className="font-mono text-xs">{formatDateTime(detailRow.started_at)}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500">{t('control_process_estimated_end')}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{t('control_process_estimated_end')}</p>
                 <p className="font-mono text-xs">{formatDateTime(detailRow.estimated_end_at)}</p>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500">{t('control_session_detail_duration')}</p>
+                <p className="text-xs font-semibold text-muted-foreground">{t('control_session_detail_duration')}</p>
                 <p>{String(detailRow.duration_hours)}</p>
               </div>
               {detailRow.status === 'cancelled' && detailRow.cancelled_at && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950">
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-950 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-100">
                   <p className="text-xs font-semibold uppercase mb-1">{t('report_cancel_section')}</p>
                   <p>
-                    <span className="text-amber-900/85">{t('report_cancel_by')}: </span>
+                    <span className="text-amber-900/85 dark:text-amber-200/85">{t('report_cancel_by')}: </span>
                     {detailRow.cancelled_by_name || detailRow.cancelled_by_email || '—'}
                   </p>
                   <p className="mt-1">
-                    <span className="text-amber-900/85">{t('report_cancel_at')}: </span>
+                    <span className="text-amber-900/85 dark:text-amber-200/85">{t('report_cancel_at')}: </span>
                     {formatDateTime(detailRow.cancelled_at)}
                   </p>
                 </div>
               )}
               <div>
-                <p className="text-xs font-semibold text-gray-500 mb-1">{t('control_process_params')}</p>
-                <pre className="text-xs bg-slate-50 border rounded-md p-2 overflow-x-auto max-h-52">
+                <p className="text-xs font-semibold text-muted-foreground mb-1">{t('control_process_params')}</p>
+                <pre className="text-xs bg-muted border border-border rounded-md p-2 overflow-x-auto max-h-52 text-foreground">
                   {paramsToString((detailRow.params || {}) as Record<string, unknown>)}
                 </pre>
               </div>
               {role !== 'viewer' && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-500">{t('user')}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{t('user')}</p>
                   <p>{detailRow.user_name || detailRow.user_email || '—'}</p>
                 </div>
               )}

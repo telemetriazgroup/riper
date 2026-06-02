@@ -44,10 +44,10 @@ function TramosTable({
   if (!safe.length) return null;
   return (
     <div className="mt-4">
-      <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2">{title}</h4>
-      <div className="border rounded-md overflow-x-auto max-h-44 overflow-y-auto text-xs">
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{title}</h4>
+      <div className="border border-border rounded-md overflow-x-auto max-h-44 overflow-y-auto text-xs text-foreground">
         <table className="w-full">
-          <thead className="bg-gray-50 sticky top-0">
+          <thead className="bg-muted/60 sticky top-0">
             <tr>
               <th className="text-left p-2">{t('tramo_col_value')}</th>
               <th className="text-left p-2">{t('tramo_col_from')}</th>
@@ -57,7 +57,7 @@ function TramosTable({
           </thead>
           <tbody>
             {safe.map((r, i) => (
-              <tr key={i} className="border-t border-gray-100">
+              <tr key={i} className="border-t border-border">
                 <td className="p-2 font-mono">{r.valor ?? '—'}</td>
                 <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.desde)}</td>
                 <td className="p-2 font-mono whitespace-nowrap">{fmtDate(r.hasta)}</td>
@@ -92,7 +92,7 @@ function formatUltimaAlarmas(entries: unknown, fmtDate: (iso: string | undefined
       }
     }
     return (
-      <li key={i} className="bg-gray-50 p-2 rounded text-xs font-mono">
+      <li key={i} className="bg-muted/50 p-2 rounded text-xs font-mono text-foreground">
         {parts.join(' · ')}
       </li>
     );
@@ -130,33 +130,33 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
   const cc = s.compressCoilHealth;
 
   return (
-    <div className="bg-white p-6 rounded-lg border shadow-sm md:col-span-2">
-      <h3 className="font-semibold mb-4 text-gray-800">{t('operativo_summary_title')}</h3>
+    <div className="bg-card p-6 rounded-lg border border-border shadow-sm md:col-span-2">
+      <h3 className="font-semibold mb-4 text-foreground">{t('operativo_summary_title')}</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-        <div className="sm:col-span-2 lg:col-span-3 border-b border-gray-100 pb-3 mb-1">
-          <span className="text-gray-500 block text-xs uppercase tracking-wide">{t('operativo_vent_mode')}</span>
-          <p className="font-medium text-gray-900 mt-0.5">
+        <div className="sm:col-span-2 lg:col-span-3 border-b border-border pb-3 mb-1">
+          <span className="text-muted-foreground block text-xs uppercase tracking-wide">{t('operativo_vent_mode')}</span>
+          <p className="font-medium text-foreground mt-0.5">
             {ventModeLabel(s.modoVentilacion, t)}
             {s.modoVentilacion != null ? (
-              <span className="text-gray-400 font-normal text-xs ml-2">({t('operativo_code')} {s.modoVentilacion})</span>
+              <span className="text-muted-foreground font-normal text-xs ml-2">({t('operativo_code')} {s.modoVentilacion})</span>
             ) : null}
           </p>
         </div>
-        <div className="border-b border-gray-50 pb-2">
-          <span className="text-gray-500 text-xs">{t('madurador_last_on')}</span>
-          <p className="font-mono text-xs mt-0.5">{fmtDate(ultimaFechaEncendido ?? undefined)}</p>
+        <div className="border-b border-border pb-2">
+          <span className="text-muted-foreground text-xs">{t('madurador_last_on')}</span>
+          <p className="font-mono text-xs mt-0.5 text-foreground">{fmtDate(ultimaFechaEncendido ?? undefined)}</p>
         </div>
-        <div className="border-b border-gray-50 pb-2">
-          <span className="text-gray-500 text-xs">{t('madurador_last_off')}</span>
-          <p className="font-mono text-xs mt-0.5">{fmtDate(s.ultima_fecha_apagado ?? undefined)}</p>
+        <div className="border-b border-border pb-2">
+          <span className="text-muted-foreground text-xs">{t('madurador_last_off')}</span>
+          <p className="font-mono text-xs mt-0.5 text-foreground">{fmtDate(s.ultima_fecha_apagado ?? undefined)}</p>
         </div>
         {cc && (
-          <div className="border-b border-gray-50 pb-2 sm:col-span-2 lg:col-span-1">
-            <span className="text-gray-500 text-xs">{t('operativo_compressor_health')}</span>
-            <p className="font-mono text-xs mt-0.5">
+          <div className="border-b border-border pb-2 sm:col-span-2 lg:col-span-1">
+            <span className="text-muted-foreground text-xs">{t('operativo_compressor_health')}</span>
+            <p className="font-mono text-xs mt-0.5 text-foreground">
               <span className="font-semibold capitalize">{String(cc.estado ?? '—')}</span>
               {cc.valor_actual != null ? (
-                <span className="text-gray-600"> · {String(cc.valor_actual)} °C</span>
+                <span className="text-muted-foreground"> · {String(cc.valor_actual)} °C</span>
               ) : null}
             </p>
           </div>
@@ -164,21 +164,21 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
       </div>
 
       {alarmas ? (
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <h4 className="text-xs font-semibold text-gray-600 uppercase mb-2">{t('operativo_alarms')}</h4>
-          <p className="text-xs text-gray-600 mb-2">
+        <div className="mt-4 border-t border-border pt-4">
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">{t('operativo_alarms')}</h4>
+          <p className="text-xs text-muted-foreground mb-2">
             {t('operativo_alarm_api_number')}{' '}
-            <span className="font-mono">{alarmas.numero_alarma ?? '—'}</span>
+            <span className="font-mono text-foreground">{alarmas.numero_alarma ?? '—'}</span>
           </p>
-          <p className="text-xs font-medium text-red-800 mb-1">
+          <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">
             {t('operativo_alarms_active')} {activasCount}
           </p>
           {activasCount > 0 ? (
-            <pre className="text-xs bg-red-50/80 border border-red-100 p-2 rounded overflow-x-auto max-h-28 mb-3">
+            <pre className="text-xs bg-red-50/80 dark:bg-red-950/40 border border-red-100 dark:border-red-900 text-foreground p-2 rounded overflow-x-auto max-h-28 mb-3">
               {JSON.stringify(alarmas.activas, null, 2)}
             </pre>
           ) : null}
-          <p className="text-xs font-medium text-gray-800 mb-1">{t('operativo_last_alarms')}</p>
+          <p className="text-xs font-medium text-foreground mb-1">{t('operativo_last_alarms')}</p>
           <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
             {formatUltimaAlarmas(alarmas.ultima_alarmas, fmtDate)}
           </ul>

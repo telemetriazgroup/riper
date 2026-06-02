@@ -10,13 +10,13 @@ import { toast } from 'sonner';
 
 function ParamsList({ params }: { params: Record<string, unknown> }) {
   const entries = Object.entries(params).filter(([k]) => k !== 'name' && k !== 'tempUnit');
-  if (entries.length === 0) return <p className="text-sm text-gray-500">—</p>;
+  if (entries.length === 0) return <p className="text-sm text-muted-foreground">—</p>;
   return (
     <ul className="text-sm space-y-1 max-h-40 overflow-y-auto">
       {entries.map(([k, v]) => (
-        <li key={k} className="flex justify-between gap-2 border-b border-gray-50 pb-1">
-          <span className="text-gray-500">{k}</span>
-          <span className="font-mono text-right break-all text-gray-900">
+        <li key={k} className="flex justify-between gap-2 border-b border-border pb-1">
+          <span className="text-muted-foreground">{k}</span>
+          <span className="font-mono text-right break-all text-foreground">
             {v !== null && typeof v === 'object' ? JSON.stringify(v) : String(v ?? '—')}
           </span>
         </li>
@@ -51,7 +51,7 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-500 p-4 border border-dashed rounded-lg">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground p-4 border border-dashed border-border rounded-lg">
         <Loader2 className="h-4 w-4 animate-spin" />
         {t('loading') || '…'}
       </div>
@@ -60,25 +60,25 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
 
   if (!session || session.status !== 'active') {
     return (
-      <div className="rounded-xl border border-gray-200 bg-slate-50/80 p-4 text-sm text-gray-600">
-        <div className="flex items-center gap-2 text-gray-700 font-medium">
-          <Activity className="h-4 w-4 text-slate-500" />
+      <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-foreground font-medium">
+          <Activity className="h-4 w-4 text-muted-foreground" />
           {t('control_module_title') || 'Módulo control (panel)'}
         </div>
-        <p className="mt-1 text-gray-500">{t('no_control_process_active') || 'No hay un proceso de control iniciado desde el panel (Homogenización, Maduración, Ventilación, Enfriamiento).'}</p>
+        <p className="mt-1">{t('no_control_process_active') || 'No hay un proceso de control iniciado desde el panel (Homogenización, Maduración, Ventilación, Enfriamiento).'}</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-white p-4 shadow-sm">
+    <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/90 to-white dark:from-blue-950/50 dark:to-card p-4 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-blue-600" />
+          <h3 className="font-semibold text-foreground flex items-center gap-2">
+            <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             {t('active_control_process') || 'Proceso de control activo'}
           </h3>
-          <p className="text-sm text-gray-600 mt-0.5">
+          <p className="text-sm text-muted-foreground mt-0.5">
             {session.display_label || session.process_type} · {session.process_type}
           </p>
         </div>
@@ -87,7 +87,7 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
             type="button"
             variant="outline"
             size="sm"
-            className="shrink-0 text-red-600 border-red-200 hover:bg-red-50"
+            className="shrink-0 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/50"
             disabled={cancelling}
             onClick={() => onCancel(session)}
           >
@@ -98,13 +98,13 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
       </div>
 
       <div className="mt-3">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
+        <div className="flex justify-between text-xs text-muted-foreground mb-1">
           <span>{t('hours_progress') || 'Avance (tiempo)'}</span>
-          <span className="font-mono text-blue-800">{pct}%</span>
+          <span className="font-mono text-blue-800 dark:text-blue-300">{pct}%</span>
         </div>
-        <div className="h-2.5 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
           <div
-            className={cn('h-full rounded-full bg-blue-600 transition-all')}
+            className={cn('h-full rounded-full bg-blue-600 dark:bg-blue-500 transition-all')}
             style={{ width: `${Math.min(100, pct)}%` }}
           />
         </div>
@@ -112,23 +112,23 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
 
       <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
         <div>
-          <span className="text-gray-500">{t('start') || 'Inicio'}</span>
-          <p className="font-mono text-gray-900">
+          <span className="text-muted-foreground">{t('start') || 'Inicio'}</span>
+          <p className="font-mono text-foreground">
             {formatDateTime(session.started_at)}
           </p>
         </div>
         <div>
-          <span className="text-gray-500">{t('control_process_estimated_end') || 'Fin estimado'}</span>
-          <p className="font-mono text-gray-900">
+          <span className="text-muted-foreground">{t('control_process_estimated_end') || 'Fin estimado'}</span>
+          <p className="font-mono text-foreground">
             {formatDateTime(session.estimated_end_at)}
           </p>
         </div>
       </div>
 
       <div className="mt-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase mb-1">{t('control_process_params') || 'Parámetros guardados'}</p>
+        <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('control_process_params') || 'Parámetros guardados'}</p>
         <ParamsList params={session.params} />
       </div>
     </div>
   );
-}
+};

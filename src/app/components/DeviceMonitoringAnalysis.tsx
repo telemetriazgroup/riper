@@ -241,7 +241,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
 
   if (trackingLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[320px] text-slate-500 gap-2">
+      <div className="flex items-center justify-center min-h-[320px] text-muted-foreground gap-2">
         <Loader2 className="h-6 w-6 animate-spin" />
         {t('control_follow_loading')}
       </div>
@@ -250,9 +250,9 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
 
   if (!activeTracking?.summary || !activeTracking.process) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/80 p-10 text-center space-y-4">
-        <AlertCircle className="h-10 w-10 text-amber-600 mx-auto" />
-        <p className="text-lg font-medium text-slate-800">{t('detail_monitoring_no_tracking')}</p>
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center space-y-4">
+        <AlertCircle className="h-10 w-10 text-amber-600 dark:text-amber-400 mx-auto" />
+        <p className="text-lg font-medium text-foreground">{t('detail_monitoring_no_tracking')}</p>
         {onGoToCreateTracking && (
           <Button type="button" className="gap-2" onClick={onGoToCreateTracking}>
             <ClipboardList className="h-4 w-4" />

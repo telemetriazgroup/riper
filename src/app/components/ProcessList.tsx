@@ -120,17 +120,17 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('process_tracking')}</h1>
-          <p className="text-gray-500 text-sm">{t('process_tracking_desc')}</p>
+          <h1 className="text-2xl font-bold text-foreground">{t('process_tracking')}</h1>
+          <p className="text-muted-foreground text-sm">{t('process_tracking_desc')}</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto justify-stretch md:justify-end items-center">
-          <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50/80 text-sm">
+          <div className="flex rounded-lg border border-border p-0.5 bg-muted/50 text-sm">
             <button
               type="button"
               onClick={() => setView('list')}
               className={clsx(
                 'px-3 py-1.5 rounded-md transition',
-                view === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                view === 'list' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               {t('seguimiento')}
@@ -141,7 +141,7 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                 onClick={() => setView('admin')}
                 className={clsx(
                   'px-3 py-1.5 rounded-md transition flex items-center gap-1.5',
-                  view === 'admin' ? 'bg-white shadow text-gray-900' : 'text-gray-600 hover:text-gray-900'
+                  view === 'admin' ? 'bg-card shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <Database className="w-3.5 h-3.5" />
@@ -150,10 +150,10 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
             )}
           </div>
           {isSuperAdmin && (
-            <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-700 cursor-pointer whitespace-nowrap max-w-[min(100%,20rem)]">
+            <label className="flex items-center gap-2 text-xs sm:text-sm text-foreground cursor-pointer whitespace-nowrap max-w-[min(100%,20rem)]">
               <input
                 type="checkbox"
-                className="rounded border-gray-300 shrink-0"
+                className="rounded border-border shrink-0"
                 checked={includeArchived}
                 onChange={(e) => setIncludeArchived(e.target.checked)}
               />

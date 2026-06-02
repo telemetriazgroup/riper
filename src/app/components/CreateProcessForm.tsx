@@ -440,7 +440,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
     return (
       <div className="max-w-4xl mx-auto">
         <div className="mb-3 flex items-center">
-          <Button type="button" variant="ghost" onClick={onCancel} className="gap-2 -ml-2 text-gray-700">
+          <Button type="button" variant="ghost" onClick={onCancel} className="gap-2 -ml-2 text-foreground">
             <ArrowLeft className="w-4 h-4" />
             {t('back_to_process_list')}
           </Button>
@@ -465,16 +465,16 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
   return (
     <div className="max-w-3xl mx-auto animate-in slide-in-from-bottom-4 duration-300">
       <div className="mb-2 flex items-center">
-        <Button type="button" variant="ghost" onClick={onCancel} className="gap-2 -ml-2 text-gray-700">
+        <Button type="button" variant="ghost" onClick={onCancel} className="gap-2 -ml-2 text-foreground">
           <ArrowLeft className="w-4 h-4" />
           {t('back_to_process_list')}
         </Button>
       </div>
-      <Card className="border-gray-200 shadow-lg">
+      <Card className="border-border shadow-lg">
         <CardContent className="p-8">
-          <div className="mb-6 border-b border-gray-100 pb-4 space-y-3">
-            <h2 className="text-2xl font-bold text-gray-900">{t('new_maturation_process')}</h2>
-            <p className="text-gray-500 mt-1">{t('new_process_desc')}</p>
+          <div className="mb-6 border-b border-border pb-4 space-y-3">
+            <h2 className="text-2xl font-bold text-foreground">{t('new_maturation_process')}</h2>
+            <p className="text-muted-foreground mt-1">{t('new_process_desc')}</p>
             <p className="text-sm text-blue-950 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 leading-snug">
               {t('create_tracking_required_banner')}
             </p>
@@ -482,43 +482,43 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">{t('process_display_name')}</label>
+              <label className="block text-sm font-medium text-foreground mb-1">{t('process_display_name')}</label>
               <input
                 type="text"
                 value={processName}
                 onChange={(e) => setProcessName(e.target.value)}
                 placeholder={autoProcessName}
-                className="w-full border border-gray-300 rounded-lg shadow-sm px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
+                className="app-field"
               />
-              <p className="text-xs text-gray-500 mt-1">{t('process_name_auto_hint')}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t('process_name_auto_hint')}</p>
             </div>
 
             <div className="space-y-3 border border-amber-100 bg-amber-50/40 rounded-lg p-4">
-              <h3 className="text-sm font-semibold text-gray-800">{t('process_supervisor_title')}</h3>
-              <p className="text-xs text-gray-600">{t('process_supervisor_desc')}</p>
+              <h3 className="text-sm font-semibold text-foreground">{t('process_supervisor_title')}</h3>
+              <p className="text-xs text-muted-foreground">{t('process_supervisor_desc')}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     {t('supervisor_name')} <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="text"
                     value={supervisorName}
                     onChange={(e) => setSupervisorName(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg shadow-sm px-3 py-2 text-sm"
+                    className="app-field"
                     required
                     autoComplete="name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     {t('supervisor_email_optional')}
                   </label>
                   <input
                     type="email"
                     value={supervisorEmail}
                     onChange={(e) => setSupervisorEmail(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg shadow-sm px-3 py-2 text-sm"
+                    className="app-field"
                     autoComplete="email"
                   />
                 </div>
@@ -526,7 +526,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
                   1
                 </span>
@@ -534,18 +534,18 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('client_type')}</label>
+                  <label className="block text-sm font-medium text-foreground mb-1">{t('client_type')}</label>
                   <select
                     value={clientType}
                     onChange={(e) => setClientType(e.target.value as 'external' | 'internal')}
-                    className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                    className="app-select"
                   >
                     <option value="external">{t('client_type_external')}</option>
                     <option value="internal">{t('client_type_internal')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     {t('client_name')} <span className="text-red-600">*</span>
                   </label>
                   <CompanyCombobox
@@ -559,24 +559,24 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                     canCreate={canManageCo}
                     onCompanyCreated={() => void loadCatalog()}
                   />
-                  <p className="text-xs text-gray-500 mt-1">{t('client_company_combobox_hint')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{t('client_company_combobox_hint')}</p>
                 </div>
               </div>
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className="h-px bg-muted" />
 
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
                   2
                 </span>
                 {t('batch_details')}
               </h3>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('product_label')}</label>
+                <label className="block text-sm font-medium text-foreground mb-1">{t('product_label')}</label>
                 {!catalogLoaded ? (
-                  <p className="text-sm text-gray-500">{t('loading_catalog')}</p>
+                  <p className="text-sm text-muted-foreground">{t('loading_catalog')}</p>
                 ) : fruitOptionRows.length > 0 || canManageProducts ? (
                   <ProductCombobox
                     value={productName}
@@ -595,7 +595,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   {t('lot_origin')} <span className="text-red-600">*</span>
                 </label>
                 <input
@@ -607,7 +607,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   }}
                   className={clsx(
                     'w-full rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500',
-                    originError ? 'border-red-400 border-2' : 'border-gray-300 border'
+                    originError ? 'border-red-400 border-2' : 'border-border border'
                   )}
                   placeholder={t('lot_origin_ph')}
                   required
@@ -617,7 +617,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     {t('quantity_kg')} <span className="text-red-600">*</span>
                   </label>
                   <input
@@ -631,7 +631,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                     }}
                     className={clsx(
                       'w-full rounded-lg shadow-sm',
-                      quantityKgError ? 'border-red-400 border-2' : 'border-gray-300 border'
+                      quantityKgError ? 'border-red-400 border-2' : 'border-border border'
                     )}
                     placeholder="0.00"
                     required
@@ -640,7 +640,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   {quantityKgError && <p className="text-xs text-red-600 mt-1">{quantityKgError}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-foreground mb-1">
                     {t('batch_volume_m3')}
                   </label>
                   <input
@@ -649,33 +649,33 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                     step="0.01"
                     value={volumeM3}
                     onChange={(e) => setVolumeM3(e.target.value)}
-                    className="w-full border-gray-300 rounded-lg shadow-sm"
+                    className="app-select"
                     placeholder="m³"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className="h-px bg-muted" />
 
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
                   3
                 </span>
                 {t('control_device')}
               </h3>
               {devicesLoading ? (
-                <p className="text-sm text-gray-500">{t('loading_devices')}</p>
+                <p className="text-sm text-muted-foreground">{t('loading_devices')}</p>
               ) : (
                 <>
-                  <p className="text-xs text-gray-500">{t('control_device_list_hint')}</p>
+                  <p className="text-xs text-muted-foreground">{t('control_device_list_hint')}</p>
                   <div className="flex items-center gap-2">
-                    <Server className="w-4 h-4 text-gray-400" />
+                    <Server className="w-4 h-4 text-muted-foreground/70" />
                     <select
                       value={deviceId}
                       onChange={(e) => setDeviceId(e.target.value)}
-                      className="flex-1 border border-gray-300 rounded-lg shadow-sm py-2 px-3"
+                      className="app-field flex-1"
                       required
                     >
                       <option value="">{t('select_device_placeholder')}</option>
@@ -699,7 +699,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                 </>
               )}
               {activeOnDeviceLoading && deviceId && (
-                <p className="text-sm text-gray-500">{t('device_active_check_loading')}</p>
+                <p className="text-sm text-muted-foreground">{t('device_active_check_loading')}</p>
               )}
 
               {hasDeviceConflict && !activeOnDeviceLoading && (
@@ -740,30 +740,30 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               )}
 
               {selectedDevice && (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-                  <p className="font-medium text-slate-800 mb-2">{t('equipo_estado_actual')}</p>
+                <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm">
+                  <p className="font-medium text-foreground mb-2">{t('equipo_estado_actual')}</p>
                   {(() => {
                     const snap = deviceSnapshot(selectedDevice, t);
                     return (
-                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-gray-700">
+                      <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-foreground">
                         <li>
-                          <span className="text-gray-500">{t('estado')}: </span>
+                          <span className="text-muted-foreground">{t('estado')}: </span>
                           {snap.on ? t('estado_on') : t('estado_off')}
                         </li>
                         <li>
-                          <span className="text-gray-500">{t('set_temp_label')}: </span>
+                          <span className="text-muted-foreground">{t('set_temp_label')}: </span>
                           {snap.setTemp != null && Number.isFinite(snap.setTemp) ? formatTemp(snap.setTemp) : '—'}
                         </li>
                         <li>
-                          <span className="text-gray-500">{t('humidity_set_point_label')}: </span>
+                          <span className="text-muted-foreground">{t('humidity_set_point_label')}: </span>
                           {snap.hum != null && Number.isFinite(snap.hum) ? `${snap.hum} %` : '—'}
                         </li>
                         <li>
-                          <span className="text-gray-500">{t('set_point_co2_label')}: </span>
+                          <span className="text-muted-foreground">{t('set_point_co2_label')}: </span>
                           {snap.co2}
                         </li>
                         <li className="sm:col-span-2">
-                          <span className="text-gray-500">{t('status_sp_ethylene')}: </span>
+                          <span className="text-muted-foreground">{t('status_sp_ethylene')}: </span>
                           {snap.spE}
                         </li>
                       </ul>
@@ -776,11 +776,11 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               )}
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className="h-px bg-muted" />
 
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                <h3 className="font-semibold text-foreground flex items-center gap-2">
                   <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
                     4
                   </span>
@@ -800,7 +800,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                       {t('select_product_first_for_recipes')}
                     </p>
                   ) : filteredRecipes.length === 0 && !customRecipe ? (
-                    <p className="text-sm text-gray-600">{t('no_recipes_for_product')}</p>
+                    <p className="text-sm text-muted-foreground">{t('no_recipes_for_product')}</p>
                   ) : null}
                   <select
                     value={selectedRecipeId}
@@ -808,7 +808,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                       setSelectedRecipeId(e.target.value);
                       if (e.target.value !== 'custom') setCustomRecipe(null);
                     }}
-                    className="w-full border border-blue-200 rounded-lg shadow-sm bg-white py-2 px-2 mt-1"
+                    className="app-select mt-1 border-blue-200 dark:border-blue-800"
                     disabled={!productName}
                   >
                     <option value="">{t('select_recipe_option')}</option>
@@ -828,14 +828,14 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   return (
                   <div className="bg-blue-50/80 p-3 rounded-md border border-blue-100 text-sm">
                     <p className="font-semibold text-blue-900 mb-1">{d.name}</p>
-                    <p className="text-gray-600 text-xs mb-2">{d.description}</p>
+                    <p className="text-muted-foreground text-xs mb-2">{d.description}</p>
                     <div className="flex flex-wrap gap-2">
                       {activeRecipe.phases
                         .filter((p) => p.enabled)
                         .map((p, i) => (
                           <span
                             key={i}
-                            className="px-2 py-1 bg-white border border-blue-100 rounded text-xs text-blue-700 font-medium"
+                            className="px-2 py-1 bg-card border border-blue-100 rounded text-xs text-blue-700 font-medium"
                           >
                             {i + 1}. {p.type}{' '}
                             {p.type === 'venting'
@@ -865,7 +865,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   );
                 })()}
                 <div className="space-y-2">
-                  <span className="text-sm font-medium text-gray-800">{t('process_start_time')}</span>
+                  <span className="text-sm font-medium text-foreground">{t('process_start_time')}</span>
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="inline-flex items-center gap-2">
                       <input
@@ -891,16 +891,16 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                       type="datetime-local"
                       value={scheduledStart}
                       onChange={(e) => setScheduledStart(e.target.value)}
-                      className="w-full max-w-sm border border-gray-300 rounded-lg shadow-sm py-2 px-2"
+                      className="app-field max-w-sm"
                     />
                   )}
                 </div>
-                <div className="rounded-lg border border-gray-200 p-4 space-y-3">
+                <div className="rounded-lg border border-border p-4 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <h4 className="font-medium text-gray-800 flex items-center gap-2">
+                    <h4 className="font-medium text-foreground flex items-center gap-2">
                       <Sliders className="w-4 h-4" /> {t('target_objectives_title')}
                     </h4>
-                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
                       <input
                         type="checkbox"
                         checked={skipObjectives}
@@ -911,11 +911,11 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   </div>
                   {!skipObjectives && (
                     <>
-                      <p className="text-xs text-gray-500">{t('objectives_optional')}</p>
+                      <p className="text-xs text-muted-foreground">{t('objectives_optional')}</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {targetParams.map((p) => (
                           <div key={p.id} className="relative">
-                            <label className="block text-xs text-gray-500 mb-1">
+                            <label className="block text-xs text-muted-foreground mb-1">
                               {p.name} ({p.unit})
                             </label>
                             <div className="flex items-center gap-1">
@@ -924,7 +924,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                                 inputMode="decimal"
                                 value={p.value}
                                 onChange={(e) => updateTarget(p.id, e.target.value)}
-                                className="w-full border border-gray-300 rounded-md py-1.5 px-2 text-sm"
+                                className="app-field py-1.5"
                                 placeholder="—"
                               />
                               {p.builtIn === false && (
@@ -940,10 +940,10 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                           </div>
                         ))}
                       </div>
-                      <div className="flex gap-2 items-center border-t border-dashed border-gray-200 pt-2">
+                      <div className="flex gap-2 items-center border-t border-dashed border-border pt-2">
                         <input
                           type="text"
-                          className="flex-1 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                          className="app-field flex-1 py-1.5"
                           value={newTargetName}
                           onChange={(e) => setNewTargetName(e.target.value)}
                           placeholder={t('new_param_name_placeholder')}
@@ -967,41 +967,41 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               </div>
             </div>
 
-            <div className="h-px bg-gray-100" />
+            <div className="h-px bg-muted" />
 
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">
                   5
                 </span>
                 <ClipboardCheck className="w-4 h-4" />
                 {t('initial_sampling_block_title')}
               </h3>
-              <p className="text-xs text-gray-500">{t('initial_sampling_block_desc')}</p>
+              <p className="text-xs text-muted-foreground">{t('initial_sampling_block_desc')}</p>
               <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1">
                 {t('sampling_result_tracking_note')}
               </p>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-foreground mb-1">
                   {t('initial_sampling_person')} <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
                   value={initialPersona}
                   onChange={(e) => setInitialPersona(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-border rounded-lg px-3 py-2 text-sm app-field"
                   placeholder={t('initial_sampling_person_ph')}
                 />
-                <p className="text-xs text-gray-500 mt-0.5">{t('initial_sampling_person_hint')}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{t('initial_sampling_person_hint')}</p>
               </div>
               <div className="rounded-md bg-blue-50/50 border border-blue-100 px-3 py-1.5 text-xs font-medium text-blue-800 inline-block">
                 {t('sampling_type_initial_only')}
               </div>
-              <p className="text-xs text-gray-500">{t('sampling_params_all_optional')}</p>
+              <p className="text-xs text-muted-foreground">{t('sampling_params_all_optional')}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {initialSamplingParams.map((p) => (
                   <div key={p.id}>
-                    <label className="block text-xs text-gray-500 mb-1">
+                    <label className="block text-xs text-muted-foreground mb-1">
                       {p.name} ({p.unit})
                     </label>
                     <div className="flex items-center gap-1">
@@ -1009,7 +1009,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                         type="text"
                         value={p.value}
                         onChange={(e) => updateSample(p.id, e.target.value)}
-                        className="w-full border border-gray-300 rounded-md py-1.5 px-2 text-sm"
+                        className="app-field py-1.5"
                         placeholder="—"
                       />
                       {p.builtIn === false && (
@@ -1028,7 +1028,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
-                  className="flex-1 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                  className="app-field flex-1 py-1.5"
                   value={newSampleParamName}
                   onChange={(e) => setNewSampleParamName(e.target.value)}
                   placeholder={t('new_param_name_placeholder')}
@@ -1047,7 +1047,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                 </Button>
               </div>
               <div>
-                <label className="text-sm text-gray-700 mb-1 block">
+                <label className="text-sm text-foreground mb-1 block">
                   {t('sampling_notes')} <span className="text-red-600">*</span>
                 </label>
                 <textarea
@@ -1058,7 +1058,7 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
                   }}
                   className={clsx(
                     'w-full border rounded-lg text-sm p-2 min-h-[80px]',
-                    notesError ? 'border-red-400 focus:ring-red-300' : 'border-gray-300'
+                    notesError ? 'border-red-400 focus:ring-red-300' : 'border-border'
                   )}
                   placeholder={t('sampling_notes_ph')}
                   required
@@ -1067,24 +1067,24 @@ export const CreateProcessForm: React.FC<CreateProcessFormProps> = ({ onCancel, 
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-800 flex items-center gap-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
                   <Camera className="w-4 h-4" />
                   {t('sampling_photo_evidence')}
                 </label>
-                <p className="text-xs text-gray-500">{t('sampling_photos_optional')}</p>
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground">{t('sampling_photos_optional')}</p>
+                <div className="border-2 border-dashed border-border rounded-lg p-3">
                   <input
                     type="file"
                     accept="image/*"
                     multiple
                     onChange={addSamplingPhotos}
-                    className="w-full text-sm file:mr-2 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1.5"
+                    className="w-full text-sm file:mr-2 file:rounded file:border-0 file:bg-muted file:px-3 file:py-1.5"
                   />
                 </div>
                 {samplingFiles.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {samplingFiles.map((s, i) => (
-                      <div key={s.previewUrl + i} className="relative group rounded-lg border border-gray-200 overflow-hidden aspect-square bg-gray-50">
+                      <div key={s.previewUrl + i} className="relative group rounded-lg border border-border overflow-hidden aspect-square bg-muted">
                         <img
                           src={s.previewUrl}
                           alt={s.file.name}

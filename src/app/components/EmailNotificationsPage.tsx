@@ -188,7 +188,7 @@ export function EmailNotificationsPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
           <Mail className="h-7 w-7 text-blue-600" />
           {t('email_notifications_title')}
         </h1>
