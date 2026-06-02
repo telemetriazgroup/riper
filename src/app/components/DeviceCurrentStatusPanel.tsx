@@ -24,6 +24,7 @@ import {
   Leaf,
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
+import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 
 type TFn = (k: string, r?: Record<string, string> | string) => string;
 
@@ -35,6 +36,8 @@ export interface DeviceCurrentStatusPanelProps {
   toggleTempUnit: () => void;
   /** Fecha/hora del último dato telemetría (junto al título «Estatus actual»). */
   formatDateTime?: (d: Date) => string;
+  /** Ocultar sensores de carga en el bloque expandido (p. ej. túnel Gourmet los muestra por unidad). */
+  hideCargoSensorNumbers?: number[];
 }
 
 function toNum(x: unknown): number | null {
@@ -107,6 +110,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   tempUnit,
   toggleTempUnit,
   formatDateTime,
+  hideCargoSensorNumbers = [],
 }) => {
   const [open, setOpen] = useState(false);
   const m = device.madurador;
@@ -139,7 +143,9 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         icon: Flame,
         label: t('status_ethylene'),
         value:
-          tel.ethylene != null && Number.isFinite(tel.ethylene) ? `${tel.ethylene.toFixed(1)} ppm` : '—',
+          tel.ethylene != null && Number.isFinite(tel.ethylene)
+            ? `${formatUiDecimal(tel.ethylene)} ppm`
+            : '—',
       },
       {
         key: 'al',
@@ -157,20 +163,22 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         key: 'rh',
         icon: Droplets,
         label: t('status_humidity'),
-        value:
-          Number.isFinite(tel.relative_humidity) ? `${Math.round(tel.relative_humidity)} %` : '—',
+        value: Number.isFinite(tel.relative_humidity) ? formatUiPercent(tel.relative_humidity) : '—',
       },
       {
         key: 'c2',
         icon: Cloud,
         label: t('status_co2'),
-        value: tel.co2_reading != null && Number.isFinite(tel.co2_reading) ? `${tel.co2_reading.toFixed(1)} %` : '—',
+        value:
+          tel.co2_reading != null && Number.isFinite(tel.co2_reading)
+            ? formatUiPercent(tel.co2_reading)
+            : '—',
       },
       {
         key: 'cp',
         icon: Gauge,
         label: t('status_capacity'),
-        value: m?.capacity_load != null && Number.isFinite(m.capacity_load) ? `${m.capacity_load} %` : '—',
+        value: m?.capacity_load != null && Number.isFinite(m.capacity_load) ? formatUiPercent(m.capacity_load) : '—',
       },
     ],
     [device, m, t, formatTemp, tel]
@@ -245,7 +253,9 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
           />
           <StatusTile icon={Cog} label={t('status_compressor')} value={compressorValue} />
           <StatusTile icon={Sun} label={t('status_ambient')} value={formatTemp(op.ambient_air)} />
-          {([1, 2, 3, 4] as const).map((n) => {
+          {([1, 2, 3, 4] as const)
+            .filter((n) => !hideCargoSensorNumbers.includes(n))
+            .map((n) => {
             const v = m?.[`cargo_${n}_temp` as 'cargo_1_temp'];
             return (
               <StatusTile
@@ -264,7 +274,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
           <StatusTile
             icon={Radio}
             label={t('status_line_frequency')}
-            value={m?.line_frequency != null && m.line_frequency > 0 ? `${m.line_frequency} Hz` : '—'}
+            value={m?.line_frequency != null && m.line_frequency > 0 ? `${formatUiDecimal(m.line_frequency)} Hz` : '—'}
           />
           {([1, 2, 3] as const).map((n) => {
             const p = m?.[`consumption_ph_${n}` as 'consumption_ph_1'];
@@ -273,7 +283,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
                 key={`ph${n}`}
                 icon={PlugZap}
                 label={t('status_phase_n', { n: String(n) })}
-                value={p != null && Number.isFinite(p) ? p.toFixed(1) : '—'}
+                value={p != null && Number.isFinite(p) ? formatUiDecimal(p) : '—'}
               />
             );
           })}
@@ -291,7 +301,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
           <StatusTile
             icon={Zap}
             label={t('status_kwh')}
-            value={Number.isFinite(op.power_kwh) ? `${op.power_kwh.toFixed(1)} kWh` : '—'}
+            value={Number.isFinite(op.power_kwh) ? `${formatUiDecimal(op.power_kwh)} kWh` : '—'}
           />
           <StatusTile
             icon={Leaf}
@@ -303,7 +313,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
             label={t('status_sp_ethylene')}
             value={
               m?.sp_ethyleno != null && Number.isFinite(m.sp_ethyleno)
-                ? `${m.sp_ethyleno % 1 === 0 ? m.sp_ethyleno : m.sp_ethyleno.toFixed(1)} ${t('sp_ethyleno_unit')}`
+                ? `${formatUiDecimal(m.sp_ethyleno)} ${t('sp_ethyleno_unit')}`
                 : '—'
             }
           />

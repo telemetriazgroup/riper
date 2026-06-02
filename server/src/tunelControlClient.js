@@ -54,10 +54,22 @@ export async function sendTunnelControlCommand(imei, tipo, dato) {
   return { ok: true, url, status: r.status, body, dato: formatted, tipo };
 }
 
-/** Inyección etileno: tipo 5 (ppm) y luego tipo 0 (ppm). */
+/** Lectura etileno: tipo 0 con dato 1 (dispara muestra de campo_1). */
+export async function sendEthylenePollCommand(imei) {
+  return sendTunnelControlCommand(imei, 0, 1);
+}
+
+/** Inyección etileno legacy: tipo 5 (ppm) y luego tipo 0 (ppm). */
 export async function sendEthyleneInjectionCommand(imei, ppm) {
   const value = Math.max(0, Math.round(Number(ppm)));
   const first = await sendTunnelControlCommand(imei, 5, value);
   const second = await sendTunnelControlCommand(imei, 0, value);
   return { ppm: value, steps: [first, second] };
+}
+
+/** Inyección incremental túnel: solo tipo 5. */
+export async function sendEthyleneDoseCommand(imei, ppm) {
+  const value = Math.max(0, Math.round(Number(ppm)));
+  const sent = await sendTunnelControlCommand(imei, 5, value);
+  return { ppm: value, step: sent };
 }

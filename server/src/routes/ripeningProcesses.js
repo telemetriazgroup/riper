@@ -14,6 +14,7 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { cancelActiveControlSessionsForDevice, kickTrackingControlForProcess } from '../ripeningTrackingControl.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -363,6 +364,13 @@ ripeningProcessesRouter.post(
       await client.query('BEGIN');
 
       if (deviceId) {
+        await cancelActiveControlSessionsForDevice(
+          client,
+          deviceId,
+          req.user.id,
+          'superseded_by_tracking'
+        );
+
         const { rows: actives } = await client.query(
           `SELECT id, display_name, payload FROM app_ripening_processes
            WHERE user_id = $1::uuid AND deleted_at IS NULL
@@ -496,6 +504,9 @@ ripeningProcessesRouter.post(
           actorEmail: req.user?.email,
           meta: { display_name: out.display_name, processId: out.id },
         });
+        kickTrackingControlForProcess(out.id).catch((e) =>
+          console.warn('[tracking-control] kickoff', out.id, e.message)
+        );
       }
       return res.status(201).json({ data: out });
     } catch (e) {

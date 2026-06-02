@@ -5,8 +5,8 @@ import {
 } from './greenyardFleet.js';
 import {
   filterRowsByGourmetDeviceIds,
-  isGourmetDeviceId,
   isGourmetTradingFleetEmail,
+  isGourmetTunnelCommandDeviceId,
 } from './gourmetFleet.js';
 
 /** Usuario demo con flota pin (Greenyard, Gourmet Trading). */
@@ -16,7 +16,7 @@ export function isPinnedFleetDemoEmail(email) {
 
 export function isPinnedFleetDeviceId(email, deviceId) {
   if (isGreenyardFleetEmail(email)) return isGreenyardDeviceId(deviceId);
-  if (isGourmetTradingFleetEmail(email)) return isGourmetDeviceId(deviceId);
+  if (isGourmetTradingFleetEmail(email)) return isGourmetTunnelCommandDeviceId(deviceId);
   return true;
 }
 

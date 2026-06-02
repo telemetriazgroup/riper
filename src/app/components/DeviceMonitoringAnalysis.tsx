@@ -39,6 +39,7 @@ import {
   DialogTrigger,
 } from '@/app/components/ui/dialog';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import type { HistoryPoint } from '@/app/lib/api';
 import { fetchMaduradorRangoHistoryForImei } from '@/app/lib/madurador';
@@ -318,12 +319,12 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
         <MetricCard
           title={t('detail_monitoring_co2_volume')}
           primary={`${metrics.ft3.toFixed(0)} ft³`}
-          secondary={`${metrics.m3.toFixed(2)} m³`}
+          secondary={`${formatUiDecimal(metrics.m3)} m³`}
           icon={<Leaf className="w-5 h-5 text-green-600" />}
         />
         <MetricCard
           title={t('detail_monitoring_energy_period')}
-          primary={metrics.kwh != null ? `${metrics.kwh.toFixed(1)} kWh` : '—'}
+          primary={metrics.kwh != null ? `${formatUiDecimal(metrics.kwh)} kWh` : '—'}
           secondary={t('detail_monitoring_energy_hint')}
           icon={<Zap className="w-5 h-5 text-yellow-600" />}
         />

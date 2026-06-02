@@ -1,11 +1,25 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { Device } from '@/app/data';
-import { ArrowLeft, Thermometer, Wind, Activity, Droplets, Power, Loader2, Layers } from 'lucide-react';
+import { ArrowLeft, Layers, Package } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { clsx } from 'clsx';
 import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
+import {
+  aggregateGourmetTunnelDevice,
+  defaultGourmetTunnelSelectedUnits,
+} from '@/app/lib/gourmetTunnelFleet';
+import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
+import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
+import { TelemetryCharts } from '@/app/components/TelemetryCharts';
+import { ControlPanel } from '@/app/components/ControlPanel';
+import { resolveControlPanelTab } from '@/app/lib/madurador';
+import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandCompliancePanel';
+import { EventLog } from '@/app/components/EventLog';
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
+import { showGourmetTunnelCommandStatesPanel, isGourmetSession } from '@/app/lib/gourmet';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 
 interface TunnelDeviceDetailProps {
   device: Device;
@@ -13,25 +27,92 @@ interface TunnelDeviceDetailProps {
 }
 
 export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, onBack }) => {
-  const { t, convertTemp, tempUnit, language, formatDateTime } = useSettings();
+  const { t, formatTemp, tempUnit, toggleTempUnit, language, formatDateTime } = useSettings();
+  const { session: activeControlSession } = useDeviceControlSession(GOURMET_TUNEL_DEVICE_ID);
+  const [controlMode, setControlMode] = useState('manual');
   const tunnel = device.tunnel;
+  const [selectedUnits, setSelectedUnits] = useState<string[]>(() => defaultGourmetTunnelSelectedUnits());
+
+  const displayDevice = useMemo(
+    () => aggregateGourmetTunnelDevice(device, selectedUnits),
+    [device, selectedUnits]
+  );
+
+  const displayDeviceForStatus = useMemo(() => {
+    if (
+      !isGourmetSession() ||
+      activeControlSession?.status !== 'active' ||
+      activeControlSession.process_type !== 'Cooling'
+    ) {
+      return displayDevice;
+    }
+    const sp = Number((activeControlSession.params as Record<string, unknown>)?.setPoint);
+    if (!Number.isFinite(sp)) return displayDevice;
+    return {
+      ...displayDevice,
+      telemetry: { ...displayDevice.telemetry, set_point: sp },
+    };
+  }, [displayDevice, activeControlSession]);
+
+  useEffect(() => {
+    setControlMode(
+      resolveControlPanelTab({
+        activeSessionProcessType:
+          activeControlSession?.status === 'active' ? activeControlSession.process_type : null,
+        procesoApi: displayDevice.procesoApi,
+        stateProcess: displayDevice.telemetry.stateProcess,
+      })
+    );
+  }, [
+    displayDevice.procesoApi,
+    displayDevice.telemetry.stateProcess,
+    activeControlSession?.id,
+    activeControlSession?.status,
+    activeControlSession?.process_type,
+  ]);
+
+  const toggleUnit = (unitId: string) => {
+    setSelectedUnits((prev) => {
+      if (prev.includes(unitId)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((u) => u !== unitId);
+      }
+      return [...prev, unitId].sort(
+        (a, b) => defaultGourmetTunnelSelectedUnits().indexOf(a) - defaultGourmetTunnelSelectedUnits().indexOf(b)
+      );
+    });
+  };
+
+  const unitSensorTiles = useMemo(() => {
+    const selected = new Set(selectedUnits);
+    const tiles: { key: string; label: string; value: string }[] = [];
+    for (const u of tunnel.units) {
+      if (!selected.has(u.unidad)) continue;
+      const src = u.sourceDevice;
+      const m = src?.madurador;
+      const c3 = m?.cargo_3_temp;
+      const c4 = m?.cargo_4_temp;
+      tiles.push({
+        key: `${u.unidad}-c3`,
+        label:
+          language === 'es'
+            ? `T° Sensor 3 ${u.unidad}`
+            : `Sensor 3 T° ${u.unidad}`,
+        value: c3 != null && Number.isFinite(c3) ? formatTemp(c3) : '—',
+      });
+      tiles.push({
+        key: `${u.unidad}-c4`,
+        label:
+          language === 'es'
+            ? `T° Sensor 4 ${u.unidad}`
+            : `Sensor 4 T° ${u.unidad}`,
+        value: c4 != null && Number.isFinite(c4) ? formatTemp(c4) : '—',
+      });
+    }
+    return tiles;
+  }, [tunnel?.units, selectedUnits, language, formatTemp]);
+
   if (!tunnel) return null;
-
-  const muestra = tunnel.muestraFecha;
-  const muestraFmt =
-    muestra && !isNaN(new Date(muestra).getTime()) ? formatDateTime(muestra) : '—';
-
-  const avgLabel =
-    tunnel.averageMode === 'powered_on'
-      ? language === 'es'
-        ? 'Promedio T° suministro (unidades encendidas)'
-        : 'Average supply temp (powered-on units)'
-      : language === 'es'
-        ? 'Promedio T° suministro (todas apagadas → las 5 unidades)'
-        : 'Average supply temp (all off → all 5 units)';
-
-  const sortDatosKeys = (d: Record<string, string | number | null>) =>
-    Object.keys(d).sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
@@ -54,149 +135,127 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
               <span
                 className={clsx(
                   'font-medium',
-                  device.estado_conexion === 'online'
-                    ? 'text-green-600'
-                    : device.estado_conexion === 'wait'
-                      ? 'text-amber-600'
-                      : 'text-gray-500'
+                  displayDevice.estado_conexion === 'online'
+                    ? 'text-green-600 dark:text-green-400'
+                    : displayDevice.estado_conexion === 'wait'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-muted-foreground'
                 )}
               >
-                {device.estado_conexion === 'online'
+                {displayDevice.estado_conexion === 'online'
                   ? t('online')
-                  : device.estado_conexion === 'wait'
+                  : displayDevice.estado_conexion === 'wait'
                     ? t('wait')
                     : t('offline')}
               </span>
-              <span>•</span>
-              <span>
-                {language === 'es' ? 'Muestra' : 'Sample'}: {muestraFmt}
-              </span>
             </div>
-            {tunnel.selectedImei && (
-              <p className="text-xs text-muted-foreground mt-2 max-w-2xl">
-                {language === 'es'
-                  ? 'Bloque IMEI usado (mayor fecha entre redundancias):'
-                  : 'IMEI block used (latest timestamp among redundant feeds):'}{' '}
-                <span className="font-mono">{tunnel.selectedImei}</span>
-              </p>
-            )}
           </div>
         </div>
       </div>
 
-      <Card className="border-indigo-200/80 bg-indigo-50/40">
+      <Card className="border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Thermometer className="h-5 w-5 text-indigo-600" />
-            {language === 'es' ? 'Resumen del túnel (5 máquinas)' : 'Tunnel summary (5 machines)'}
+          <CardTitle className="text-base text-foreground">
+            {language === 'es' ? 'Máquinas del túnel' : 'Tunnel machines'}
           </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            {language === 'es'
+              ? 'Seleccione al menos una unidad. Los promedios en Estatus actual usan las unidades marcadas.'
+              : 'Select at least one unit. Current status averages use the checked units.'}
+          </p>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-600 mb-4">{avgLabel}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="rounded-lg border bg-white/80 p-4">
-              <div className="text-xs text-gray-500">{t('temperature')} (T_Suministro Ø)</div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {tunnel.averageSupplyTemp != null
-                  ? `${convertTemp(tunnel.averageSupplyTemp).toFixed(1)}°${tempUnit}`
-                  : '—'}
-              </div>
-            </div>
-            <div className="rounded-lg border bg-white/80 p-4">
-              <div className="text-xs text-gray-500">{t('set_temperature')}</div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {convertTemp(device.telemetry.set_point).toFixed(1)}°{tempUnit}
-              </div>
-            </div>
-            <div className="rounded-lg border bg-white/80 p-4">
-              <div className="text-xs text-gray-500 flex items-center gap-1">
-                <Droplets className="h-3.5 w-3.5" /> {t('humidity')}
-              </div>
-              <div className="text-2xl font-bold text-foreground mt-1">{device.telemetry.relative_humidity}%</div>
-            </div>
-            <div className="rounded-lg border bg-white/80 p-4">
-              <div className="text-xs text-gray-500 flex items-center gap-1">
-                <Wind className="h-3.5 w-3.5" /> {t('co2')}
-              </div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {device.telemetry.co2_reading != null ? `${Number(device.telemetry.co2_reading).toFixed(2)} %` : '—'}
-              </div>
-            </div>
-            <div className="rounded-lg border bg-white/80 p-4 sm:col-span-2">
-              <div className="text-xs text-gray-500 flex items-center gap-1">
-                <Activity className="h-3.5 w-3.5" /> {t('ethylene')} (campo_1)
-              </div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {device.telemetry.ethylene != null ? `${Number(device.telemetry.ethylene).toFixed(2)}` : '—'}
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-3">
+            {tunnel.units.map((u) => {
+              const checked = selectedUnits.includes(u.unidad);
+              const imei = u.imei ?? u.pregunta ?? '—';
+              return (
+                <label
+                  key={u.unidad}
+                  className={clsx(
+                    'inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
+                    checked
+                      ? 'border-indigo-400 bg-indigo-100/80 dark:border-indigo-600 dark:bg-indigo-950/50'
+                      : 'border-border bg-card hover:bg-muted/50'
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="rounded border-border"
+                    checked={checked}
+                    onChange={() => toggleUnit(u.unidad)}
+                  />
+                  <span className="font-mono font-semibold text-foreground">{u.unidad}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{imei}</span>
+                </label>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
 
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">
-          {language === 'es' ? 'Unidades' : 'Units'}
-        </h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {tunnel.units.map((u) => (
-            <Card key={u.unidad} className="overflow-hidden">
-              <CardHeader className="py-3 flex flex-row items-center justify-between space-y-0 bg-gray-50/80 border-b">
-                <CardTitle className="text-base font-mono">{u.unidad}</CardTitle>
-                <span
-                  className={clsx(
-                    'inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full',
-                    u.powerOn ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'
-                  )}
-                >
-                  <Power className="h-3 w-3" />
-                  {u.powerOn ? 'ON' : 'OFF'}
-                </span>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                  <div>
-                    <span className="text-gray-500 text-xs">T suministro</span>
-                    <div className="font-mono font-medium">
-                      {u.supplyTemp != null ? `${convertTemp(u.supplyTemp).toFixed(1)}°${tempUnit}` : '—'}
-                    </div>
-                  </div>
-                  {u.pregunta && (
-                    <div className="col-span-2">
-                      <span className="text-gray-500 text-xs">ID</span>
-                      <div className="font-mono text-xs break-all">{u.pregunta}</div>
-                    </div>
-                  )}
+      <DeviceCurrentStatusPanel
+        device={displayDeviceForStatus}
+        t={t}
+        formatTemp={formatTemp}
+        tempUnit={tempUnit}
+        toggleTempUnit={toggleTempUnit}
+        formatDateTime={formatDateTime}
+        hideCargoSensorNumbers={[3, 4]}
+      />
+
+      {unitSensorTiles.length > 0 && (
+        <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 shadow-sm">
+          <h3 className="text-lg font-bold text-foreground mb-4">
+            {language === 'es' ? 'Sensores por unidad' : 'Sensors by unit'}
+          </h3>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {unitSensorTiles.map((tile) => (
+              <div
+                key={tile.key}
+                className="flex gap-3 rounded-xl border border-border bg-muted/30 p-3"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  <Package className="h-5 w-5" />
                 </div>
-                <div className="border-t pt-3">
-                  <div className="text-xs font-semibold text-gray-600 mb-2">
-                    {language === 'es' ? 'Parámetros' : 'Parameters'}
-                  </div>
-                  {sortDatosKeys(u.datos).length === 0 ? (
-                    <div className="text-sm text-gray-400 flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 opacity-50" />
-                      {language === 'es' ? 'Sin datos en conjunto' : 'No data in conjunto'}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      {sortDatosKeys(u.datos).map((k) => (
-                        <div key={k} className="flex justify-between gap-2 border-b border-gray-50 pb-1">
-                          <span className="text-gray-500 truncate" title={k}>
-                            {k}
-                          </span>
-                          <span className="font-mono text-gray-900 shrink-0 max-w-[55%] truncate" title={String(u.datos[k])}>
-                            {u.datos[k] === null || u.datos[k] === undefined ? '—' : String(u.datos[k])}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </p>
+                  <p className="mt-0.5 font-mono text-sm font-bold text-foreground">{tile.value}</p>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showGourmetTunnelCommandStatesPanel(
+        GOURMET_TUNEL_DEVICE_ID,
+        activeControlSession?.process_type,
+        activeControlSession?.status
+      ) && <TunnelCommandCompliancePanel deviceId={GOURMET_TUNEL_DEVICE_ID} />}
+
+      <DeviceControlProcessPanel deviceId={GOURMET_TUNEL_DEVICE_ID} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1">
+          <ControlPanel
+            mode={controlMode}
+            onChangeMode={setControlMode}
+            deviceId={GOURMET_TUNEL_DEVICE_ID}
+            device={displayDevice}
+          />
+        </div>
+        <div className="lg:col-span-2 space-y-3">
+          <h3 className="text-lg font-semibold text-foreground">
+            {language === 'es' ? 'Últimas 12 horas' : 'Last 12 hours'}
+          </h3>
+          <TelemetryCharts deviceId={GOURMET_TUNEL_DEVICE_ID} />
         </div>
       </div>
+
+      <EventLog deviceId={GOURMET_TUNEL_DEVICE_ID} />
     </div>
   );
 };

@@ -1,9 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { pool } from './db.js';
-import { sendEthyleneInjectionCommand, sendTunnelControlCommand } from './tunelControlClient.js';
+import {
+  gourmetTradingStandaloneImei,
+  gourmetTradingTunnelUnitImeis,
+  gourmetTunnelEthyleneImei,
+  isGourmetTunnelAggregateDeviceId,
+} from './gourmetFleet.js';
+import { syncControlSessionForTunnelBatch } from './tunnelControlHistory.js';
+import {
+  sendEthyleneDoseCommand,
+  sendEthyleneInjectionCommand,
+  sendEthylenePollCommand,
+  sendTunnelControlCommand,
+} from './tunelControlClient.js';
 import { fetchDeviceRowByImei, readTelemetryField } from './tunnelCommandTelemetry.js';
 
 export const ETHYLENE_VERIFY_DELAY_MS = 4 * 60 * 1000;
+export const ETHYLENE_POLL_INTERVAL_MS = 2 * 60 * 1000;
+export const ETHYLENE_READINGS_NEEDED = 3;
+export const ETHYLENE_MAX_READING = 300;
 export const SIMPLE_VERIFY_DELAY_MS = 30 * 1000;
 export const POLL_INTERVAL_MS = 15 * 1000;
 
@@ -35,6 +50,61 @@ function ethyleneTargetReached(actual, target, tolerance) {
   return actual >= target - tolerance;
 }
 
+function usesTunnelEthyleneAlgorithm(job) {
+  if (Boolean(job.meta?.tunnelEthylene)) return true;
+  if (isGourmetTunnelAggregateDeviceId(job.device_id)) return true;
+  const id = String(job.device_id || '').trim();
+  return id === gourmetTradingStandaloneImei() || id === gourmetTunnelEthyleneImei();
+}
+
+function resolveFanOutImeis(job) {
+  const fromMeta = job.meta?.fanOutImeis;
+  if (Array.isArray(fromMeta) && fromMeta.length > 0) {
+    return fromMeta.map((x) => String(x).trim()).filter(Boolean);
+  }
+  if (isGourmetTunnelAggregateDeviceId(job.device_id)) {
+    // Humedad: solo UNIT333 (867856038562796). Temp y ventilación: las 5 máquinas.
+    if (job.kind === 'humidity') {
+      return [gourmetTunnelEthyleneImei()];
+    }
+    return gourmetTradingTunnelUnitImeis();
+  }
+  return [String(job.device_id).trim()];
+}
+
+function resolveEthyleneImei(job) {
+  const fromMeta = job.meta?.ethyleneImei;
+  if (fromMeta) return String(fromMeta).trim();
+  return gourmetTunnelEthyleneImei();
+}
+
+function isValidEthyleneReading(value, existing = []) {
+  if (value == null || !Number.isFinite(value)) return false;
+  if (value === 0 || value >= ETHYLENE_MAX_READING) return false;
+  return !existing.some((r) => Math.abs(r - value) < 0.05);
+}
+
+function computeInitialEthyleneDose(_baseline, target) {
+  const remaining = Math.max(0, Number(target) - Number(_baseline ?? 0));
+  if (remaining <= 0) return 0;
+  return 2;
+}
+
+function computeProportionalEthyleneDose(meta, target, lastReading) {
+  const baseline = Number(meta.baselineBeforeDose);
+  const lastDose = Number(meta.lastTipo5Dato);
+  if (!Number.isFinite(baseline) || !Number.isFinite(lastDose) || lastDose <= 0) {
+    return Math.max(1, Math.round(target - lastReading));
+  }
+  const increment = lastReading - baseline;
+  if (increment <= 0) return Math.max(1, Math.round(target - lastReading));
+  const remaining = target - lastReading;
+  if (remaining <= 0) return 0;
+  const ppmPerUnit = increment / lastDose;
+  if (ppmPerUnit <= 0) return Math.max(1, Math.round(remaining));
+  return Math.max(1, Math.round(remaining / ppmPerUnit));
+}
+
 async function updateJob(id, patch) {
   const fields = [];
   const vals = [];
@@ -51,6 +121,47 @@ async function updateJob(id, patch) {
   fields.push('updated_at = now()');
   vals.push(id);
   await pool.query(`UPDATE app_tunnel_command_jobs SET ${fields.join(', ')} WHERE id = $${i}`, vals);
+
+  const batchRow = await pool.query(`SELECT batch_id FROM app_tunnel_command_jobs WHERE id = $1`, [id]);
+  const batchId = batchRow.rows[0]?.batch_id;
+  if (batchId) {
+    await syncControlSessionForTunnelBatch(batchId).catch((e) =>
+      console.warn('[tunnel-history] sync', batchId, e.message)
+    );
+  }
+}
+
+function buildJobMeta(deviceId, kind, target) {
+  const meta = kind === 'ethylene' ? { ethyleneTargetPpm: target } : {};
+  const id = String(deviceId || '').trim();
+
+  if (
+    kind === 'ethylene' &&
+    (isGourmetTunnelAggregateDeviceId(id) ||
+      id === gourmetTradingStandaloneImei() ||
+      id === gourmetTunnelEthyleneImei())
+  ) {
+    return {
+      ...meta,
+      tunnelEthylene: true,
+      ethyleneImei:
+        id === gourmetTradingStandaloneImei() || id === gourmetTunnelEthyleneImei()
+          ? id
+          : gourmetTunnelEthyleneImei(),
+      phase: 'init',
+      readings: [],
+    };
+  }
+
+  if (isGourmetTunnelAggregateDeviceId(id)) {
+    if (kind === 'temperature' || kind === 'ventilation') {
+      return { ...meta, fanOutImeis: gourmetTradingTunnelUnitImeis() };
+    }
+    if (kind === 'humidity') {
+      return { ...meta, sensorImei: gourmetTunnelEthyleneImei() };
+    }
+  }
+  return meta;
 }
 
 /**
@@ -67,6 +178,8 @@ export async function createTunnelCommandJobs({ client, userId, deviceId, comman
     const target = Number(raw);
     if (!Number.isFinite(target)) continue;
 
+    const meta = buildJobMeta(deviceId, kind, target);
+
     const { rows } = await db.query(
       `INSERT INTO app_tunnel_command_jobs
          (user_id, device_id, batch_id, kind, target_value, status, tunnel_tipo, verify_field, tolerance, meta)
@@ -81,7 +194,7 @@ export async function createTunnelCommandJobs({ client, userId, deviceId, comman
         cfg.tunnelTipo,
         cfg.verifyField,
         cfg.tolerance,
-        JSON.stringify(kind === 'ethylene' ? { ethyleneTargetPpm: target } : {}),
+        JSON.stringify(meta),
       ]
     );
     jobs.push(rows[0]);
@@ -90,30 +203,156 @@ export async function createTunnelCommandJobs({ client, userId, deviceId, comman
   return { batchId, jobs };
 }
 
-async function dispatchInitialSend(job) {
+async function dispatchFanOutSimple(job) {
+  const imeis = resolveFanOutImeis(job);
+  const target = Number(job.target_value);
+  let steps = job.steps ?? [];
+  const sentUrls = [];
+
+  try {
+    for (const imei of imeis) {
+      const sent = await sendTunnelControlCommand(imei, job.tunnel_tipo, target);
+      sentUrls.push({ imei, url: sent.url, dato: sent.dato });
+    }
+    steps = appendStep(steps, {
+      action: 'send_fanout',
+      tipo: job.tunnel_tipo,
+      dato: target,
+      imeis,
+      urls: sentUrls,
+    });
+    const nextCheck = new Date(Date.now() + SIMPLE_VERIFY_DELAY_MS);
+    await updateJob(job.id, {
+      status: 'verifying',
+      steps,
+      meta: { ...(job.meta ?? {}), fanOutImeis: imeis },
+      next_check_at: nextCheck.toISOString(),
+      attempts: 1,
+    });
+  } catch (e) {
+    steps = appendStep(steps, { action: 'error', message: String(e.message) });
+    await updateJob(job.id, {
+      status: 'failed',
+      steps,
+      last_error: String(e.message),
+      completed_at: nowIso(),
+    });
+  }
+}
+
+async function dispatchLegacyEthylene(job) {
   const imei = job.device_id;
   const target = Number(job.target_value);
   let steps = job.steps ?? [];
 
   try {
-    if (job.kind === 'ethylene') {
-      const sent = await sendEthyleneInjectionCommand(imei, target);
-      steps = appendStep(steps, {
-        action: 'send_ethylene',
-        ppm: sent.ppm,
-        urls: sent.steps.map((s) => s.url),
-      });
-      const nextCheck = new Date(Date.now() + ETHYLENE_VERIFY_DELAY_MS);
+    const sent = await sendEthyleneInjectionCommand(imei, target);
+    steps = appendStep(steps, {
+      action: 'send_ethylene',
+      ppm: sent.ppm,
+      urls: sent.steps.map((s) => s.url),
+    });
+    const nextCheck = new Date(Date.now() + ETHYLENE_VERIFY_DELAY_MS);
+    await updateJob(job.id, {
+      status: 'waiting',
+      steps,
+      next_check_at: nextCheck.toISOString(),
+      attempts: 1,
+    });
+  } catch (e) {
+    steps = appendStep(steps, { action: 'error', message: String(e.message) });
+    await updateJob(job.id, {
+      status: 'failed',
+      steps,
+      last_error: String(e.message),
+      completed_at: nowIso(),
+    });
+  }
+}
+
+async function dispatchTunnelEthylene(job) {
+  const imei = resolveEthyleneImei(job);
+  const target = Number(job.target_value);
+  const tolerance = Number(job.tolerance);
+  let steps = job.steps ?? [];
+  let meta = { ...(job.meta ?? {}), ethyleneImei: imei, readings: [], phase: 'polling' };
+
+  try {
+    const row = await fetchDeviceRowByImei(imei);
+    const baseline = readTelemetryField(row, 'campo_1') ?? 0;
+
+    if (ethyleneTargetReached(baseline, target, tolerance)) {
       await updateJob(job.id, {
-        status: 'waiting',
-        steps,
-        next_check_at: nextCheck.toISOString(),
-        attempts: 1,
+        status: 'completed',
+        steps: appendStep(steps, {
+          action: 'completed',
+          reason: 'ethylene_already_at_target',
+          baseline,
+          target,
+        }),
+        last_read_value: baseline,
+        completed_at: nowIso(),
+        meta,
       });
       return;
     }
 
-    const sent = await sendTunnelControlCommand(imei, job.tunnel_tipo, target);
+    let baselineBeforeDose = baseline;
+    let lastTipo5Dato = 0;
+
+    if (baseline < target) {
+      const dose = computeInitialEthyleneDose(baseline, target);
+      const sent = await sendEthyleneDoseCommand(imei, dose);
+      lastTipo5Dato = sent.ppm;
+      steps = appendStep(steps, {
+        action: 'send_tipo5',
+        dato: sent.ppm,
+        baselineBeforeDose: baseline,
+        url: sent.step.url,
+      });
+      meta.baselineBeforeDose = baseline;
+      meta.lastTipo5Dato = sent.ppm;
+    }
+
+    await updateJob(job.id, {
+      status: 'waiting',
+      steps,
+      meta,
+      last_read_value: baselineBeforeDose,
+      next_check_at: new Date(Date.now() + ETHYLENE_POLL_INTERVAL_MS).toISOString(),
+      attempts: 1,
+    });
+  } catch (e) {
+    steps = appendStep(steps, { action: 'error', message: String(e.message) });
+    await updateJob(job.id, {
+      status: 'failed',
+      steps,
+      last_error: String(e.message),
+      completed_at: nowIso(),
+    });
+  }
+}
+
+async function dispatchInitialSend(job) {
+  if (job.kind === 'ethylene') {
+    if (usesTunnelEthyleneAlgorithm(job)) {
+      await dispatchTunnelEthylene(job);
+    } else {
+      await dispatchLegacyEthylene(job);
+    }
+    return;
+  }
+
+  if (isGourmetTunnelAggregateDeviceId(job.device_id) || job.meta?.fanOutImeis?.length) {
+    await dispatchFanOutSimple(job);
+    return;
+  }
+
+  const target = Number(job.target_value);
+  let steps = job.steps ?? [];
+
+  try {
+    const sent = await sendTunnelControlCommand(job.device_id, job.tunnel_tipo, target);
     steps = appendStep(steps, {
       action: 'send',
       tipo: job.tunnel_tipo,
@@ -136,6 +375,64 @@ async function dispatchInitialSend(job) {
       completed_at: nowIso(),
     });
   }
+}
+
+async function verifyFanOutSimpleJob(job) {
+  const imeis = resolveFanOutImeis(job);
+  const target = Number(job.target_value);
+  const tolerance = Number(job.tolerance);
+  let steps = job.steps ?? [];
+  const unitResults = [];
+
+  for (const imei of imeis) {
+    const row = await fetchDeviceRowByImei(imei);
+    const actual = readTelemetryField(row, job.verify_field);
+    unitResults.push({ imei, actual, ok: valuesMatch(actual, target, tolerance) });
+  }
+
+  steps = appendStep(steps, {
+    action: 'read_fanout',
+    field: job.verify_field,
+    target,
+    unitResults,
+  });
+
+  const allOk = unitResults.length > 0 && unitResults.every((r) => r.ok);
+  if (allOk) {
+    await updateJob(job.id, {
+      status: 'completed',
+      steps: appendStep(steps, { action: 'completed', reason: 'all_units_reached' }),
+      last_read_value: unitResults.reduce((s, r) => s + (r.actual ?? 0), 0) / unitResults.length,
+      meta: { ...(job.meta ?? {}), unitResults },
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+    return;
+  }
+
+  const attempts = Number(job.attempts) + 1;
+  if (attempts >= Number(job.max_attempts)) {
+    const failed = unitResults.filter((r) => !r.ok).map((r) => r.imei);
+    await updateJob(job.id, {
+      status: 'failed',
+      steps: appendStep(steps, { action: 'failed', reason: 'max_attempts', failedImeis: failed }),
+      attempts,
+      meta: { ...(job.meta ?? {}), unitResults },
+      last_error: `Unidades sin objetivo: ${failed.join(', ')}`,
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+    return;
+  }
+
+  const nextCheck = new Date(Date.now() + SIMPLE_VERIFY_DELAY_MS);
+  await updateJob(job.id, {
+    status: 'verifying',
+    steps,
+    attempts,
+    meta: { ...(job.meta ?? {}), unitResults },
+    next_check_at: nextCheck.toISOString(),
+  });
 }
 
 async function verifySimpleJob(job, row) {
@@ -184,7 +481,7 @@ async function verifySimpleJob(job, row) {
   });
 }
 
-async function verifyEthyleneJob(job, row) {
+async function verifyLegacyEthyleneJob(job, row) {
   const target = Number(job.target_value);
   const tolerance = Number(job.tolerance);
   const actual = readTelemetryField(row, 'campo_1');
@@ -260,6 +557,139 @@ async function verifyEthyleneJob(job, row) {
   }
 }
 
+async function verifyTunnelEthyleneJob(job) {
+  const imei = resolveEthyleneImei(job);
+  const target = Number(job.target_value);
+  const tolerance = Number(job.tolerance);
+  let meta = { ...(job.meta ?? {}) };
+  let readings = Array.isArray(meta.readings) ? [...meta.readings] : [];
+  let steps = job.steps ?? [];
+  const attempts = Number(job.attempts) + 1;
+
+  try {
+    const poll = await sendEthylenePollCommand(imei);
+    steps = appendStep(steps, { action: 'poll_tipo0', url: poll.url, dato: 1 });
+  } catch (e) {
+    steps = appendStep(steps, { action: 'poll_error', message: String(e.message) });
+  }
+
+  const row = await fetchDeviceRowByImei(imei);
+  const actual = readTelemetryField(row, 'campo_1');
+
+  if (isValidEthyleneReading(actual, readings)) {
+    readings.push(actual);
+    meta.readings = readings;
+  }
+
+  steps = appendStep(steps, {
+    action: 'read_ethylene_poll',
+    value: actual,
+    target,
+    readings: [...readings],
+    readingsNeeded: ETHYLENE_READINGS_NEEDED,
+  });
+
+  if (ethyleneTargetReached(actual, target, tolerance)) {
+    await updateJob(job.id, {
+      status: 'completed',
+      steps: appendStep(steps, { action: 'completed', reason: 'ethylene_target_reached' }),
+      last_read_value: actual,
+      meta,
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+    return;
+  }
+
+  if (readings.length < ETHYLENE_READINGS_NEEDED) {
+    if (attempts >= Number(job.max_attempts)) {
+      await updateJob(job.id, {
+        status: 'failed',
+        steps: appendStep(steps, { action: 'failed', reason: 'max_attempts_poll' }),
+        last_read_value: actual,
+        attempts,
+        meta,
+        last_error: `No se obtuvieron ${ETHYLENE_READINGS_NEEDED} lecturas válidas de campo_1`,
+        completed_at: nowIso(),
+        next_check_at: null,
+      });
+      return;
+    }
+    await updateJob(job.id, {
+      status: 'waiting',
+      steps,
+      last_read_value: actual,
+      attempts,
+      meta,
+      next_check_at: new Date(Date.now() + ETHYLENE_POLL_INTERVAL_MS).toISOString(),
+    });
+    return;
+  }
+
+  const lastReading = readings[readings.length - 1];
+  if (lastReading >= target - tolerance) {
+    await updateJob(job.id, {
+      status: 'completed',
+      steps: appendStep(steps, { action: 'completed', reason: 'ethylene_target_reached_after_poll' }),
+      last_read_value: lastReading,
+      meta,
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+    return;
+  }
+
+  const nextDose = computeProportionalEthyleneDose(meta, target, lastReading);
+
+  if (nextDose <= 0 || attempts >= Number(job.max_attempts)) {
+    await updateJob(job.id, {
+      status: 'failed',
+      steps: appendStep(steps, { action: 'failed', reason: 'max_attempts_dose' }),
+      last_read_value: lastReading,
+      attempts,
+      meta,
+      last_error: `Etileno no alcanzó ${target} ppm (lectura ${lastReading})`,
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+    return;
+  }
+
+  try {
+    const previousBaseline = Number(meta.baselineBeforeDose ?? lastReading);
+    const observedIncrement = lastReading - previousBaseline;
+    const sent = await sendEthyleneDoseCommand(imei, nextDose);
+    meta.baselineBeforeDose = lastReading;
+    meta.lastTipo5Dato = sent.ppm;
+    meta.readings = [];
+    steps = appendStep(steps, {
+      action: 'send_tipo5_proportional',
+      dato: sent.ppm,
+      baselineBeforeDose: previousBaseline,
+      lastReading,
+      observedIncrement,
+      remaining: target - lastReading,
+      url: sent.step.url,
+    });
+    await updateJob(job.id, {
+      status: 'waiting',
+      steps,
+      last_read_value: lastReading,
+      attempts,
+      meta,
+      next_check_at: new Date(Date.now() + ETHYLENE_POLL_INTERVAL_MS).toISOString(),
+    });
+  } catch (e) {
+    await updateJob(job.id, {
+      status: 'failed',
+      steps: appendStep(steps, { action: 'error', message: String(e.message) }),
+      last_error: String(e.message),
+      completed_at: nowIso(),
+      next_check_at: null,
+    });
+  }
+}
+
 async function processOneJob(job) {
   if (job.status === 'pending') {
     await dispatchInitialSend(job);
@@ -267,6 +697,40 @@ async function processOneJob(job) {
   }
 
   if (job.status !== 'verifying' && job.status !== 'waiting') return;
+
+  if (job.kind === 'ethylene') {
+    if (usesTunnelEthyleneAlgorithm(job)) {
+      await verifyTunnelEthyleneJob(job);
+      return;
+    }
+    const row = await fetchDeviceRowByImei(job.device_id);
+    if (!row) {
+      const attempts = Number(job.attempts) + 1;
+      if (attempts >= Number(job.max_attempts)) {
+        await updateJob(job.id, {
+          status: 'failed',
+          attempts,
+          last_error: 'Sin telemetría del dispositivo',
+          completed_at: nowIso(),
+          next_check_at: null,
+        });
+        return;
+      }
+      await updateJob(job.id, {
+        attempts,
+        next_check_at: new Date(Date.now() + ETHYLENE_VERIFY_DELAY_MS).toISOString(),
+        last_error: 'Sin telemetría del dispositivo',
+      });
+      return;
+    }
+    await verifyLegacyEthyleneJob(job, row);
+    return;
+  }
+
+  if (isGourmetTunnelAggregateDeviceId(job.device_id) || job.meta?.fanOutImeis?.length) {
+    await verifyFanOutSimpleJob(job);
+    return;
+  }
 
   const row = await fetchDeviceRowByImei(job.device_id);
   if (!row) {
@@ -281,22 +745,15 @@ async function processOneJob(job) {
       });
       return;
     }
-    const nextCheck = new Date(
-      Date.now() + (job.kind === 'ethylene' ? ETHYLENE_VERIFY_DELAY_MS : SIMPLE_VERIFY_DELAY_MS)
-    );
     await updateJob(job.id, {
       attempts,
-      next_check_at: nextCheck.toISOString(),
+      next_check_at: new Date(Date.now() + SIMPLE_VERIFY_DELAY_MS).toISOString(),
       last_error: 'Sin telemetría del dispositivo',
     });
     return;
   }
 
-  if (job.kind === 'ethylene') {
-    await verifyEthyleneJob(job, row);
-  } else {
-    await verifySimpleJob(job, row);
-  }
+  await verifySimpleJob(job, row);
 }
 
 /** Procesa trabajos pendientes o en verificación cuyo next_check_at ya venció. */

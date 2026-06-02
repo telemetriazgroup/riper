@@ -2,12 +2,13 @@ import express from 'express';
 import { writeAudit } from '../auditLog.js';
 import { fireEmailNotification } from '../emailNotifications.js';
 import { isPinnedFleetDeviceId, isPinnedFleetDemoEmail } from '../demoFleetFilter.js';
-import { isGourmetDeviceId, isGourmetTradingFleetEmail } from '../gourmetFleet.js';
+import { isGourmetTunnelCommandDeviceId, isGourmetTradingFleetEmail } from '../gourmetFleet.js';
 import {
   createTunnelCommandJobs,
   kickoffTunnelCommandBatch,
   listTunnelCommandJobs,
 } from '../tunnelCommandCompliance.js';
+import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
 
 export const tunnelCommandsRouter = express.Router();
 
@@ -18,7 +19,7 @@ function isViewer(req) {
 function canUseTunnelCommands(req, deviceId) {
   if (isViewer(req)) return false;
   if (!isGourmetTradingFleetEmail(req.user?.email)) return false;
-  if (!isGourmetDeviceId(deviceId)) return false;
+  if (!isGourmetTunnelCommandDeviceId(deviceId)) return false;
   if (isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
     return false;
   }
@@ -62,6 +63,7 @@ tunnelCommandsRouter.post('/apply-manual', async (req, res) => {
     });
 
     await kickoffTunnelCommandBatch(batchId);
+    await syncControlSessionForTunnelBatch(batchId);
 
     await writeAudit(req, {
       action: 'tunnel_commands.apply_manual',
@@ -91,7 +93,7 @@ tunnelCommandsRouter.get('/', async (req, res) => {
     const batchId = String(req.query.batchId || '').trim();
     const activeOnly = req.query.active === '1' || req.query.active === 'true';
 
-    if (deviceId && isGourmetTradingFleetEmail(req.user?.email) && !isGourmetDeviceId(deviceId)) {
+    if (deviceId && isGourmetTradingFleetEmail(req.user?.email) && !isGourmetTunnelCommandDeviceId(deviceId)) {
       return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
     }
     if (deviceId && isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {

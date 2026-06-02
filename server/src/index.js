@@ -34,6 +34,14 @@ import {
   finalizeDueDeviceControlSessions,
 } from './autoFinalizeDueProcesses.js';
 import { processTunnelCommandJobs, POLL_INTERVAL_MS } from './tunnelCommandCompliance.js';
+import {
+  GOURMET_PROCESS_POLL_MS,
+  processGourmetActiveControlSessions,
+} from './gourmetProcessControl.js';
+import {
+  kickTrackingControlForProcess,
+  processGourmetActiveTrackingSessions,
+} from './ripeningTrackingControl.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const AUTO_FINALIZE_MS = Math.max(15000, Number(process.env.AUTO_FINALIZE_INTERVAL_MS) || 60000);
@@ -104,6 +112,13 @@ async function main() {
   setInterval(() => {
     processTunnelCommandJobs().catch((e) => console.error('[tunnel-compliance]', e.message));
   }, POLL_INTERVAL_MS).unref?.();
+
+  setInterval(() => {
+    Promise.all([
+      processGourmetActiveControlSessions(),
+      processGourmetActiveTrackingSessions(),
+    ]).catch((e) => console.error('[gourmet-process]', e.message));
+  }, GOURMET_PROCESS_POLL_MS).unref?.();
 }
 
 main().catch((e) => {

@@ -22,6 +22,13 @@ import {
 import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
 import { cn } from '@/app/lib/utils';
 import { toast } from 'sonner';
+import {
+  filterUserFacingParams,
+  programmedFieldsFromSession,
+  summarizeProcessEventI18n,
+  type ProcessEventRow,
+} from '@/app/lib/controlProcessDisplay';
+import { ProcessTechnicalDetailsDialog } from '@/app/components/ProcessTechnicalDetailsDialog';
 const STATUS_ES: Record<string, string> = {
   active: 'Activo',
   cancelled: 'Cancelado',
@@ -37,7 +44,7 @@ function paramsToString(p: Record<string, unknown>) {
 }
 
 export const DeviceControlAdmin: React.FC = () => {
-  const { t, formatDateTime } = useSettings();
+  const { t, formatDateTime, formatTemp } = useSettings();
   const role = getStoredUser()?.role;
   const isSuperAdmin = role === 'superadmin';
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
@@ -50,6 +57,7 @@ export const DeviceControlAdmin: React.FC = () => {
   const [editParamsText, setEditParamsText] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
   const [detailRow, setDetailRow] = useState<DeviceControlSessionRow | null>(null);
+  const [detailTechOpen, setDetailTechOpen] = useState(false);
   const uid = getStoredUser()?.id;
   const canModerateSessions = role === 'operator' || role === 'admin' || role === 'superadmin';
   const canHardDeleteDb = canDeleteDeviceControlRecord();
@@ -247,10 +255,19 @@ export const DeviceControlAdmin: React.FC = () => {
                       )}
                     </span>
                     <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2 max-w-md">
-                      {Object.entries((r.params && typeof r.params === 'object' ? r.params : {}) as Record<string, unknown>)
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k}: ${String(v)}`)
-                        .join(' · ')}
+                      {(() => {
+                        const fields = programmedFieldsFromSession(r, t, formatTemp);
+                        if (fields.length > 0) {
+                          return fields.map((f) => `${f.label}: ${f.value}`).join(' · ');
+                        }
+                        const p = filterUserFacingParams(
+                          (r.params && typeof r.params === 'object' ? r.params : {}) as Record<string, unknown>
+                        );
+                        return Object.entries(p)
+                          .slice(0, 3)
+                          .map(([k, v]) => `${k}: ${String(v)}`)
+                          .join(' · ');
+                      })()}
                     </div>
                   </td>
                   <td className="p-3">
@@ -464,11 +481,25 @@ export const DeviceControlAdmin: React.FC = () => {
                   </p>
                 </div>
               )}
+              {detailRow && programmedFieldsFromSession(detailRow, t, formatTemp).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-1">
+                    {t('control_process_programmed_values')}
+                  </p>
+                  <ul className="text-sm space-y-1">
+                    {programmedFieldsFromSession(detailRow, t, formatTemp).map((f) => (
+                      <li key={f.label} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{f.label}</span>
+                        <span className="font-mono">{f.value}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground mb-1">{t('control_process_params')}</p>
-                <pre className="text-xs bg-muted border border-border rounded-md p-2 overflow-x-auto max-h-52 text-foreground">
-                  {paramsToString((detailRow.params || {}) as Record<string, unknown>)}
-                </pre>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setDetailTechOpen(true)}>
+                  {t('control_process_see_more')}
+                </Button>
               </div>
               {role !== 'viewer' && (
                 <div>
@@ -485,6 +516,22 @@ export const DeviceControlAdmin: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {detailRow && (
+        <ProcessTechnicalDetailsDialog
+          open={detailTechOpen}
+          onOpenChange={setDetailTechOpen}
+          title={t('control_process_technical_detail')}
+          payload={detailRow.params ?? {}}
+          eventLog={
+            Array.isArray(detailRow.params?.tunnelEventLog)
+              ? (detailRow.params.tunnelEventLog as ProcessEventRow[])
+              : []
+          }
+          formatEvent={(ev) => summarizeProcessEventI18n(ev, t)}
+          formatDateTime={formatDateTime}
+        />
+      )}
     </div>
   );
 };

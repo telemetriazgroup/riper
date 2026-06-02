@@ -28,6 +28,7 @@ import {
 } from '@/app/lib/historySeriesSanitize';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 import { CHART_METRIC_KEYS, buildChartMetricLabels } from '@/app/lib/chartMetricLabels';
+import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 
 /** Modal Datos históricos: ejes Y1–Y4 y orden de variables en panel. */
 const HISTORICAL_Y1_TEMP_KEYS = [
@@ -250,7 +251,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         fontSize={12}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        tickFormatter={(val) => formatUiDecimal(Number(val))}
                         width={44}
                         label={{
                           value: `${t('temperature')} (°${tempUnit})`,
@@ -262,7 +263,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       />
                       <Tooltip
                         formatter={(value: number | null, name) => [
-                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? formatUiDecimal(value) : '—',
                           name,
                         ]}
                         contentStyle={{
@@ -332,7 +333,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         fontSize={12}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        tickFormatter={(val) => formatUiDecimal(Number(val))}
                         width={44}
                         label={{
                           value: `${t('co2')} / ${metricLabels.o2_reading} (%)`,
@@ -344,7 +345,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       />
                       <Tooltip
                         formatter={(value: number | null, name) => [
-                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? formatUiDecimal(value) : '—',
                           name,
                         ]}
                         contentStyle={{
@@ -418,7 +419,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         fontSize={12}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        tickFormatter={(val) => formatUiDecimal(Number(val))}
                         width={44}
                         label={{ value: `${metricLabels.return_air} (°${tempUnit})`, angle: -90, position: 'insideLeft', fill: '#ef4444', style: { fontSize: 11 } }}
                       />
@@ -436,7 +437,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       />
                       <Tooltip
                         formatter={(value: number | null, name) => [
-                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? formatUiDecimal(value) : '—',
                           name,
                         ]}
                         contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
@@ -479,13 +480,13 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         fontSize={12}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={(val) => Number(val).toFixed(1)}
+                        tickFormatter={(val) => formatUiDecimal(Number(val))}
                         width={40}
                         label={{ value: `${t('co2')} (%)`, angle: 90, position: 'insideRight', fill: '#6b7280', style: { fontSize: 11 } }}
                       />
                       <Tooltip
                         formatter={(value: number | null, name) => [
-                          value != null && typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(2) : '—',
+                          value != null && typeof value === 'number' && !Number.isNaN(value) ? formatUiDecimal(value) : '—',
                           name,
                         ]}
                         contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
@@ -801,7 +802,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
           {(Array.isArray(payload) ? payload : []).map((entry) => (
             <li key={entry.dataKey} className="flex justify-between gap-4 text-sm">
               <span style={{ color: entry.color }}>{metricLabels[String(entry.dataKey)] ?? entry.dataKey}</span>
-              <span className="font-mono font-medium">{entry.value != null ? Number(entry.value).toFixed(2) : '—'}</span>
+              <span className="font-mono font-medium">{entry.value != null ? formatUiDecimal(Number(entry.value)) : '—'}</span>
             </li>
           ))}
         </ul>
@@ -1333,7 +1334,7 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
                                     (nextNum != null && Math.abs(numVal - nextNum) >= variationThreshold);
                                   const isRegular = index % labelStep === 0;
                                   if (!isVariation && !isRegular) return null;
-                                  const text = typeof value === 'number' ? value.toFixed(1) : String(value);
+                                  const text = typeof value === 'number' ? formatUiDecimal(value) : String(value);
                                   return (
                                     <text x={x} y={y} dy={labelDy} textAnchor="middle" fill={color} fontSize={labelFontSize} fontWeight={700}>
                                       {text}
@@ -1479,7 +1480,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
     if (v == null) return '—';
     if ((key === 'co2_reading' || key === 'o2_reading') && Number(v) === 0) return '-';
     if (key === 'ethylene' && Number(v) === 0) return 'NA';
-    if (typeof v === 'number') return Number(v).toFixed(2);
+    if (typeof v === 'number') return formatUiDecimal(v);
     return String(v);
   };
 
@@ -1647,7 +1648,7 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
                                 : key === 'ethylene' && Number(row[key]) === 0
                                   ? 'NA'
                                   : typeof row[key] === 'number'
-                                    ? Number(row[key]).toFixed(2)
+                                    ? formatUiDecimal(Number(row[key]))
                                     : String(row[key])}
                           </td>
                         ))}

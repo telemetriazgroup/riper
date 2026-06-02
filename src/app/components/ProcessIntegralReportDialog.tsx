@@ -26,6 +26,7 @@ import { Button } from '@/app/components/ui/Button';
 import { AuthedImage } from '@/app/components/AuthedImage';
 import { ImageWithFallback } from '@/app/components/figma/ImageWithFallback';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { fetchMaduradorRangoHistoryForImei } from '@/app/lib/madurador';
 import {
@@ -487,7 +488,7 @@ function TempRhDualChart({
     tempDomainFixed ?? ([...yDomainPadded(rows.map((r) => r.temp))] as [number, number]);
   const hDom: [number, number] =
     rhDomainFixed ?? ([...yDomainPadded(rows.map((r) => r.rh))] as [number, number]);
-  const dec1 = (v: number) => Number(v).toFixed(1);
+  const decUi = (v: number) => formatUiDecimal(v);
   return (
     <div className="h-64 w-full mt-2">
       <ResponsiveContainer width="100%" height="100%">
@@ -498,7 +499,7 @@ function TempRhDualChart({
             yAxisId="temp"
             domain={tDom}
             tick={{ fontSize: 10, fill: '#fca5a5' }}
-            tickFormatter={dec1}
+            tickFormatter={decUi}
             width={44}
             label={{ value: tempLabel, angle: -90, position: 'insideLeft', fill: '#fca5a5', fontSize: 10 }}
           />
@@ -507,11 +508,11 @@ function TempRhDualChart({
             orientation="right"
             domain={hDom}
             tick={{ fontSize: 10, fill: '#c4b5fd' }}
-            tickFormatter={dec1}
+            tickFormatter={decUi}
             width={44}
             label={{ value: rhLabel, angle: 90, position: 'insideRight', fill: '#c4b5fd', fontSize: 10 }}
           />
-          <Tooltip formatter={(v: number | string) => dec1(Number(v))} />
+          <Tooltip formatter={(v: number | string) => decUi(Number(v))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line
             yAxisId="temp"
@@ -551,7 +552,7 @@ function GasDualChart({
   ethDomain?: [number, number];
 }) {
   if (!rows.length) return <p className="text-sm text-gray-500 py-4">{t('integral_report_no_series')}</p>;
-  const dec1 = (v: number) => Number(v).toFixed(1);
+  const decUi = (v: number) => formatUiDecimal(v);
   return (
     <div className="h-64 w-full mt-2">
       <ResponsiveContainer width="100%" height="100%">
@@ -563,7 +564,7 @@ function GasDualChart({
             domain={co2Domain}
             tick={{ fontSize: 10 }}
             width={40}
-            tickFormatter={dec1}
+            tickFormatter={decUi}
             label={{ value: 'CO₂ %', angle: -90, position: 'insideLeft', fontSize: 10 }}
           />
           <YAxis
@@ -572,7 +573,7 @@ function GasDualChart({
             domain={ethDomain}
             tick={{ fontSize: 10 }}
             width={44}
-            tickFormatter={dec1}
+            tickFormatter={decUi}
             label={{
               value: `${t('integral_report_ethylene_axis')} (ppm)`,
               angle: 90,
@@ -580,7 +581,7 @@ function GasDualChart({
               fontSize: 9,
             }}
           />
-          <Tooltip formatter={(v: number | string | null) => (v == null ? '—' : dec1(Number(v)))} />
+          <Tooltip formatter={(v: number | string | null) => (v == null ? '—' : decUi(Number(v)))} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line
             yAxisId="co2"
@@ -658,7 +659,7 @@ function StatGrid({ items }: { items: { label: string; value: string }[] }) {
 }
 
 export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
-  const { t, formatDateTime, formatFileTimestamp, tempUnit, convertTemp } = useSettings();
+  const { t, formatDateTime, formatFileTimestamp, tempUnit, convertTemp, formatTemp } = useSettings();
   const integralReportTempDomain: [number, number] = tempUnit === 'F' ? [32, 86] : [0, 30];
   const printRef = useRef<HTMLDivElement>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -821,12 +822,12 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           />
           <StatGrid
             items={[
-              { label: t('integral_report_avg_temp'), value: stats.avgTemp != null ? `${convertTemp(stats.avgTemp).toFixed(1)} °${tempUnit}` : '—' },
-              { label: t('integral_report_min_temp'), value: stats.minTemp != null ? `${convertTemp(stats.minTemp).toFixed(1)} °${tempUnit}` : '—' },
-              { label: t('integral_report_max_temp'), value: stats.maxTemp != null ? `${convertTemp(stats.maxTemp).toFixed(1)} °${tempUnit}` : '—' },
-              { label: t('integral_report_avg_rh'), value: stats.avgRh != null ? `${stats.avgRh.toFixed(1)} %` : '—' },
-              { label: t('integral_report_min_rh'), value: stats.minRh != null ? `${stats.minRh.toFixed(1)} %` : '—' },
-              { label: t('integral_report_max_rh'), value: stats.maxRh != null ? `${stats.maxRh.toFixed(1)} %` : '—' },
+              { label: t('integral_report_avg_temp'), value: stats.avgTemp != null ? formatTemp(stats.avgTemp) : '—' },
+              { label: t('integral_report_min_temp'), value: stats.minTemp != null ? formatTemp(stats.minTemp) : '—' },
+              { label: t('integral_report_max_temp'), value: stats.maxTemp != null ? formatTemp(stats.maxTemp) : '—' },
+              { label: t('integral_report_avg_rh'), value: stats.avgRh != null ? formatUiPercent(stats.avgRh) : '—' },
+              { label: t('integral_report_min_rh'), value: stats.minRh != null ? formatUiPercent(stats.minRh) : '—' },
+              { label: t('integral_report_max_rh'), value: stats.maxRh != null ? formatUiPercent(stats.maxRh) : '—' },
               {
                 label: t('integral_report_minutes_to_setpoint'),
                 value: stats.minutesToSetpoint != null ? `${Math.round(stats.minutesToSetpoint)} min` : '—',
@@ -883,8 +884,8 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           />
           <StatGrid
             items={[
-              { label: t('integral_report_avg_temp'), value: statsTh.avgTemp != null ? `${convertTemp(statsTh.avgTemp).toFixed(1)} °${tempUnit}` : '—' },
-              { label: t('integral_report_avg_rh'), value: statsTh.avgRh != null ? `${statsTh.avgRh.toFixed(1)} %` : '—' },
+              { label: t('integral_report_avg_temp'), value: statsTh.avgTemp != null ? formatTemp(statsTh.avgTemp) : '—' },
+              { label: t('integral_report_avg_rh'), value: statsTh.avgRh != null ? formatUiPercent(statsTh.avgRh) : '—' },
               {
                 label: t('integral_report_minutes_to_setpoint'),
                 value: statsTh.minutesToSetpoint != null ? `${Math.round(statsTh.minutesToSetpoint)} min` : '—',
@@ -904,9 +905,9 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           <StatGrid
             items={[
               { label: t('integral_report_vent_ft3'), value: `${ft3.toFixed(0)} ft³` },
-              { label: t('integral_report_vent_m3'), value: `${m3v.toFixed(1)} m³` },
-              { label: t('integral_report_co2_weighted_vol'), value: co2W.toFixed(1) },
-              { label: t('integral_report_energy_kwh'), value: kwh != null ? kwh.toFixed(1) : '—' },
+              { label: t('integral_report_vent_m3'), value: `${formatUiDecimal(m3v)} m³` },
+              { label: t('integral_report_co2_weighted_vol'), value: formatUiDecimal(co2W) },
+              { label: t('integral_report_energy_kwh'), value: kwh != null ? formatUiDecimal(kwh) : '—' },
               { label: t('integral_report_ethylene_injected'), value: t('integral_report_na_future') },
             ]}
           />
@@ -928,14 +929,14 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
           {phaseSectionHeading(t('integral_report_pdf_phase_ventilation_heading'))}
           <StatGrid
             items={[
-              { label: t('integral_report_avg_avl'), value: avgAvl != null ? `${avgAvl.toFixed(1)} CFM` : '—' },
+              { label: t('integral_report_avg_avl'), value: avgAvl != null ? `${formatUiDecimal(avgAvl)} CFM` : '—' },
               {
                 label: t('integral_report_ethylene_drop'),
-                value: dEth.delta != null ? `${dEth.delta.toFixed(1)}` : '—',
+                value: dEth.delta != null ? formatUiDecimal(dEth.delta) : '—',
               },
               {
                 label: t('integral_report_co2_drop'),
-                value: dCo2.delta != null ? `${dCo2.delta.toFixed(1)} %` : '—',
+                value: dCo2.delta != null ? formatUiPercent(dCo2.delta) : '—',
               },
             ]}
           />
@@ -971,7 +972,7 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
             items={[
               {
                 label: t('integral_report_cooling_avg_change'),
-                value: deltaAvg != null ? `${deltaAvg > 0 ? '+' : ''}${deltaAvg.toFixed(1)} °${tempUnit}` : '—',
+                value: deltaAvg != null ? `${deltaAvg > 0 ? '+' : ''}${formatUiDecimal(deltaAvg)} °${tempUnit}` : '—',
               },
             ]}
           />
@@ -1086,10 +1087,10 @@ export const ProcessIntegralReportDialog: React.FC<Props> = ({ open, onOpenChang
                       <YAxis
                         tick={{ fontSize: 10 }}
                         domain={['auto', 'auto']}
-                        tickFormatter={(v) => Number(v).toFixed(1)}
+                        tickFormatter={(v) => formatUiDecimal(Number(v))}
                         width={40}
                       />
-                      <Tooltip formatter={(v: number) => Number(v).toFixed(1)} />
+                      <Tooltip formatter={(v: number) => formatUiDecimal(Number(v))} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       <Line type="monotone" dataKey="brix" name="Brix" stroke="#f97316" dot strokeWidth={2} isAnimationActive={false} />
                       <Line

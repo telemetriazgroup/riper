@@ -1,10 +1,10 @@
-export type TempUnit = 'C' | 'F';
+import { roundUiNumber, formatUiDecimal, UI_MAX_DECIMALS } from '@/app/lib/formatUiNumber';
 
-/** Convierte valor ingresado en la unidad de visualización a °C (almacenamiento interno). */
+export type TempUnit = 'C' | 'F';
 export function celsiusFromDisplayValue(value: number, unit: TempUnit): number {
   if (!Number.isFinite(value)) return value;
-  if (unit === 'C') return parseFloat(value.toFixed(2));
-  return parseFloat((((value - 32) * 5) / 9).toFixed(2));
+  if (unit === 'C') return roundUiNumber(value, UI_MAX_DECIMALS);
+  return roundUiNumber(((value - 32) * 5) / 9, UI_MAX_DECIMALS);
 }
 
 /** Formatea °C almacenados para mostrar en la unidad del usuario. */
@@ -12,10 +12,10 @@ export function formatStoredCelsius(
   celsius: number,
   convertTemp: (c: number) => number,
   unit: TempUnit,
-  decimals = 1
+  decimals = UI_MAX_DECIMALS
 ): string {
   if (!Number.isFinite(celsius)) return '—';
-  return `${convertTemp(celsius).toFixed(decimals)}°${unit}`;
+  return `${formatUiDecimal(convertTemp(celsius), decimals)}°${unit}`;
 }
 
 export type TempDisplayOpts = {

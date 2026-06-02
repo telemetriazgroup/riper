@@ -1,6 +1,10 @@
 import { Device, MOCK_DEVICES, TermoKingEstadoGeneralResponse, TermoKingHistorialResponse, mapTermoKingDispositivoToDevice } from '@/app/data';
 import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
+import {
+  GOURMET_TUNNEL_ETHYLENE_IMEI,
+  packageGourmetFleetDevices,
+} from '@/app/lib/gourmetTunnelFleet';
 import { isFleetDemoSession } from '@/app/lib/fleetDemo';
 import { fetchFleetDemoMaduradorDetail, fetchFleetDemoMaduradorList } from '@/app/lib/maduradorFleetDirect';
 import {
@@ -13,6 +17,7 @@ import {
   GOURMET_TUNEL_DEVICE_ID,
   getCachedGourmetTunnelDevice,
   refreshGourmetTunnelDevice,
+  setCachedGourmetTunnelDevice,
 } from '@/app/lib/tunelUnido';
 import {
   applySobrenombresToDevice,
@@ -21,6 +26,38 @@ import {
   putDeviceDisplayName,
 } from '@/app/lib/deviceNamesApi';
 import { deviceNameStorageKey } from '@/app/lib/deviceLocalNames';
+import {
+  applyGourmetEthyleneDisplayToDevice,
+  applyGourmetEthyleneDisplayToFleet,
+  applyGourmetEthyleneDisplayToHistory,
+  resolveGourmetProgrammedEthylenePpm,
+} from '@/app/lib/gourmetEthyleneDisplay';
+import { listControlSessions } from '@/app/lib/deviceControlProcessApi';
+
+async function finalizeGourmetClientFleet(list: Device[]): Promise<Device[]> {
+  const named = await mergeSavedDisplayNames(list);
+  if (!isGourmetSession()) return named;
+  let sessions = null;
+  try {
+    sessions = await listControlSessions();
+  } catch {
+    sessions = null;
+  }
+  return applyGourmetEthyleneDisplayToFleet(named, sessions);
+}
+
+async function finalizeGourmetClientDevice(device: Device): Promise<Device> {
+  const named = await mergeSavedDisplayNameOne(device);
+  if (!isGourmetSession()) return named;
+  let sessions = null;
+  try {
+    sessions = await listControlSessions();
+  } catch {
+    sessions = null;
+  }
+  const programmed = resolveGourmetProgrammedEthylenePpm(named.id, sessions);
+  return applyGourmetEthyleneDisplayToDevice(named, programmed);
+}
 
 async function mergeSavedDisplayNames(list: Device[]): Promise<Device[]> {
   if (list.length === 0) return list;
@@ -61,8 +98,14 @@ function appendGourmetTunnelIfNeeded(list: Device[]): Promise<Device[]> {
   if (!isGourmetSession() || isGourmetMaduradorFleetSession()) return Promise.resolve(list);
   return refreshGourmetTunnelDevice().then((tun) => {
     if (list.some((d) => d.id === tun.id)) return list;
+    setCachedGourmetTunnelDevice(tun);
     return [...list, tun];
   });
+}
+
+async function fetchGourmetMaduradorFleet(): Promise<Device[]> {
+  const raw = await getMaduradorDevicesCached();
+  return packageGourmetFleetDevices(raw);
 }
 
 export async function fetchDevices(): Promise<Device[]> {
@@ -77,14 +120,18 @@ export async function fetchDevices(): Promise<Device[]> {
   }
   if (hasMaduradorIdentificador()) {
     try {
+      if (isGourmetSession() && isGourmetMaduradorFleetSession()) {
+        const list = await fetchGourmetMaduradorFleet();
+        return finalizeGourmetClientFleet(list);
+      }
       const list = await getMaduradorDevicesCached();
       const withTunnel = await appendGourmetTunnelIfNeeded(list);
-      return mergeSavedDisplayNames(withTunnel);
+      return finalizeGourmetClientFleet(withTunnel);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
       if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
         const tun = await refreshGourmetTunnelDevice();
-        return mergeSavedDisplayNames([tun]);
+        return finalizeGourmetClientFleet([tun]);
       }
       return [];
     }
@@ -92,7 +139,7 @@ export async function fetchDevices(): Promise<Device[]> {
   if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
     const mad = buildGourmetDevice();
     const tun = await refreshGourmetTunnelDevice();
-    return mergeSavedDisplayNames([mad, tun]);
+    return finalizeGourmetClientFleet([mad, tun]);
   }
   try {
     const list = await fetchEstadoGeneral();
@@ -106,9 +153,14 @@ export async function fetchDevices(): Promise<Device[]> {
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
+  if (isGourmetSession() && isGourmetMaduradorFleetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
+    const list = await fetchGourmetMaduradorFleet();
+    const d = list.find((x) => x.id === id);
+    if (d) return finalizeGourmetClientDevice(d);
+  }
   if (isGourmetSession() && !isGourmetMaduradorFleetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const d = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());
-    return mergeSavedDisplayNameOne(d);
+    return finalizeGourmetClientDevice(d);
   }
   if (isFleetDemoSession()) {
     try {
@@ -124,16 +176,21 @@ export async function fetchDevice(id: string): Promise<Device> {
     }
   }
   if (hasMaduradorIdentificador()) {
-    const list = await getMaduradorDevicesCached();
+    let list: Device[] = [];
+    if (isGourmetSession() && isGourmetMaduradorFleetSession()) {
+      list = await fetchGourmetMaduradorFleet();
+    } else {
+      list = await getMaduradorDevicesCached();
+    }
     const device = list.find((d) => d.id === id);
-    if (device) return mergeSavedDisplayNameOne(device);
-    if (list.length) return mergeSavedDisplayNameOne(list[0]);
+    if (device) return finalizeGourmetClientDevice(device);
+    if (list.length) return finalizeGourmetClientDevice(list[0]);
     return new Promise((resolve) =>
       setTimeout(async () => resolve(await mergeSavedDisplayNameOne(MOCK_DEVICES[0])), 200)
     );
   }
   if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
-    return mergeSavedDisplayNameOne(buildGourmetDevice());
+    return finalizeGourmetClientDevice(buildGourmetDevice());
   }
   try {
     const list = await fetchEstadoGeneral();
@@ -203,8 +260,21 @@ export async function fetchDeviceHistory(
   options: FetchHistoryOptions = {}
 ): Promise<HistoryPoint[]> {
   if (shouldUseMaduradorRangoHistory()) {
-    const { points } = await fetchMaduradorRangoHistoryForImei(id, options ?? {});
-    return Array.isArray(points) ? points : [];
+    const historyImei =
+      isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID ? GOURMET_TUNNEL_ETHYLENE_IMEI : id;
+    const { points } = await fetchMaduradorRangoHistoryForImei(historyImei, options ?? {});
+    const list = Array.isArray(points) ? points : [];
+    if (isGourmetSession()) {
+      let sessions = null;
+      try {
+        sessions = await listControlSessions();
+      } catch {
+        sessions = null;
+      }
+      const programmed = resolveGourmetProgrammedEthylenePpm(id, sessions);
+      return applyGourmetEthyleneDisplayToHistory(list, programmed);
+    }
+    return list;
   }
   if (isGourmetSession() && !isGourmetMaduradorFleetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());

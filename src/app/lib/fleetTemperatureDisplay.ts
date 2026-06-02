@@ -63,6 +63,13 @@ export function getFleetCardTemperatureDisplay(
     trackingProcess,
     trackingProgressPct
   );
+  if (device.tunnel) {
+    return {
+      primaryC: device.telemetry.return_air,
+      setpointC: device.telemetry.set_point,
+      inCooling,
+    };
+  }
   const primaryC = inCooling ? device.telemetry.return_air : device.telemetry.temp_supply_1;
   const setpointC = inCooling && finalC != null ? finalC : device.telemetry.set_point;
   return { primaryC, setpointC, inCooling };

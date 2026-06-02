@@ -37,6 +37,20 @@ import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
+import { isGourmetSession } from '@/app/lib/gourmet';
+import { formatGourmetFleetEthyleneLabel } from '@/app/lib/gourmetEthyleneDisplay';
+import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
+
+function fleetEthyleneText(device: Device, gourmetFleet: boolean): string {
+  if (gourmetFleet) {
+    const label = formatGourmetFleetEthyleneLabel(device.telemetry.ethylene);
+    return label === '—' ? '—' : `${label} PPM`;
+  }
+  const v = device.telemetry.ethylene;
+  if (v == null) return '—';
+  if (v === 0) return 'NA';
+  return `${formatUiDecimal(v)} PPM`;
+}
 
 interface DeviceCardProps {
   device: Device;
@@ -56,12 +70,14 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   panelActiveSession,
   trackingProcess,
 }) => {
-  const { convertTemp, tempUnit, t, language, formatDateTime } = useSettings();
+  const { t, language, formatDateTime, formatTemp } = useSettings();
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(() => resolveDeviceDisplayName(device));
   const [isSaving, setIsSaving] = useState(false);
   const [trackingDetailsOpen, setTrackingDetailsOpen] = useState(false);
   const displayName = resolveDeviceDisplayName(device);
+  const gourmetFleet = isGourmetSession();
+  const ethyleneFleetLabel = fleetEthyleneText(device, gourmetFleet);
 
   useEffect(() => {
     setNewName(displayName);
@@ -458,8 +474,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                    <div>
                      <div className="text-xs text-muted-foreground">{t('temperature')}</div>
                      <div className="font-bold text-card-foreground">
-                       {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
-                       <span className="text-muted-foreground/70 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
+                       {formatTemp(fleetTemps.primaryC)}
+                       <span className="text-muted-foreground/70 font-normal ml-1">/ {formatTemp(fleetTemps.setpointC)}</span>
                      </div>
                    </div>
                  </div>
@@ -474,9 +490,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                      <div className="font-bold text-card-foreground">
                        {isTkCard
                          ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
-                           ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
+                           ? formatUiPercent(device.telemetry.o2_reading as number)
                            : '—'
-                         : `${device.telemetry.relative_humidity}%`}
+                         : formatUiPercent(device.telemetry.relative_humidity)}
                      </div>
                    </div>
                  </div>
@@ -486,14 +502,16 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                    <Activity className="h-4 w-4 text-green-500" />
                    <div>
                      <div className="text-xs text-muted-foreground">{t('ethylene')}</div>
-                     <div className="font-bold text-card-foreground">{device.telemetry.ethylene ?? '-'} PPM</div>
+                     <div className="font-bold text-card-foreground">{ethyleneFleetLabel}</div>
                    </div>
                  </div>
                  <div className="flex items-center gap-2">
                    <Wind className="h-4 w-4 text-muted-foreground" />
                    <div>
                      <div className="text-xs text-muted-foreground">{t('co2')}</div>
-                     <div className="font-bold text-card-foreground">{device.telemetry.co2_reading ?? '-'} %</div>
+                     <div className="font-bold text-card-foreground">
+                       {device.telemetry.co2_reading != null ? formatUiPercent(device.telemetry.co2_reading) : '-'}
+                     </div>
                    </div>
                  </div>
                </div>
@@ -508,8 +526,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <div>
                   <div className="text-xs text-muted-foreground">{t('temperature')}</div>
                   <div className="font-bold text-card-foreground">
-                    {convertTemp(fleetTemps.primaryC).toFixed(1)}°{tempUnit}
-                    <span className="text-gray-400 font-normal ml-1">/ {convertTemp(fleetTemps.setpointC)}°{tempUnit}</span>
+                       {formatTemp(fleetTemps.primaryC)}
+                       <span className="text-gray-400 font-normal ml-1">/ {formatTemp(fleetTemps.setpointC)}</span>
                   </div>
                 </div>
               </div>
@@ -525,9 +543,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <div className="font-bold text-card-foreground">
                     {isTkCard
                       ? device.telemetry.o2_reading != null && Number.isFinite(device.telemetry.o2_reading as number)
-                        ? `${Number(device.telemetry.o2_reading).toFixed(2)} %`
+                        ? formatUiPercent(device.telemetry.o2_reading as number)
                         : '—'
-                      : `${device.telemetry.relative_humidity}%`}
+                      : formatUiPercent(device.telemetry.relative_humidity)}
                   </div>
                 </div>
               </div>
@@ -538,7 +556,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <Activity className="h-4 w-4 text-green-500" />
                 <div>
                   <div className="text-xs text-muted-foreground">{t('ethylene')}</div>
-                  <div className="font-bold text-card-foreground">{device.telemetry.ethylene ?? '-'} PPM</div>
+                  <div className="font-bold text-card-foreground">{ethyleneFleetLabel}</div>
                 </div>
               </div>
 
@@ -546,7 +564,9 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <Wind className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <div className="text-xs text-muted-foreground">{t('co2')}</div>
-                  <div className="font-bold text-card-foreground">{device.telemetry.co2_reading ?? '-'} %</div>
+                  <div className="font-bold text-card-foreground">
+                    {device.telemetry.co2_reading != null ? formatUiPercent(device.telemetry.co2_reading) : '-'}
+                  </div>
                 </div>
               </div>
             </div>

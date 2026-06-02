@@ -19,7 +19,12 @@ import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Timer, WifiOff, Loader2 }
 import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
 import { applyTunnelManualCommands } from '@/app/lib/tunnelCommandsApi';
-import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
+import { isGourmetSession, isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
+import {
+  cacheGourmetProgrammedEthylene,
+  resolveGourmetProgrammedEthylenePpm,
+} from '@/app/lib/gourmetEthyleneDisplay';
+import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { Device } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { differenceInMinutes } from 'date-fns';
@@ -31,8 +36,10 @@ import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
-import { isManualProcesoLabel } from '@/app/lib/madurador';
+import { isManualProcesoLabel, controlPanelTabFromProcessType } from '@/app/lib/madurador';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
+import { isActivePanelProcess } from '@/app/lib/controlProcessDisplay';
+import { ActiveProcessProgrammedPanel } from '@/app/components/ActiveProcessProgrammedPanel';
 import {
   MANUAL_TARGET_TEMP_EXTENDED_MIN_C,
   MANUAL_TARGET_TEMP_MAX_C,
@@ -41,6 +48,7 @@ import {
   formatManualTempRangeDual,
   manualTargetTempBoundsC,
 } from '@/app/lib/manualControlTemp';
+import { formatUiDecimal, formatUiPercent, UI_MAX_DECIMALS } from '@/app/lib/formatUiNumber';
 
 /** Objetivos manual en % / ppm (telemetría). Temperatura: ver manualControlTemp.ts */
 const MANUAL_RH_MIN = 80;
@@ -66,6 +74,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   const [flowOpen, setFlowOpen] = useState(false);
   const [flowDraft, setFlowDraft] = useState<ControlStartDraft | null>(null);
   const { activeTracking, isLoading: trackingLoading } = useRipeningActiveForDevice(deviceId);
+  const { session: activeControlSession } = useDeviceControlSession(deviceId);
+
+  const activePanelProcess = isActivePanelProcess(activeControlSession) ? activeControlSession : null;
+  const lockedMode = activePanelProcess
+    ? controlPanelTabFromProcessType(activePanelProcess.process_type)
+    : null;
+
+  React.useEffect(() => {
+    if (lockedMode && mode !== lockedMode) {
+      onChangeMode(lockedMode);
+    }
+  }, [lockedMode, mode, onChangeMode]);
 
   /** Proceso activo creado desde la pestaña Seguimiento y enlazado a este equipo. */
   const followBlocksPanelProcesses = useMemo(() => {
@@ -77,6 +97,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
     if (!deviceId) return;
     if (!canOperateDeviceControl()) {
       toast.error(t('viewer_cannot_control_panel'));
+      return;
+    }
+    if (activePanelProcess) {
+      toast.error(t('control_process_tab_locked'));
       return;
     }
     if (followBlocksPanelProcesses) {
@@ -112,24 +136,40 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
     <Card className="h-full">
       <div className="border-b border-border">
         <div className="flex overflow-x-auto no-scrollbar">
-          {modes.map((m) => (
+          {modes.map((m) => {
+            const tabLocked = lockedMode != null && m.id !== lockedMode;
+            return (
             <button
               key={m.id}
-              onClick={() => onChangeMode(m.id)}
+              type="button"
+              onClick={() => {
+                if (tabLocked) {
+                  toast.error(t('control_process_tab_locked'));
+                  return;
+                }
+                onChangeMode(m.id);
+              }}
+              disabled={tabLocked}
               className={cn(
                 "flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2",
                 mode === m.id
                   ? "border-blue-600 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-950/40"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                tabLocked && "opacity-40 cursor-not-allowed hover:bg-transparent"
               )}
             >
               <m.icon className="h-4 w-4" />
               {m.label}
             </button>
-          ))}
+          );
+          })}
         </div>
       </div>
       <CardContent className="p-6">
+        {activePanelProcess && lockedMode === mode ? (
+          <ActiveProcessProgrammedPanel session={activePanelProcess} />
+        ) : (
+          <>
         {mode === 'manual' && (
           <ManualControl
             deviceId={deviceId}
@@ -159,6 +199,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
         )}
         {mode === 'cooling' && (
           <CoolingControl deviceId={deviceId} disabled={processModesDisabled} onBeginStart={openStartFlow} tempUnitKey={tempUnit} />
+        )}
+          </>
         )}
       </CardContent>
       <ControlProcessStartFlow
@@ -206,21 +248,22 @@ const RangeControl = ({
   step = 1,
   originalValue,
   disabled = false,
-  decimals = 1,
+  decimals = 2,
 }: RangeControlProps) => {
   const isChanged = originalValue !== undefined && Math.abs(value - originalValue) > 1e-9;
+  const displayDecimals = Math.min(decimals, UI_MAX_DECIMALS);
 
   const commitNumber = (raw: string) => {
     const n = parseFloat(raw.replace(',', '.'));
     if (!Number.isFinite(n)) return;
     let v = clamp(n, min, max);
     if (decimals <= 0) v = Math.round(v);
-    else v = Number(v.toFixed(decimals));
+    else v = Number(v.toFixed(displayDecimals));
     onChange(v);
   };
 
   const displayVal =
-    decimals <= 0 ? String(Math.round(value)) : decimals >= 2 ? value.toFixed(decimals) : value.toFixed(decimals);
+    decimals <= 0 ? String(Math.round(value)) : formatUiDecimal(value, displayDecimals);
 
   return (
     <div
@@ -254,7 +297,10 @@ const RangeControl = ({
           </div>
           {isChanged && originalValue !== undefined && (
             <span className="text-xs text-blue-500 dark:text-blue-400 line-through decoration-blue-400/50">
-              {decimals <= 0 ? Math.round(originalValue) : Number(originalValue.toFixed(decimals))} {unit}
+              {decimals <= 0
+                ? Math.round(originalValue)
+                : formatUiDecimal(originalValue, displayDecimals)}{' '}
+              {unit}
             </span>
           )}
         </div>
@@ -270,7 +316,7 @@ const RangeControl = ({
             const v = Number(e.target.value);
             if (!Number.isFinite(v)) return;
             const c = clamp(v, min, max);
-            onChange(decimals <= 0 ? Math.round(c) : Number(c.toFixed(decimals)));
+            onChange(decimals <= 0 ? Math.round(c) : Number(c.toFixed(displayDecimals)));
           }}
           disabled={disabled}
           className={cn(
@@ -298,8 +344,20 @@ const ManualControl = ({
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
   const { mutate: sessionMutate } = useDeviceControlSession(deviceId);
+  const { sessions: controlSessions } = useControlSessionsList(false);
   const md = device?.madurador;
   const isMadurador = Boolean(md);
+  const gourmetManualEthylene = useMemo(() => {
+    if (!isGourmetSession() || !deviceId) return null;
+    const programmed = resolveGourmetProgrammedEthylenePpm(deviceId, controlSessions);
+    if (programmed != null) return programmed;
+    if (device?.telemetry.ethylene_programmed != null) return device.telemetry.ethylene_programmed;
+    return null;
+  }, [deviceId, controlSessions, device?.telemetry.ethylene_programmed]);
+  const manualEthyleneBase = useMemo(() => {
+    if (gourmetManualEthylene != null) return gourmetManualEthylene;
+    return device?.telemetry.ethylene ?? 0;
+  }, [gourmetManualEthylene, device?.telemetry.ethylene]);
   const [extendedTempRange, setExtendedTempRange] = useState(false);
   const tempBounds = useMemo(() => manualTargetTempBoundsC(extendedTempRange), [extendedTempRange]);
   const tempRangeDual = useMemo(
@@ -322,7 +380,7 @@ const ManualControl = ({
     )
   );
   const [ethylene, setEthylene] = useState(() =>
-    clamp(device?.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX)
+    clamp(manualEthyleneBase, MANUAL_ETH_MIN, MANUAL_ETH_MAX)
   );
   const [fan, setFan] = useState(md?.ventilation_fan_reference_pct ?? 100);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,10 +410,10 @@ const ManualControl = ({
           MANUAL_RH_MAX
         )
       );
-      setEthylene(clamp(device.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX));
+      setEthylene(clamp(manualEthyleneBase, MANUAL_ETH_MIN, MANUAL_ETH_MAX));
       setFan(device.madurador?.ventilation_fan_reference_pct ?? 100);
     }
-  }, [device]);
+  }, [device, manualEthyleneBase]);
 
   const originalTemp = clampManualTargetTempC(
     device?.telemetry.set_point ?? 19,
@@ -366,7 +424,7 @@ const ManualControl = ({
     MANUAL_RH_MIN,
     MANUAL_RH_MAX
   );
-  const originalEthylene = clamp(device?.telemetry.ethylene ?? 0, MANUAL_ETH_MIN, MANUAL_ETH_MAX);
+  const originalEthylene = clamp(manualEthyleneBase, MANUAL_ETH_MIN, MANUAL_ETH_MAX);
   const originalFan = device?.madurador?.ventilation_fan_reference_pct ?? 100;
   const isPoweredOn = device?.telemetry.power_state === 1;
 
@@ -415,6 +473,40 @@ const ManualControl = ({
         const result = await applyTunnelManualCommands({ deviceId, commands: tunnelCommands });
         const sentKinds = result.jobs.map((j) => j.kind).join(', ');
         console.info('[tunnel] comandos enviados upstream', deviceId, tunnelCommands, sentKinds);
+        const summary = changes.map((c) => `${c.name}: ${c.from} → ${c.to}`).join(' · ');
+        await startControlProcess({
+          deviceId,
+          processType: 'Manual',
+          displayLabel: `${t('manual_mode')}: ${summary}`.slice(0, 500),
+          params: {
+            set_point: temp,
+            humidity_set_point: humidity,
+            ethylene,
+            fan_speed: fan,
+            changes,
+            tempUnit,
+            source: 'tunnel_api',
+            tunnelCommandBatchId: result.batchId,
+            tunnelJobs: result.jobs.map((j) => ({
+              id: j.id,
+              kind: j.kind,
+              status: j.status,
+              target: j.target_value,
+            })),
+            tunnelOverallStatus: 'in_progress',
+            ethylene_injection_programmed: ethylene,
+          },
+          durationHours: 1 / 3600,
+          auditLog: true,
+          startedAt: new Date().toISOString(),
+        });
+        cacheGourmetProgrammedEthylene(deviceId, ethylene);
+        void revalidateControlSessionsList();
+        void revalidateFleetActiveControlSessions();
+        await sessionMutate();
+        toast.success(t('tunnel_cmd_sent_ok') || 'Comandos enviados al túnel — seguimiento en curso');
+        setIsConfirmOpen(false);
+        return;
       } else {
         await sendControlCommand(deviceId, 'manual_update', {
           set_point: temp,
@@ -435,11 +527,15 @@ const ManualControl = ({
           fan_speed: fan,
           changes,
           tempUnit,
+          ...(isGourmetSession() ? { ethylene_injection_programmed: ethylene } : {}),
         },
         durationHours: 1 / 3600,
         auditLog: true,
         startedAt: new Date().toISOString(),
       });
+      if (isGourmetSession() && deviceId) {
+        cacheGourmetProgrammedEthylene(deviceId, ethylene);
+      }
       void revalidateControlSessionsList();
       void revalidateFleetActiveControlSessions();
       await sessionMutate();
@@ -759,8 +855,8 @@ const HomogenizationControl = ({
         <Thermometer className="h-5 w-5 shrink-0" />
         <p>
           {t('homogenization_control_desc', {
-            tempMin: convertTemp(8).toFixed(1),
-            tempMax: convertTemp(18).toFixed(1),
+            tempMin: formatUiDecimal(convertTemp(8)),
+            tempMax: formatUiDecimal(convertTemp(18)),
             unit: tempUnit,
           })}
         </p>
@@ -799,8 +895,8 @@ const HomogenizationControl = ({
         <p className="text-sm text-muted-foreground mb-1">{t('preview')}</p>
         <p className="font-medium text-foreground">
           {t('homogenization_control_preview', {
-            tempFrom: convertTemp(8).toFixed(1),
-            tempTo: convertTemp(temp).toFixed(1),
+            tempFrom: formatUiDecimal(convertTemp(8)),
+            tempTo: formatUiDecimal(convertTemp(temp)),
             unit: tempUnit,
             humidity: String(humidity),
             hours: String(duration),

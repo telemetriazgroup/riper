@@ -7,7 +7,7 @@ import {
 } from '../greenyardFleet.js';
 import {
   gourmetTradingEmpresaIdentificador,
-  gourmetTradingDeviceImeis,
+  gourmetTradingMaduradorFleetImeis,
   isGourmetTradingFleetEmail,
 } from '../gourmetFleet.js';
 
@@ -313,7 +313,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         console.error('[madurador] gourmet trading upstream failed', gtIdent);
         return res.status(502).json({ error: 'madurador_upstream', message: `upstream gourmet ${gtIdent}` });
       }
-      const allow = gourmetTradingDeviceImeis();
+      const allow = gourmetTradingMaduradorFleetImeis();
       const data = filterRowsByImeiAllowlistOrdered(listGt, allow);
       return res.json({ data });
     }

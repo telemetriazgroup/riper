@@ -91,6 +91,10 @@ export interface TelemetryData {
   return_air: number;
   relative_humidity: number;
   ethylene: number | null;
+  /** Lectura real campo_1 (solo trazabilidad interna Gourmet). */
+  ethylene_raw?: number | null;
+  /** Inyección programada en control manual (Gourmet). */
+  ethylene_programmed?: number | null;
   co2_reading: number | null;
   /** Oxígeno (%). null si no llega desde Madurador. */
   o2_reading?: number | null;
@@ -114,10 +118,14 @@ export interface OperationalData {
 /** Telemetría por unidad dentro del túnel (conjunto). */
 export interface TunnelUnitTelemetry {
   unidad: string;
+  /** IMEI Madurador de la máquina (flota Gourmet). */
+  imei?: string;
   pregunta: string | null;
   powerOn: boolean;
   supplyTemp: number | null;
   datos: Record<string, string | number | null>;
+  /** Fila Madurador completa cuando la flota arma el túnel desde IMEI pin. */
+  sourceDevice?: Device;
 }
 
 /** Resumen grupo túnel (5 máquinas + promedios). */

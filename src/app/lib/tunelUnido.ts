@@ -52,6 +52,10 @@ export function getCachedGourmetTunnelDevice(): Device | null {
   return gourmetTunnelDeviceCache;
 }
 
+export function setCachedGourmetTunnelDevice(device: Device | null): void {
+  gourmetTunnelDeviceCache = device;
+}
+
 function toNum(v: unknown): number | null {
   if (v == null) return null;
   if (typeof v === 'number' && Number.isFinite(v)) return v;

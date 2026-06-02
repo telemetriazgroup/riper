@@ -9,6 +9,10 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
+import { initGourmetProcessOnSessionStart, shouldInitAutomatedProcessControl, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
+import { appendSessionTunnelEvent, appendTunnelEventLog, programmedSummaryFromParams } from '../tunnelEventLog.js';
+import { normalizeControlProcessParams, validateControlProcessParams } from '../controlProcessParams.js';
 
 function parseIncludeArchived(req) {
   const v = req.query.includeArchived ?? req.query.include_archived;
@@ -83,8 +87,9 @@ deviceControlRouter.post('/start', async (req, res) => {
   const deviceId = String(body.deviceId || '').trim();
   const processType = String(body.processType || '').trim();
   const displayLabel = String(body.displayLabel || processType).trim() || processType;
-  const params = body.params && typeof body.params === 'object' ? body.params : {};
   const durationHours = Number(body.durationHours);
+  const rawParams = body.params && typeof body.params === 'object' ? body.params : {};
+  const params = normalizeControlProcessParams(processType, rawParams, durationHours);
   const startedAtRaw = body.startedAt;
 
   if (!deviceId) {
@@ -99,6 +104,12 @@ deviceControlRouter.post('/start', async (req, res) => {
   }
   if (!Number.isFinite(durationHours) || durationHours <= 0 || durationHours > 10000) {
     return res.status(400).json({ error: 'validation', message: 'invalid durationHours' });
+  }
+  if (!auditLog && processType !== 'StopPlan' && processType !== 'Manual') {
+    const paramErr = validateControlProcessParams(processType, params);
+    if (paramErr) {
+      return res.status(400).json({ error: 'validation', message: paramErr });
+    }
   }
   if (isViewer(req)) {
     return res.status(403).json({ error: 'forbidden', message: 'viewers cannot start control sessions' });
@@ -150,16 +161,34 @@ deviceControlRouter.post('/start', async (req, res) => {
         });
       }
 
-      await client.query(
+      const { rows: replacedRows } = await client.query(
         `UPDATE app_device_control_sessions
          SET status = 'cancelled',
              cancelled_at = now(),
              cancelled_by_user_id = $3::uuid,
              updated_at = now()
-         WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active' AND archived_at IS NULL`,
+         WHERE user_id = $1::uuid AND device_id = $2 AND status = 'active' AND archived_at IS NULL
+         RETURNING id`,
         [req.user.id, deviceId, req.user.id]
       );
+      for (const prev of replacedRows) {
+        await appendSessionTunnelEvent(client, prev.id, {
+          action: 'process_cancelled',
+          source: 'control_panel',
+          reason: 'replaced_by_new_session',
+          cancelledBy: req.user?.email ?? req.user?.id,
+        });
+      }
     }
+
+    const startParams = appendTunnelEventLog(params, {
+      action: 'process_started',
+      source: 'control_panel',
+      processType,
+      displayLabel,
+      startedBy: req.user?.email ?? req.user?.id,
+      programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
+    });
 
     const { rows } = await client.query(
       `INSERT INTO app_device_control_sessions
@@ -171,7 +200,7 @@ deviceControlRouter.post('/start', async (req, res) => {
         deviceId,
         processType,
         displayLabel,
-        JSON.stringify(params),
+        JSON.stringify(startParams),
         sessionStatus,
         started.toISOString(),
         estimatedEnd.toISOString(),
@@ -179,7 +208,22 @@ deviceControlRouter.post('/start', async (req, res) => {
       ]
     );
     await client.query('COMMIT');
-    const sessionRow = rows[0];
+    let sessionRow = rows[0];
+    if (shouldInitAutomatedProcessControl(deviceId, processType, auditLog)) {
+      sessionRow = await initGourmetProcessOnSessionStart(sessionRow);
+      kickGourmetProcessForSession(sessionRow).catch((e) =>
+        console.warn('[gourmet-process] kickoff', e.message)
+      );
+    }
+    const batchId =
+      params && typeof params === 'object' && params.tunnelCommandBatchId != null
+        ? String(params.tunnelCommandBatchId).trim()
+        : '';
+    if (batchId) {
+      await syncControlSessionForTunnelBatch(batchId).catch((e) =>
+        console.warn('[tunnel-history] sync on session start', batchId, e.message)
+      );
+    }
     await writeAudit(req, {
       action: 'device_control.session.start',
       entityType: 'device_control_session',
@@ -296,6 +340,13 @@ deviceControlRouter.post('/:id/complete', async (req, res) => {
     if (row.status !== 'active') {
       return res.json({ data: row });
     }
+    await appendSessionTunnelEvent(pool, id, {
+      action: 'process_completed',
+      source: 'control_panel',
+      reason: 'manual_complete',
+      completedBy: req.user?.email ?? req.user?.id,
+      processType: row.process_type,
+    });
     const { rows: upd } = await pool.query(
       `UPDATE app_device_control_sessions
        SET status = 'completed', updated_at = now()
@@ -348,6 +399,13 @@ deviceControlRouter.post('/:id/cancel', async (req, res) => {
       return res.json({ data: row });
     }
     const uid = req.user.id;
+    await appendSessionTunnelEvent(pool, id, {
+      action: 'process_cancelled',
+      source: 'control_panel',
+      reason: 'user_cancelled',
+      cancelledBy: req.user?.email ?? req.user?.id,
+      processType: row.process_type,
+    });
     const { rows: upd } = await pool.query(
       `UPDATE app_device_control_sessions
        SET status = 'cancelled',

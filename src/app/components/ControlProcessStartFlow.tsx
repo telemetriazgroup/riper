@@ -12,7 +12,6 @@ import { startControlProcess, type StartControlProcessBody } from '@/app/lib/dev
 import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
-import { sendControlCommand } from '@/app/lib/api';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -62,11 +61,6 @@ export const ControlProcessStartFlow: React.FC<Props> = ({ open, onOpenChange, d
       });
       void revalidateControlSessionsList();
       void revalidateFleetActiveControlSessions();
-      await sendControlCommand(deviceId, 'set_process', {
-        type: draft.processType,
-        name: draft.displayLabel,
-        ...draft.params,
-      });
       await mutateActive();
       toast.success(t('control_process_started') || 'Proceso registrado e iniciado');
       onOpenChange(false);

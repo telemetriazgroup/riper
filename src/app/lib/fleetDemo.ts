@@ -1,4 +1,5 @@
 import { getStoredUser } from '@/app/lib/auth';
+import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
 
 /** Cuenta demo: datos desde API Madurador (ver `maduradorFleetDirect.ts`). */
 export const FLEET_DEMO_EMAIL = 'demo-flota@riper.local';
@@ -95,5 +96,14 @@ export function getGreenyardPinnedImeis(): string[] {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/** Equipos con control automático de procesos vía upstream (Gourmet túnel + Greenyard TermoKing). */
+export function isAutomatedControlDevice(deviceId?: string | null): boolean {
+  if (!deviceId) return false;
+  const id = String(deviceId).trim();
+  if (isGourmetTunnelCommandDevice(id)) return true;
+  if (isGreenyardSession() && getGreenyardPinnedImeis().includes(id)) return true;
+  return false;
 }
 

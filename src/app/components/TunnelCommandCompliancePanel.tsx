@@ -10,6 +10,7 @@ import {
   type TunnelCommandStatus,
 } from '@/app/lib/tunnelCommandsApi';
 import { cn } from '@/app/lib/utils';
+import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 
 type Props = {
   deviceId: string;
@@ -43,25 +44,23 @@ function StatusIcon({ status }: { status: TunnelCommandStatus }) {
   return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />;
 }
 
-function formatTarget(job: TunnelCommandJob, convertTemp: (c: number) => number, tempUnit: string) {
+function formatTarget(job: TunnelCommandJob, formatTemp: (c: number) => string) {
   const v = Number(job.target_value);
-  if (job.kind === 'temperature') return `${convertTemp(v).toFixed(1)}°${tempUnit}`;
-  if (job.kind === 'humidity' || job.kind === 'ventilation') return `${v}%`;
-  if (job.kind === 'ethylene') return `${v} ppm`;
-  return String(v);
+  if (job.kind === 'temperature') return formatTemp(v);
+  if (job.kind === 'humidity' || job.kind === 'ventilation') return formatUiPercent(v);
+  if (job.kind === 'ethylene') return `${formatUiDecimal(v)} ppm`;
+  return formatUiDecimal(v);
 }
 
 function JobRow({
   job,
   t,
-  convertTemp,
-  tempUnit,
+  formatTemp,
   formatDateTime,
 }: {
   job: TunnelCommandJob;
   t: (k: string) => string;
-  convertTemp: (c: number) => number;
-  tempUnit: string;
+  formatTemp: (c: number) => string;
   formatDateTime: (d: Date | string) => string;
 }) {
   const tone = tunnelCommandStatusTone(job.status);
@@ -77,13 +76,17 @@ function JobRow({
               {tunnelCommandKindLabel(job.kind, t)}
             </p>
             <p className="text-xs text-gray-500">
-              Objetivo: {formatTarget(job, convertTemp, tempUnit)}
+              Objetivo: {formatTarget(job, formatTemp)}
               {readVal != null && (
                 <span className="ml-2">
                   · Lectura:{' '}
                   {job.kind === 'temperature'
-                    ? `${convertTemp(readVal).toFixed(1)}°${tempUnit}`
-                    : readVal}
+                    ? formatTemp(readVal)
+                    : job.kind === 'humidity' || job.kind === 'ventilation'
+                      ? formatUiPercent(readVal)
+                      : job.kind === 'ethylene'
+                        ? `${formatUiDecimal(readVal)} ppm`
+                        : formatUiDecimal(readVal)}
                 </span>
               )}
             </p>
@@ -120,7 +123,7 @@ function latestBatchJobs(jobs: TunnelCommandJob[]): TunnelCommandJob[] {
 }
 
 export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
-  const { t, convertTemp, tempUnit, formatDateTime } = useSettings();
+  const { t, formatTemp, formatDateTime } = useSettings();
   const { jobs, isLoading, error, refresh, hasActive } = useTunnelCommandJobs(deviceId, true);
 
   const latestJobs = useMemo(() => latestBatchJobs(jobs), [jobs]);
@@ -156,8 +159,7 @@ export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
             key={job.id}
             job={job}
             t={t}
-            convertTemp={convertTemp}
-            tempUnit={tempUnit}
+            formatTemp={formatTemp}
             formatDateTime={formatDateTime}
           />
         ))}

@@ -91,5 +91,16 @@ export function readTelemetryField(row, field) {
     const raw = toNum(flat.avl);
     return fanPctFromAvl(raw);
   }
+  if (field === 'avl_raw') {
+    return toNum(flat.avl);
+  }
+  if (field === 'co2_reading') {
+    return toNum(flat.co2_reading);
+  }
+  if (field === 'set_point_co2') {
+    return toNum(
+      flat.set_point_co2 ?? flat.set_point_co2_value ?? nestedValor(row.set_point_co2)
+    );
+  }
   return toNum(flat[field]);
 }

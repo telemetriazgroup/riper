@@ -19,7 +19,8 @@ import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcess
 import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
 import { DeviceMonitoringAnalysis } from '@/app/components/DeviceMonitoringAnalysis';
 import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandCompliancePanel';
-import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
+import { showGourmetTunnelCommandStatesPanel, isGourmetSession } from '@/app/lib/gourmet';
+import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -69,6 +70,23 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
   const showOfflineBanner =
     device &&
     (device.estado_conexion === 'offline' || minsSinceLastSeen > 720 || device.status === 'offline');
+
+  const displayDeviceForStatus = useMemo(() => {
+    if (!device || !isGourmetSession()) return device;
+    if (
+      activeControlSession?.status === 'active' &&
+      activeControlSession.process_type === 'Cooling'
+    ) {
+      const sp = Number((activeControlSession.params as Record<string, unknown>)?.setPoint);
+      if (Number.isFinite(sp)) {
+        return {
+          ...device,
+          telemetry: { ...device.telemetry, set_point: sp },
+        };
+      }
+    }
+    return device;
+  }, [device, activeControlSession]);
 
   const consumptionKwhPeriod = useMemo(() => {
     if (!history || history.length < 2) return null;
@@ -187,7 +205,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
       {activeView === 'operation' ? (
         <div className="space-y-6 h-full animate-in fade-in duration-300">
           <DeviceCurrentStatusPanel
-            device={device}
+            device={displayDeviceForStatus ?? device}
             t={t}
             formatTemp={formatTemp}
             tempUnit={tempUnit}
@@ -195,9 +213,11 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
             formatDateTime={formatDateTime}
           />
           <DeviceControlProcessPanel deviceId={deviceId} />
-          {isGourmetTunnelCommandDevice(deviceId) && (
-            <TunnelCommandCompliancePanel deviceId={deviceId} />
-          )}
+          {showGourmetTunnelCommandStatesPanel(
+            deviceId,
+            activeControlSession?.process_type,
+            activeControlSession?.status
+          ) && <TunnelCommandCompliancePanel deviceId={deviceId} />}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* Left Column: Control Panel */}
           <div className="lg:col-span-1">
@@ -246,7 +266,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                          <span className="text-muted-foreground flex items-center gap-1">
                            <Zap className="h-4 w-4" /> {t('energy_consumption_period')}
                          </span>
-                         <span className="font-mono font-medium text-foreground">{consumptionKwhPeriod.toFixed(1)} kWh</span>
+                         <span className="font-mono font-medium text-foreground">{formatUiDecimal(consumptionKwhPeriod)} kWh</span>
                        </div>
                      )}
                      <div className="flex justify-between border-b border-border pb-2">

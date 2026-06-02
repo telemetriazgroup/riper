@@ -10,7 +10,8 @@ import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
 import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
-import { getGourmetTradingPinnedImeis, isGourmetSession } from '@/app/lib/gourmet';
+import { isGourmetSession } from '@/app/lib/gourmet';
+import { getGourmetMaduradorFleetImeis } from '@/app/lib/gourmetTunnelFleet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
   SIM_FLEET_AVL_MAX_CFM,
@@ -21,6 +22,7 @@ import {
 } from '@/app/lib/simulatedInkapackingFleet';
 import { resolvePowerState } from '@/app/lib/powerState';
 import { FLEET_ALARM_RED_MIN_COUNT } from '@/app/lib/fleetKpi';
+import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import {
   connectionStateFromAgeMinutes,
   maduradorServerTimestampToIso,
@@ -499,7 +501,7 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     return withSim.filter((d) => String(d.id ?? '').trim() === pin);
   }
   if (isGourmetSession()) {
-    const allow = new Set(getGourmetTradingPinnedImeis());
+    const allow = new Set(getGourmetMaduradorFleetImeis());
     return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
   }
   /** Greenyard: solo IMEI pin NEWY2001 / NEWY1001 (servidor ya filtra; refuerzo en cliente). */
@@ -812,8 +814,10 @@ export function shouldUseMaduradorRangoHistory(): boolean {
   );
 }
 
+
 export function formatMaduradorScalar(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   if (typeof value === 'number' && !Number.isFinite(value)) return '—';
+  if (typeof value === 'number') return formatUiDecimal(value);
   return String(value);
 }

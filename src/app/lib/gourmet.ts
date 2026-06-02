@@ -44,16 +44,33 @@ export function isGourmetSession(): boolean {
   }
 }
 
-/** Perfil con identificador Madurador: datos reales upstream, sin JSON local ni túnel extra. */
+/** Perfil con identificador Madurador: datos reales upstream; flota empaquetada en api (standalone + túnel). */
 export function isGourmetMaduradorFleetSession(): boolean {
   if (!isGourmetSession()) return false;
   return Boolean(getStoredUser()?.identificador?.trim());
 }
 
-/** Dispositivo IMEI Gourmet: control manual vía API Tunel (tipo 1/2/5+0/6). */
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
+
+/** Dispositivo IMEI Gourmet o túnel agregado: control manual vía API Tunel. */
 export function isGourmetTunnelCommandDevice(deviceId?: string | null): boolean {
   if (!deviceId || !isGourmetSession()) return false;
-  return getGourmetTradingPinnedImeis().includes(String(deviceId).trim());
+  const id = String(deviceId).trim();
+  if (id === GOURMET_TUNEL_DEVICE_ID) return true;
+  return getGourmetTradingPinnedImeis().includes(id);
+}
+
+/** Ocultar «Estados de comandos» mientras hay proceso de panel activo (no Manual). */
+export function showGourmetTunnelCommandStatesPanel(
+  deviceId: string | undefined,
+  activeProcessType: string | null | undefined,
+  sessionStatus: string | null | undefined
+): boolean {
+  if (!deviceId || !isGourmetTunnelCommandDevice(deviceId)) return false;
+  if (sessionStatus === 'active' && activeProcessType && activeProcessType !== 'Manual') {
+    return false;
+  }
+  return true;
 }
 
 export const GOURMET_DEVICE_ID = 'CC:DB:A7:9D:F3:E8';

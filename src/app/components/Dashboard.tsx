@@ -12,6 +12,7 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { totalNumeroAlarmaFleet, countProcesosEnCurso } from '@/app/lib/fleetKpi';
 import { getFleetCardTemperatureDisplay } from '@/app/lib/fleetTemperatureDisplay';
+import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 
 interface DashboardProps {
   onSelectDevice: (deviceId: string) => void;
@@ -21,7 +22,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const { devices, isLoading, isError, mutate } = useDevices();
   const { byDeviceId: panelSessionsByDevice } = useFleetActiveControlMap();
   const { byDeviceId: ripeningTrackingByDevice } = useFleetRipeningTrackingMap();
-  const { t, convertTemp, tempUnit, formatDateTime, formatDateShort, formatFileTimestamp } = useSettings();
+  const { t, formatTemp, formatDateTime, formatDateShort, formatFileTimestamp } = useSettings();
   const [downloading, setDownloading] = useState(false);
   const [deviceSearch, setDeviceSearch] = useState('');
 
@@ -222,11 +223,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         const track = ripeningTrackingByDevice.get(d.id) ?? null;
         const { primaryC } = getFleetCardTemperatureDisplay(d, panel, track, null);
         const temp = d.telemetry?.temp_supply_1 != null || d.telemetry?.return_air != null
-          ? convertTemp(primaryC).toFixed(1)
+          ? formatTemp(primaryC)
           : '—';
-        const hr = d.telemetry?.relative_humidity ?? '—';
-        const eth = d.telemetry?.ethylene != null ? (d.telemetry.ethylene === 0 ? 'NA' : d.telemetry.ethylene.toFixed(2)) : '—';
-        const co2 = d.telemetry?.co2_reading != null ? Number(d.telemetry.co2_reading).toFixed(2) : '—';
+        const hr = d.telemetry?.relative_humidity != null ? formatUiDecimal(d.telemetry.relative_humidity) : '—';
+        const eth = d.telemetry?.ethylene != null ? (d.telemetry.ethylene === 0 ? 'NA' : formatUiDecimal(d.telemetry.ethylene)) : '—';
+        const co2 = d.telemetry?.co2_reading != null ? formatUiDecimal(d.telemetry.co2_reading) : '—';
         const row: string[] = [d.name || d.id, status, conn, power, temp, String(hr), String(eth), String(co2), formatLast(d)];
 
         drawRect(tableX, y, finalTableW, rowH);
