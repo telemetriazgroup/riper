@@ -29,7 +29,6 @@ import {
 import { deviceNameStorageKey } from '@/app/lib/deviceLocalNames';
 import {
   applyEthyleneDisplayPolicyToDevice,
-  applyEthyleneDisplayPolicyToHistory,
 } from '@/app/lib/ethyleneDisplayPolicy';
 import { listControlSessions } from '@/app/lib/deviceControlProcessApi';
 
@@ -279,14 +278,7 @@ export async function fetchDeviceHistory(
     const historyImei =
       isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID ? GOURMET_TUNNEL_ETHYLENE_IMEI : id;
     const { points } = await fetchMaduradorRangoHistoryForImei(historyImei, options ?? {});
-    const list = Array.isArray(points) ? points : [];
-    let sessions = null;
-    try {
-      sessions = await listControlSessions();
-    } catch {
-      sessions = null;
-    }
-    return applyEthyleneDisplayPolicyToHistory(list, { deviceId: id, sessions });
+    return Array.isArray(points) ? points : [];
   }
   if (isGourmetSession() && !isGourmetMaduradorFleetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());

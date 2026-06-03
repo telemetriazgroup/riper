@@ -3,10 +3,14 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   ComposedChart, ReferenceArea, LabelList, TooltipProps,
 } from 'recharts';
-import { useDeviceHistory } from '@/app/hooks/useDevices';
+import { useDeviceHistory, useDevice } from '@/app/hooks/useDevices';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
-import { applyEthyleneDisplayPolicyToHistory } from '@/app/lib/ethyleneDisplayPolicy';
+import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
+import {
+  applyEthyleneDisplayPolicyToHistory,
+  type EthyleneDisplayPolicyContext,
+} from '@/app/lib/ethyleneDisplayPolicy';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
@@ -192,18 +196,27 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
+  const { device } = useDevice(deviceId || null);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
   const { session: panelSession } = useDeviceControlSession(deviceId);
+  const { sessions: controlSessions } = useControlSessionsList();
 
-  const policyHistory = useMemo(() => {
-    const raw = history ?? [];
-    if (!deviceId || raw.length === 0) return raw;
-    return applyEthyleneDisplayPolicyToHistory(raw, {
+  const ethylenePolicyCtx = useMemo((): EthyleneDisplayPolicyContext | null => {
+    if (!deviceId) return null;
+    return {
       deviceId,
       trackingProcess: activeTracking?.process ?? null,
       panelActiveSession: panelSession?.status === 'active' ? panelSession : null,
-    });
-  }, [history, deviceId, activeTracking, panelSession]);
+      sessions: controlSessions,
+      device: device ?? null,
+    };
+  }, [deviceId, activeTracking, panelSession, controlSessions, device]);
+
+  const policyHistory = useMemo(() => {
+    const raw = history ?? [];
+    if (!ethylenePolicyCtx || raw.length === 0) return raw;
+    return applyEthyleneDisplayPolicyToHistory(raw, ethylenePolicyCtx);
+  }, [history, ethylenePolicyCtx]);
 
   const isTkCharts = isThermoKingSession();
   const dataClassic = useMemo(
@@ -521,15 +534,17 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         )}
       </CardContent>
 
-      <HistoricalDataModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <HistoricalDataModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         deviceId={deviceId}
+        ethylenePolicyCtx={ethylenePolicyCtx}
       />
-      <HistoricalDataTableModal 
-        isOpen={isTableModalOpen} 
-        onClose={() => setIsTableModalOpen(false)} 
+      <HistoricalDataTableModal
+        isOpen={isTableModalOpen}
+        onClose={() => setIsTableModalOpen(false)}
         deviceId={deviceId}
+        ethylenePolicyCtx={ethylenePolicyCtx}
       />
     </Card>
   );
@@ -537,7 +552,17 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 
 // --- Historical Data Modal Component ---
 
-const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, onClose: () => void, deviceId?: string }) => {
+const HistoricalDataModal = ({
+  isOpen,
+  onClose,
+  deviceId,
+  ethylenePolicyCtx,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  deviceId?: string;
+  ethylenePolicyCtx?: EthyleneDisplayPolicyContext | null;
+}) => {
   const { t, tempUnit, displayTimeZone, language, dateFormat } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   
@@ -628,7 +653,11 @@ const HistoricalDataModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean, o
         setChartData([]);
         return;
       }
-      const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
+      const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
+      const history =
+        ethylenePolicyCtx && historyRaw.length > 0
+          ? applyEthyleneDisplayPolicyToHistory(historyRaw, ethylenePolicyCtx)
+          : historyRaw;
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
         const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
@@ -1398,7 +1427,17 @@ function tableModalDefaultPresetColumns(): string[] {
   return [...TABLE_PRESETS[0].columns];
 }
 
-const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boolean; onClose: () => void; deviceId?: string }) => {
+const HistoricalDataTableModal = ({
+  isOpen,
+  onClose,
+  deviceId,
+  ethylenePolicyCtx,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  deviceId?: string;
+  ethylenePolicyCtx?: EthyleneDisplayPolicyContext | null;
+}) => {
   const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp, language } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [dateRange, setDateRange] = useState({
@@ -1426,7 +1465,11 @@ const HistoricalDataTableModal = ({ isOpen, onClose, deviceId }: { isOpen: boole
         setTableData([]);
         return;
       }
-      const history = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
+      const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
+      const history =
+        ethylenePolicyCtx && historyRaw.length > 0
+          ? applyEthyleneDisplayPolicyToHistory(historyRaw, ethylenePolicyCtx)
+          : historyRaw;
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
         const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };

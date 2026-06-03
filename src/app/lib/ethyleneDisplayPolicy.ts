@@ -6,6 +6,7 @@ import { getStoredUser } from '@/app/lib/auth';
 import {
   applyGourmetFleetEthyleneZeroGuard,
   formatGourmetFleetEthyleneLabel,
+  getCachedGourmetProgrammedEthylene,
   modulateGourmetEthyleneDisplayPpm,
   resolveGourmetProgrammedEthyleneFromSessions,
 } from '@/app/lib/gourmetEthyleneDisplay';
@@ -81,6 +82,18 @@ export function resolveEthyleneDisplayTargetPpm(opts: {
   const fromRecipe = ethylenePpmFromRipeningRecipe(opts.trackingProcess?.payload);
   if (fromRecipe != null) return fromRecipe;
 
+  const spEarly = opts.device?.madurador?.sp_ethyleno ?? opts.device?.telemetry?.sp_ethyleno;
+  if (
+    fromRecipe == null &&
+    opts.trackingProcess?.status === 'active' &&
+    trackingRecipeHasRipeningPhase(opts.trackingProcess.payload) &&
+    spEarly != null &&
+    Number.isFinite(Number(spEarly)) &&
+    Number(spEarly) > 0
+  ) {
+    return Number(spEarly);
+  }
+
   if (opts.panelActiveSession?.status === 'active') {
     const fromPanel = ethyleneFromSessionParams(opts.panelActiveSession.params);
     if (fromPanel != null) return fromPanel;
@@ -94,6 +107,14 @@ export function resolveEthyleneDisplayTargetPpm(opts: {
     ? resolveGourmetProgrammedEthyleneFromSessions(opts.deviceId, opts.sessions)
     : null;
   if (fromSessions != null) return fromSessions;
+
+  const cached = getCachedGourmetProgrammedEthylene(opts.deviceId);
+  if (cached != null) return cached;
+
+  const programmed = opts.device?.telemetry?.ethylene_programmed;
+  if (programmed != null && Number.isFinite(Number(programmed)) && Number(programmed) > 0) {
+    return Number(programmed);
+  }
 
   const sp = opts.device?.madurador?.sp_ethyleno ?? opts.device?.telemetry?.sp_ethyleno;
   if (sp != null && Number.isFinite(Number(sp)) && Number(sp) > 0) return Number(sp);
@@ -151,6 +172,38 @@ export function formatFleetEthyleneLabel(
   return label === '—' ? '—' : `${label} PPM`;
 }
 
+export type EthyleneDisplayPolicyContext = {
+  deviceId: string;
+  trackingProcess?: RipeningProcessRow | null;
+  panelActiveSession?: DeviceControlSessionRow | null;
+  sessions?: DeviceControlSessionRow[] | null;
+  device?: Device | null;
+};
+
+/** Suaviza ceros breves en series históricas (lecturas filtradas estables en gráfica). */
+function smoothFilteredEthyleneHistory(values: (number | null | undefined)[]): (number | null)[] {
+  const out: (number | null)[] = [];
+  let lastGood: number | null = null;
+  let zeroStreak = 0;
+
+  for (const raw of values) {
+    const v = raw != null && Number.isFinite(Number(raw)) ? Number(raw) : null;
+    if (v != null && v > 0) {
+      zeroStreak = 0;
+      lastGood = v;
+      out.push(v);
+      continue;
+    }
+    if (v === 0) {
+      zeroStreak += 1;
+      out.push(zeroStreak >= 2 ? null : lastGood);
+      continue;
+    }
+    out.push(v);
+  }
+  return out;
+}
+
 export function applyEthyleneDisplayPolicyToDevice(
   device: Device,
   opts?: {
@@ -185,14 +238,9 @@ export function applyEthyleneDisplayPolicyToDevice(
 
 export function applyEthyleneDisplayPolicyToHistory(
   points: HistoryPoint[],
-  opts: {
-    deviceId: string;
-    trackingProcess?: RipeningProcessRow | null;
-    panelActiveSession?: DeviceControlSessionRow | null;
-    sessions?: DeviceControlSessionRow[] | null;
-    device?: Device | null;
-  }
+  opts: EthyleneDisplayPolicyContext
 ): HistoryPoint[] {
+  if (!points.length) return points;
   if (isUnfilteredEthyleneViewer()) return points;
   if (
     !shouldShowEthyleneToUser({
@@ -203,20 +251,16 @@ export function applyEthyleneDisplayPolicyToHistory(
     return points.map((p) => ({ ...p, ethylene: null }));
   }
 
-  const target = resolveEthyleneDisplayTargetPpm({
-    deviceId: opts.deviceId,
-    trackingProcess: opts.trackingProcess,
-    panelActiveSession: opts.panelActiveSession,
-    sessions: opts.sessions,
-    device: opts.device,
-  });
-
-  if (target == null || !Number.isFinite(target)) {
+  const target = resolveEthyleneDisplayTargetPpm(opts);
+  if (target == null || !Number.isFinite(target) || target <= 0) {
     return points.map((p) => ({ ...p, ethylene: null }));
   }
 
-  return points.map((p) => ({
+  const modulated = points.map((p) => modulateGourmetEthyleneDisplayPpm(p.ethylene, target));
+  const smoothed = smoothFilteredEthyleneHistory(modulated);
+
+  return points.map((p, i) => ({
     ...p,
-    ethylene: modulateGourmetEthyleneDisplayPpm(p.ethylene, target),
+    ethylene: smoothed[i],
   }));
 }
