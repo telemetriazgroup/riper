@@ -1,4 +1,10 @@
 import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
+import {
+  identificadorForUltraorganicsImei,
+  ultraorganicsDeviceGroupsMap,
+  ultraorganicsPanelDeviceIdForImei,
+  ultraorganicsUpstreamIdentificadores,
+} from './ultraorganicsFleet.js';
 import { maduradorApiBase } from './tunelControlClient.js';
 
 function flatMaduradorRow(row) {
@@ -6,14 +12,16 @@ function flatMaduradorRow(row) {
   const flat = { ...row };
   const ud = row.ultimo_dato;
   if (ud && typeof ud === 'object' && !Array.isArray(ud)) {
-    Object.assign(flat, ud);
+    for (const [k, v] of Object.entries(ud)) {
+      if (v != null) flat[k] = v;
+    }
   }
   return flat;
 }
 
 export function rowImeiFromMaduradorRow(row) {
   const flat = flatMaduradorRow(row);
-  return String(flat.imei ?? row?.imei ?? '').trim();
+  return String(flat.imei ?? flat.device ?? row?.imei ?? row?.device ?? '').trim();
 }
 
 function nestedValor(v) {
@@ -60,9 +68,36 @@ async function fetchDispositivosList(identificador) {
 export async function fetchDeviceRowByImei(imei, identificador = gourmetTradingEmpresaIdentificador()) {
   const want = String(imei || '').trim();
   if (!want) return null;
-  const list = await fetchDispositivosList(identificador);
-  if (!Array.isArray(list)) return null;
-  return list.find((row) => rowImeiFromMaduradorRow(row) === want) ?? null;
+
+  const tryImeis = [want];
+  if (want.startsWith('MEX')) {
+    const panel = ultraorganicsPanelDeviceIdForImei(want);
+    const group = ultraorganicsDeviceGroupsMap()[panel];
+    if (Array.isArray(group)) {
+      for (const g of group) {
+        if (!tryImeis.includes(g)) tryImeis.push(g);
+      }
+    }
+  }
+
+  const idents = new Set([String(identificador || '').trim()].filter(Boolean));
+  if (want.startsWith('MEX')) {
+    idents.add(identificadorForUltraorganicsImei(want));
+    for (const id of ultraorganicsUpstreamIdentificadores()) idents.add(id);
+  }
+
+  for (const ident of idents) {
+    const list = await fetchDispositivosList(ident);
+    if (!Array.isArray(list)) continue;
+    for (const tryWant of tryImeis) {
+      const wantLower = tryWant.toLowerCase();
+      const row =
+        list.find((r) => rowImeiFromMaduradorRow(r) === tryWant) ??
+        list.find((r) => rowImeiFromMaduradorRow(r).toLowerCase() === wantLower);
+      if (row) return row;
+    }
+  }
+  return null;
 }
 
 export function fanPctFromAvl(avlRaw) {
@@ -73,7 +108,7 @@ export function fanPctFromAvl(avlRaw) {
 
 /**
  * @param {Record<string, unknown>} row
- * @param {'set_point'|'humidity_set_point'|'campo_1'|'avl'} field
+ * @param {'set_point'|'humidity_set_point'|'campo_1'|'avl'|'set_point_co2'} field
  */
 export function readTelemetryField(row, field) {
   if (!row) return null;

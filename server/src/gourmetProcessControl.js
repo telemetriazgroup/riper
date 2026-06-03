@@ -91,7 +91,11 @@ async function fetchUnitRow(ctx, unitId) {
     adapter.identificadorForImei?.(unitId) ??
     adapter.empresaIdentificador ??
     gourmetTradingEmpresaIdentificador();
-  return fetchDeviceRowByImei(unitId, ident);
+  const row = await fetchDeviceRowByImei(unitId, ident);
+  if (!row && (adapter.fleet === 'ultraorganics' || adapter.fleet === 'greenyard')) {
+    console.warn('[gourmet-process] telemetry not found', adapter.fleet, unitId, 'ident', ident);
+  }
+  return row;
 }
 
 function commandImeis(ctx, tipo) {
@@ -251,12 +255,27 @@ export async function initGourmetProcessOnSessionStart(sessionRow) {
 async function ensureTemperature(ctx, params, auto, processType) {
   const target = commandTempC(params, processType);
   if (target == null) return { auto, events: [] };
-  const units = fanOutUnits(ctx);
-  const { results, allOk } = await allUnitsMatch(ctx, units, 'set_point', target, TEMP_TOLERANCE);
+  const adapter = adapterFor(ctx);
+
+  let results;
+  let allOk;
+  if (adapter?.telemetryImei) {
+    // UltraOrganics: perfil Greenyard — un equipo lógico (panel), leer set_point del IMEI primario del grupo
+    const panel = String(ctx.device_id || '').trim();
+    const imei = adapter.telemetryImei(panel, 'set_point');
+    const row = await fetchUnitRow(ctx, imei);
+    const actual = readTelemetryField(row, 'set_point');
+    const ok = valuesMatch(actual, target, TEMP_TOLERANCE);
+    results = [{ imei, actual, ok }];
+    allOk = ok;
+  } else {
+    ({ results, allOk } = await allUnitsMatch(ctx, fanOutUnits(ctx), 'set_point', target, TEMP_TOLERANCE));
+  }
+
   const events = [{ action: 'check_temperature', target, results }];
 
   if (!allOk) {
-    const urls = await fanOutSend(ctx, units, 1, target);
+    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, target);
     events.push({ action: 'send_temperature', target, urls });
     return {
       auto: { ...auto, nextActionAt: msFromNow(TEMP_VERIFY_MS) },

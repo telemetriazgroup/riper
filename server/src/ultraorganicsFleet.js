@@ -144,10 +144,13 @@ export function ultraorganicsCommandImeis(panelDeviceId, tipo) {
   return [panel];
 }
 
-/** IMEI para leer telemetría en control automático. */
+/** IMEI para leer telemetría en control automático (mismo criterio que Greenyard: un equipo lógico por panel). */
 export function ultraorganicsTelemetryImei(panelDeviceId, field) {
   const panel = String(panelDeviceId || '').trim();
   const f = String(field || '');
+  if (f === 'set_point') {
+    return ultraorganicsEthyleneImei(panel);
+  }
   if (f === 'campo_1' || f === 'sp_ethyleno' || f === 'ethylene') {
     return ultraorganicsEthyleneImei(panel);
   }
