@@ -1,11 +1,14 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Device } from '@/app/data';
-import { ArrowLeft, Layers, Package } from 'lucide-react';
+import { ArrowLeft, Layers, Package, Edit2, Check, X, Loader2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { clsx } from 'clsx';
-import { resolveDeviceDisplayName } from '@/app/lib/deviceLocalNames';
+import { resolveDeviceDisplayName, deviceNameStorageKey, applySobrenombresToDevice } from '@/app/lib/deviceLocalNames';
+import { updateDeviceName } from '@/app/lib/api';
+import { toast } from 'sonner';
+import { useDevices } from '@/app/hooks/useDevices';
 import {
   aggregateGourmetTunnelDevice,
   defaultGourmetTunnelSelectedUnits,
@@ -28,7 +31,44 @@ interface TunnelDeviceDetailProps {
 
 export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, onBack }) => {
   const { t, formatTemp, tempUnit, toggleTempUnit, language, formatDateTime } = useSettings();
+  const { mutate: refreshDevices } = useDevices();
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(() => resolveDeviceDisplayName(device));
+  const [isSavingName, setIsSavingName] = useState(false);
+  const displayName = resolveDeviceDisplayName(device);
   const { session: activeControlSession } = useDeviceControlSession(GOURMET_TUNEL_DEVICE_ID);
+
+  useEffect(() => {
+    setNameDraft(displayName);
+  }, [device.id, displayName]);
+
+  const handleSaveName = async () => {
+    const trimmed = nameDraft.trim();
+    if (trimmed === displayName.trim()) {
+      setIsEditingName(false);
+      return;
+    }
+    setIsSavingName(true);
+    try {
+      const key = deviceNameStorageKey(device.id) || device.id;
+      await updateDeviceName(device.id, trimmed);
+      await refreshDevices(
+        (current) =>
+          (current ?? []).map((d) =>
+            deviceNameStorageKey(d.id) === key
+              ? applySobrenombresToDevice({ ...d, nombreApi: d.nombreApi ?? d.name }, { [key]: trimmed })
+              : d
+          ),
+        { revalidate: true }
+      );
+      toast.success(t('name_updated'));
+      setIsEditingName(false);
+    } catch {
+      toast.error(t('error_updating_name'));
+    } finally {
+      setIsSavingName(false);
+    }
+  };
   const [controlMode, setControlMode] = useState('manual');
   const tunnel = device.tunnel;
   const [selectedUnits, setSelectedUnits] = useState<string[]>(() => defaultGourmetTunnelSelectedUnits());
@@ -122,8 +162,59 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-2xl font-bold text-foreground">{resolveDeviceDisplayName(device)}</h2>
+            <div className="flex items-center gap-2 flex-wrap group">
+              {isEditingName ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    className="text-2xl font-bold text-foreground border-b-2 border-blue-500 focus:outline-none bg-transparent px-1 py-0.5"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void handleSaveName();
+                      if (e.key === 'Escape') {
+                        setNameDraft(displayName);
+                        setIsEditingName(false);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveName()}
+                    disabled={isSavingName}
+                    className="p-1 hover:bg-green-100 rounded text-green-600"
+                  >
+                    {isSavingName ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(displayName);
+                      setIsEditingName(false);
+                    }}
+                    disabled={isSavingName}
+                    className="p-1 hover:bg-red-100 rounded text-red-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold text-foreground">{displayName}</h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNameDraft(displayName);
+                      setIsEditingName(true);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded text-muted-foreground hover:text-blue-600"
+                    title={t('rename_device')}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                </>
+              )}
               <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200 text-xs font-semibold px-2 py-0.5">
                 <Layers className="h-3 w-3" />
                 {language === 'es' ? 'Túnel / Madurador' : 'Tunnel / Ripener'}

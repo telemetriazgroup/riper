@@ -4,6 +4,9 @@ import {
   ComposedChart, ReferenceArea, LabelList, TooltipProps,
 } from 'recharts';
 import { useDeviceHistory } from '@/app/hooks/useDevices';
+import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import { applyEthyleneDisplayPolicyToHistory } from '@/app/lib/ethyleneDisplayPolicy';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
@@ -189,15 +192,27 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
+  const { activeTracking } = useRipeningActiveForDevice(deviceId);
+  const { session: panelSession } = useDeviceControlSession(deviceId);
+
+  const policyHistory = useMemo(() => {
+    const raw = history ?? [];
+    if (!deviceId || raw.length === 0) return raw;
+    return applyEthyleneDisplayPolicyToHistory(raw, {
+      deviceId,
+      trackingProcess: activeTracking?.process ?? null,
+      panelActiveSession: panelSession?.status === 'active' ? panelSession : null,
+    });
+  }, [history, deviceId, activeTracking, panelSession]);
 
   const isTkCharts = isThermoKingSession();
   const dataClassic = useMemo(
-    () => buildLast12hChartData(history ?? [], convertTemp),
-    [history, convertTemp]
+    () => buildLast12hChartData(policyHistory, convertTemp),
+    [policyHistory, convertTemp]
   );
   const dataThermoKing = useMemo(
-    () => buildThermoKingLast12hChartData(history ?? [], convertTemp),
-    [history, convertTemp]
+    () => buildThermoKingLast12hChartData(policyHistory, convertTemp),
+    [policyHistory, convertTemp]
   );
 
   if (isLoading) {
@@ -208,7 +223,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     );
   }
 
-  const noHistory = (history?.length ?? 0) === 0;
+  const noHistory = (policyHistory?.length ?? 0) === 0;
 
   return (
     <Card className="col-span-1 lg:col-span-2">

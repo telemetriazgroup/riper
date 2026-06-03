@@ -28,36 +28,51 @@ import {
 } from '@/app/lib/deviceNamesApi';
 import { deviceNameStorageKey } from '@/app/lib/deviceLocalNames';
 import {
-  applyGourmetEthyleneDisplayToDevice,
-  applyGourmetEthyleneDisplayToFleet,
-  applyGourmetEthyleneDisplayToHistory,
-  resolveGourmetProgrammedEthylenePpm,
-} from '@/app/lib/gourmetEthyleneDisplay';
+  applyEthyleneDisplayPolicyToDevice,
+  applyEthyleneDisplayPolicyToHistory,
+} from '@/app/lib/ethyleneDisplayPolicy';
 import { listControlSessions } from '@/app/lib/deviceControlProcessApi';
 
-async function finalizeGourmetClientFleet(list: Device[]): Promise<Device[]> {
-  const named = await mergeSavedDisplayNames(list);
-  if (!isGourmetSession()) return named;
+async function finalizeClientFleetEthylene(list: Device[]): Promise<Device[]> {
   let sessions = null;
   try {
     sessions = await listControlSessions();
   } catch {
     sessions = null;
   }
-  return applyGourmetEthyleneDisplayToFleet(named, sessions);
+  return list.map((d) => {
+    const withRaw = {
+      ...d,
+      telemetry: {
+        ...d.telemetry,
+        ethylene_raw: d.telemetry.ethylene_raw ?? d.telemetry.ethylene,
+      },
+    };
+    return applyEthyleneDisplayPolicyToDevice(withRaw, { sessions });
+  });
+}
+
+async function finalizeGourmetClientFleet(list: Device[]): Promise<Device[]> {
+  const named = await mergeSavedDisplayNames(list);
+  return finalizeClientFleetEthylene(named);
 }
 
 async function finalizeGourmetClientDevice(device: Device): Promise<Device> {
   const named = await mergeSavedDisplayNameOne(device);
-  if (!isGourmetSession()) return named;
   let sessions = null;
   try {
     sessions = await listControlSessions();
   } catch {
     sessions = null;
   }
-  const programmed = resolveGourmetProgrammedEthylenePpm(named.id, sessions);
-  return applyGourmetEthyleneDisplayToDevice(named, programmed);
+  const withRaw = {
+    ...named,
+    telemetry: {
+      ...named.telemetry,
+      ethylene_raw: named.telemetry.ethylene_raw ?? named.telemetry.ethylene,
+    },
+  };
+  return applyEthyleneDisplayPolicyToDevice(withRaw, { sessions });
 }
 
 async function mergeSavedDisplayNames(list: Device[]): Promise<Device[]> {
@@ -113,7 +128,7 @@ export async function fetchDevices(): Promise<Device[]> {
   if (isFleetDemoSession()) {
     try {
       const list = await fetchFleetDemoMaduradorList();
-      return mergeSavedDisplayNames(list);
+      return finalizeClientFleetEthylene(await mergeSavedDisplayNames(list));
     } catch (e) {
       console.warn('Fleet demo Madurador list failed:', e);
       return [];
@@ -265,17 +280,13 @@ export async function fetchDeviceHistory(
       isGourmetSession() && id === GOURMET_TUNEL_DEVICE_ID ? GOURMET_TUNNEL_ETHYLENE_IMEI : id;
     const { points } = await fetchMaduradorRangoHistoryForImei(historyImei, options ?? {});
     const list = Array.isArray(points) ? points : [];
-    if (isGourmetSession()) {
-      let sessions = null;
-      try {
-        sessions = await listControlSessions();
-      } catch {
-        sessions = null;
-      }
-      const programmed = resolveGourmetProgrammedEthylenePpm(id, sessions);
-      return applyGourmetEthyleneDisplayToHistory(list, programmed);
+    let sessions = null;
+    try {
+      sessions = await listControlSessions();
+    } catch {
+      sessions = null;
     }
-    return list;
+    return applyEthyleneDisplayPolicyToHistory(list, { deviceId: id, sessions });
   }
   if (isGourmetSession() && !isGourmetMaduradorFleetSession() && id === GOURMET_TUNEL_DEVICE_ID) {
     const dev = getCachedGourmetTunnelDevice() ?? (await refreshGourmetTunnelDevice());

@@ -6,10 +6,14 @@
 import { pool } from './db.js';
 import { fetchDeviceRowByImei, readTelemetryField } from './tunnelCommandTelemetry.js';
 import {
-  ETHYLENE_MAX_READING,
   ETHYLENE_POLL_INTERVAL_MS,
   ETHYLENE_READINGS_NEEDED,
 } from './tunnelCommandCompliance.js';
+import {
+  applyEthyleneReadingToMeta,
+  recordEthyleneDose,
+  resolveEthyleneReading,
+} from './ethyleneReading.js';
 import { appendTunnelEventLog } from './tunnelEventLog.js';
 import { controlParamNumber, normalizeControlProcessParams, parseSessionParams, effectiveSessionParams } from './controlProcessParams.js';
 import { isAutomatedControlDeviceId, resolveProcessControlAdapter } from './processControlAdapter.js';
@@ -54,12 +58,6 @@ function parseParams(session) {
 function valuesMatch(actual, target, tolerance) {
   if (actual == null || !Number.isFinite(actual)) return false;
   return Math.abs(actual - target) <= tolerance;
-}
-
-function isValidEthyleneReading(value, existing = []) {
-  if (value == null || !Number.isFinite(value)) return false;
-  if (value === 0 || value >= ETHYLENE_MAX_READING) return false;
-  return !existing.some((r) => Math.abs(r - value) < 0.05);
 }
 
 function computeProportionalEthyleneDose(meta, target, lastReading) {
@@ -209,8 +207,10 @@ export function initGourmetProcessAutomation(session) {
     completedPhases: [],
     ethylene: {
       readings: [],
+      nonZeroReadings: [],
       baselineBeforeDose: null,
       lastTipo5Dato: 0,
+      lastDoseAt: null,
       pollRound: 0,
       cycleStartedAt: null,
     },
@@ -402,32 +402,44 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
   }
 
   const row = await telemetryRow(ctx, 'campo_1');
-  const actual = readTelemetryField(row, 'campo_1');
+  const actualRaw = readTelemetryField(row, 'campo_1');
+  const resolved = resolveEthyleneReading(actualRaw, eth);
+  eth = applyEthyleneReadingToMeta(eth, resolved);
   eth.lastMonitorAt = nowIso();
-  eth.lastReading = actual;
 
   events.push({
-    action: 'ethylene_read',
-    value: actual,
+    action: resolved.ignoredZero ? 'ethylene_read_ignored_zero' : 'ethylene_read',
+    value: actualRaw,
+    effective: resolved.effective,
+    ignoredZero: resolved.ignoredZero,
+    nonZeroReadings: [...resolved.history],
     target,
-    reason: 'steady_monitor',
-    inRange: actual != null && actual >= target - 0.5,
+    reason: resolved.ignoredZero ? 'sensor_zero_after_dose' : 'steady_monitor',
+    inRange: resolved.effective != null && resolved.effective >= target - 0.5,
   });
 
-  if (actual != null && actual < target - 0.5) {
+  if (resolved.ignoredZero || !resolved.canInject) {
+    return {
+      auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) },
+      events,
+      rescheduled: true,
+    };
+  }
+
+  const effective = resolved.effective;
+  if (effective != null && effective < target - 0.5) {
     const isInitial = !eth.lastTipo5Dato;
-    const dose = isInitial ? 2 : computeProportionalEthyleneDose(eth, target, actual);
+    const dose = isInitial ? 2 : computeProportionalEthyleneDose(eth, target, effective);
     if (dose > 0 && adapter) {
       try {
         const sent = await adapter.sendEthyleneDose(imei, dose);
-        eth.baselineBeforeDose = actual;
-        eth.lastTipo5Dato = sent.ppm;
+        eth = recordEthyleneDose(eth, sent.ppm, effective);
         events.push({
           action: isInitial ? 'ethylene_tipo5_initial' : 'ethylene_tipo5_proportional',
           imei,
           dato: sent.ppm,
-          baseline: actual,
-          lastReading: actual,
+          baseline: effective,
+          lastReading: effective,
           target,
           url: sent.step.url,
           reason: 'below_target_steady',
@@ -463,16 +475,33 @@ async function tickEthyleneCycle(ctx, params, auto) {
   const cycleStart = eth.cycleStartedAt ? new Date(eth.cycleStartedAt).getTime() : now;
 
   if (!eth.cycleStartedAt || now - cycleStart >= ETHYLENE_CYCLE_MS) {
-    eth = { readings: [], baselineBeforeDose: null, lastTipo5Dato: 0, pollRound: 0, cycleStartedAt: nowIso() };
+    eth = {
+      readings: [],
+      nonZeroReadings: [],
+      baselineBeforeDose: null,
+      lastTipo5Dato: 0,
+      lastDoseAt: null,
+      pollRound: 0,
+      cycleStartedAt: nowIso(),
+    };
     const row = await telemetryRow(ctx, 'campo_1');
-    const baseline = readTelemetryField(row, 'campo_1') ?? 0;
-    eth.baselineBeforeDose = baseline;
+    const baselineRaw = readTelemetryField(row, 'campo_1');
+    const resolved = resolveEthyleneReading(baselineRaw, eth);
+    eth = applyEthyleneReadingToMeta(eth, resolved);
+    const baseline = resolved.effective;
 
-    if (baseline < target - 0.5 && adapter) {
+    if (baseline != null && baseline < target - 0.5 && adapter && resolved.canInject) {
       const sent = await adapter.sendEthyleneDose(imei, 2);
-      eth.lastTipo5Dato = sent.ppm;
-      events.push({ action: 'ethylene_tipo5_initial', imei, dato: sent.ppm, url: sent.step.url, baseline });
-    } else {
+      eth = recordEthyleneDose(eth, sent.ppm, baseline);
+      events.push({
+        action: 'ethylene_tipo5_initial',
+        imei,
+        dato: sent.ppm,
+        url: sent.step.url,
+        baseline,
+        value: baselineRaw,
+      });
+    } else if (baseline != null && baseline >= target - 0.5) {
       events.push({ action: 'ethylene_skip_dose', reason: 'at_target', baseline, target });
       return {
         auto: {
@@ -481,6 +510,20 @@ async function tickEthyleneCycle(ctx, params, auto) {
           ethylene: { ...eth, lastReading: baseline },
           nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS),
         },
+        events,
+        rescheduled: true,
+      };
+    } else {
+      events.push({
+        action: 'ethylene_read',
+        value: baselineRaw,
+        effective: baseline,
+        ignoredZero: resolved.ignoredZero,
+        reason: 'cycle_start_wait_reading',
+        target,
+      });
+      return {
+        auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS) },
         events,
         rescheduled: true,
       };
@@ -500,19 +543,28 @@ async function tickEthyleneCycle(ctx, params, auto) {
   }
 
   const row = await telemetryRow(ctx, 'campo_1');
-  const actual = readTelemetryField(row, 'campo_1');
-  const readings = Array.isArray(eth.readings) ? [...eth.readings] : [];
-  if (isValidEthyleneReading(actual, readings)) readings.push(actual);
-  eth.readings = readings;
+  const actualRaw = readTelemetryField(row, 'campo_1');
+  const resolved = resolveEthyleneReading(actualRaw, eth);
+  eth = applyEthyleneReadingToMeta(eth, resolved);
   eth.pollRound = (eth.pollRound ?? 0) + 1;
-  events.push({ action: 'ethylene_read', value: actual, readings: [...readings], target });
 
-  if (actual != null && actual >= target - 0.5) {
+  events.push({
+    action: resolved.ignoredZero ? 'ethylene_read_ignored_zero' : 'ethylene_read',
+    value: actualRaw,
+    effective: resolved.effective,
+    ignoredZero: resolved.ignoredZero,
+    nonZeroReadings: [...resolved.history],
+    target,
+  });
+
+  const effective = resolved.effective;
+
+  if (effective != null && effective >= target - 0.5) {
     return {
       auto: {
         ...auto,
         mode: 'steady',
-        ethylene: { ...eth, cycleStartedAt: null, lastMonitorAt: nowIso(), lastReading: actual },
+        ethylene: { ...eth, cycleStartedAt: null, lastMonitorAt: nowIso(), lastReading: effective },
         nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS),
       },
       events,
@@ -520,7 +572,7 @@ async function tickEthyleneCycle(ctx, params, auto) {
     };
   }
 
-  if (readings.length < ETHYLENE_READINGS_NEEDED || eth.pollRound < 4) {
+  if (resolved.ignoredZero || resolved.history.length < ETHYLENE_READINGS_NEEDED || eth.pollRound < 4) {
     return {
       auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS) },
       events,
@@ -528,13 +580,13 @@ async function tickEthyleneCycle(ctx, params, auto) {
     };
   }
 
-  const lastReading = readings[readings.length - 1];
+  const lastReading = resolved.history[resolved.history.length - 1];
   const dose = computeProportionalEthyleneDose(eth, target, lastReading);
-  if (dose > 0 && lastReading < target - 0.5 && adapter) {
+  if (dose > 0 && lastReading < target - 0.5 && adapter && resolved.canInject) {
     const sent = await adapter.sendEthyleneDose(imei, dose);
-    eth.baselineBeforeDose = lastReading;
-    eth.lastTipo5Dato = sent.ppm;
+    eth = recordEthyleneDose(eth, sent.ppm, lastReading);
     eth.readings = [];
+    eth.nonZeroReadings = [];
     eth.pollRound = 0;
     events.push({
       action: 'ethylene_tipo5_proportional',

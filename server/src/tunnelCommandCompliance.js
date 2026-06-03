@@ -14,11 +14,17 @@ import {
   sendTunnelControlCommand,
 } from './tunelControlClient.js';
 import { fetchDeviceRowByImei, readTelemetryField } from './tunnelCommandTelemetry.js';
+import {
+  ETHYLENE_MAX_READING,
+  applyEthyleneReadingToMeta,
+  recordEthyleneDose,
+  resolveEthyleneReading,
+} from './ethyleneReading.js';
 
 export const ETHYLENE_VERIFY_DELAY_MS = 4 * 60 * 1000;
 export const ETHYLENE_POLL_INTERVAL_MS = 2 * 60 * 1000;
 export const ETHYLENE_READINGS_NEEDED = 3;
-export const ETHYLENE_MAX_READING = 300;
+export { ETHYLENE_MAX_READING } from './ethyleneReading.js';
 export const SIMPLE_VERIFY_DELAY_MS = 30 * 1000;
 export const POLL_INTERVAL_MS = 15 * 1000;
 
@@ -279,9 +285,12 @@ async function dispatchTunnelEthylene(job) {
 
   try {
     const row = await fetchDeviceRowByImei(imei);
-    const baseline = readTelemetryField(row, 'campo_1') ?? 0;
+    const baselineRaw = readTelemetryField(row, 'campo_1');
+    const resolved = resolveEthyleneReading(baselineRaw, meta);
+    meta = applyEthyleneReadingToMeta(meta, resolved);
+    const baseline = resolved.effective;
 
-    if (ethyleneTargetReached(baseline, target, tolerance)) {
+    if (baseline != null && ethyleneTargetReached(baseline, target, tolerance)) {
       await updateJob(job.id, {
         status: 'completed',
         steps: appendStep(steps, {
@@ -300,7 +309,7 @@ async function dispatchTunnelEthylene(job) {
     let baselineBeforeDose = baseline;
     let lastTipo5Dato = 0;
 
-    if (baseline < target) {
+    if (baseline != null && baseline < target && resolved.canInject) {
       const dose = computeInitialEthyleneDose(baseline, target);
       const sent = await sendEthyleneDoseCommand(imei, dose);
       lastTipo5Dato = sent.ppm;
@@ -310,8 +319,21 @@ async function dispatchTunnelEthylene(job) {
         baselineBeforeDose: baseline,
         url: sent.step.url,
       });
-      meta.baselineBeforeDose = baseline;
-      meta.lastTipo5Dato = sent.ppm;
+      meta = recordEthyleneDose({ ...meta, baselineBeforeDose: baseline }, sent.ppm, baseline);
+    } else if (baseline == null) {
+      await updateJob(job.id, {
+        status: 'waiting',
+        steps: appendStep(steps, {
+          action: 'read_ethylene_poll',
+          value: baselineRaw,
+          reason: 'await_valid_baseline',
+        }),
+        meta,
+        last_read_value: null,
+        next_check_at: new Date(Date.now() + ETHYLENE_POLL_INTERVAL_MS).toISOString(),
+        attempts: 1,
+      });
+      return;
     }
 
     await updateJob(job.id, {
@@ -562,7 +584,6 @@ async function verifyTunnelEthyleneJob(job) {
   const target = Number(job.target_value);
   const tolerance = Number(job.tolerance);
   let meta = { ...(job.meta ?? {}) };
-  let readings = Array.isArray(meta.readings) ? [...meta.readings] : [];
   let steps = job.steps ?? [];
   const attempts = Number(job.attempts) + 1;
 
@@ -574,26 +595,27 @@ async function verifyTunnelEthyleneJob(job) {
   }
 
   const row = await fetchDeviceRowByImei(imei);
-  const actual = readTelemetryField(row, 'campo_1');
-
-  if (isValidEthyleneReading(actual, readings)) {
-    readings.push(actual);
-    meta.readings = readings;
-  }
+  const actualRaw = readTelemetryField(row, 'campo_1');
+  const resolved = resolveEthyleneReading(actualRaw, meta);
+  meta = applyEthyleneReadingToMeta(meta, resolved);
 
   steps = appendStep(steps, {
-    action: 'read_ethylene_poll',
-    value: actual,
+    action: resolved.ignoredZero ? 'read_ethylene_ignored_zero' : 'read_ethylene_poll',
+    value: actualRaw,
+    effective: resolved.effective,
+    ignoredZero: resolved.ignoredZero,
     target,
-    readings: [...readings],
+    nonZeroReadings: [...resolved.history],
     readingsNeeded: ETHYLENE_READINGS_NEEDED,
   });
 
-  if (ethyleneTargetReached(actual, target, tolerance)) {
+  const effective = resolved.effective;
+
+  if (effective != null && ethyleneTargetReached(effective, target, tolerance)) {
     await updateJob(job.id, {
       status: 'completed',
       steps: appendStep(steps, { action: 'completed', reason: 'ethylene_target_reached' }),
-      last_read_value: actual,
+      last_read_value: effective,
       meta,
       completed_at: nowIso(),
       next_check_at: null,
@@ -601,12 +623,12 @@ async function verifyTunnelEthyleneJob(job) {
     return;
   }
 
-  if (readings.length < ETHYLENE_READINGS_NEEDED) {
+  if (resolved.ignoredZero || meta.nonZeroReadings.length < ETHYLENE_READINGS_NEEDED) {
     if (attempts >= Number(job.max_attempts)) {
       await updateJob(job.id, {
         status: 'failed',
         steps: appendStep(steps, { action: 'failed', reason: 'max_attempts_poll' }),
-        last_read_value: actual,
+        last_read_value: effective,
         attempts,
         meta,
         last_error: `No se obtuvieron ${ETHYLENE_READINGS_NEEDED} lecturas válidas de campo_1`,
@@ -618,7 +640,7 @@ async function verifyTunnelEthyleneJob(job) {
     await updateJob(job.id, {
       status: 'waiting',
       steps,
-      last_read_value: actual,
+      last_read_value: effective,
       attempts,
       meta,
       next_check_at: new Date(Date.now() + ETHYLENE_POLL_INTERVAL_MS).toISOString(),
@@ -626,7 +648,7 @@ async function verifyTunnelEthyleneJob(job) {
     return;
   }
 
-  const lastReading = readings[readings.length - 1];
+  const lastReading = meta.nonZeroReadings[meta.nonZeroReadings.length - 1];
   if (lastReading >= target - tolerance) {
     await updateJob(job.id, {
       status: 'completed',
@@ -659,9 +681,9 @@ async function verifyTunnelEthyleneJob(job) {
     const previousBaseline = Number(meta.baselineBeforeDose ?? lastReading);
     const observedIncrement = lastReading - previousBaseline;
     const sent = await sendEthyleneDoseCommand(imei, nextDose);
-    meta.baselineBeforeDose = lastReading;
-    meta.lastTipo5Dato = sent.ppm;
+    meta = recordEthyleneDose({ ...meta, baselineBeforeDose: lastReading }, sent.ppm, lastReading);
     meta.readings = [];
+    meta.nonZeroReadings = [];
     steps = appendStep(steps, {
       action: 'send_tipo5_proportional',
       dato: sent.ppm,

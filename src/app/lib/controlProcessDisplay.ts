@@ -240,6 +240,7 @@ const ETH_ACTIONS = new Set([
   'ethylene_skip_dose',
   'ethylene_poll',
   'ethylene_read',
+  'ethylene_read_ignored_zero',
   'send_ethylene',
   'send_tipo5',
   'send_tipo5_proportional',
@@ -512,6 +513,15 @@ export function summarizeProcessEventParts(
       reason: isMonitor
         ? t('log_ctrl_reason_ethylene_steady_monitor')
         : t('log_ctrl_reason_ethylene_poll'),
+    };
+  }
+  if (action === 'ethylene_read_ignored_zero' || action === 'read_ethylene_ignored_zero') {
+    const effective = String(ev.effective ?? detail.effective ?? '—');
+    const raw = String(ev.value ?? detail.value ?? '0');
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_read_ignored_zero', { raw, effective }),
+      reason: t('log_ctrl_reason_ethylene_read_ignored_zero', { raw, effective, target: ethTarget }),
     };
   }
   if (action === 'ethylene_read' || action === 'read_ethylene_poll' || action === 'read_ethylene') {

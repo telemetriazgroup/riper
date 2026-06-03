@@ -37,19 +37,16 @@ import { differenceInMinutes, formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
-import { isGourmetSession } from '@/app/lib/gourmet';
-import { formatGourmetFleetEthyleneLabel } from '@/app/lib/gourmetEthyleneDisplay';
+import { formatFleetEthyleneLabel } from '@/app/lib/ethyleneDisplayPolicy';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
+import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 
-function fleetEthyleneText(device: Device, gourmetFleet: boolean): string {
-  if (gourmetFleet) {
-    const label = formatGourmetFleetEthyleneLabel(device.telemetry.ethylene);
-    return label === '—' ? '—' : `${label} PPM`;
-  }
-  const v = device.telemetry.ethylene;
-  if (v == null) return '—';
-  if (v === 0) return 'NA';
-  return `${formatUiDecimal(v)} PPM`;
+function fleetEthyleneText(
+  device: Device,
+  trackingProcess?: RipeningProcessRow | null,
+  panelActiveSession?: DeviceControlSessionRow | null
+): string {
+  return formatFleetEthyleneLabel(device, { trackingProcess, panelActiveSession });
 }
 
 interface DeviceCardProps {
@@ -76,8 +73,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [trackingDetailsOpen, setTrackingDetailsOpen] = useState(false);
   const displayName = resolveDeviceDisplayName(device);
-  const gourmetFleet = isGourmetSession();
-  const ethyleneFleetLabel = fleetEthyleneText(device, gourmetFleet);
+  const ethyleneFleetLabel = fleetEthyleneText(device, trackingProcess, panelActiveSession);
 
   useEffect(() => {
     setNewName(displayName);
@@ -433,19 +429,17 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   TÚNEL
                 </span>
               )}
-              {!device.tunnel && (
-                <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setNewName(displayName);
-                    setIsEditing(true);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
-                  title={t('rename_device')}
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
-              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setNewName(displayName);
+                  setIsEditing(true);
+                }}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-muted rounded text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400"
+                title={t('rename_device')}
+              >
+                <Edit2 className="w-3 h-3" />
+              </button>
             </div>
           )}
           <div className="text-xs text-muted-foreground font-mono mt-1 flex items-center gap-2">

@@ -1,12 +1,20 @@
 import type { Device } from '@/app/data';
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import type { HistoryPoint } from '@/app/lib/api';
+import { getStoredUser } from '@/app/lib/auth';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 import {
   GOURMET_STANDALONE_IMEI,
   GOURMET_TUNNEL_ETHYLENE_IMEI,
 } from '@/app/lib/gourmetTunnelFleet';
+
+const UNFILTERED_ETHYLENE_VIEWER_EMAIL = 'superadmin@riper.local';
+
+function isUnfilteredEthyleneViewerLocal(): boolean {
+  const email = (getStoredUser()?.email ?? '').trim().toLowerCase();
+  return email === UNFILTERED_ETHYLENE_VIEWER_EMAIL;
+}
 
 /** Máximo +21 % sobre la inyección programada (ej. 50 → 60.5 ppm). */
 export const GOURMET_ETHYLENE_DISPLAY_CAP_RATIO = 0.21;
@@ -199,6 +207,20 @@ export function applyGourmetEthyleneDisplayToDevice(
   device: Device,
   programmedTarget: number | null | undefined
 ): Device {
+  const raw = device.telemetry.ethylene_raw ?? device.telemetry.ethylene;
+
+  if (isUnfilteredEthyleneViewerLocal()) {
+    return {
+      ...device,
+      telemetry: {
+        ...device.telemetry,
+        ethylene: raw,
+        ethylene_raw: raw,
+        ethylene_programmed: programmedTarget ?? null,
+      },
+    };
+  }
+
   const target =
     programmedTarget ??
     resolveGourmetProgrammedEthylenePpm(device.id) ??
@@ -206,7 +228,18 @@ export function applyGourmetEthyleneDisplayToDevice(
       ? Number(device.madurador.sp_ethyleno)
       : null);
 
-  const raw = device.telemetry.ethylene_raw ?? device.telemetry.ethylene;
+  if (target == null || target <= 0) {
+    return {
+      ...device,
+      telemetry: {
+        ...device.telemetry,
+        ethylene: null,
+        ethylene_raw: raw,
+        ethylene_programmed: null,
+      },
+    };
+  }
+
   const modulated = modulateGourmetEthyleneDisplayPpm(raw, target);
   const display = applyGourmetFleetEthyleneZeroGuard(device.id, raw, modulated);
 
@@ -225,7 +258,10 @@ export function applyGourmetEthyleneDisplayToHistory(
   points: HistoryPoint[],
   programmedTarget: number | null | undefined
 ): HistoryPoint[] {
-  if (programmedTarget == null || !Number.isFinite(programmedTarget)) return points;
+  if (isUnfilteredEthyleneViewerLocal()) return points;
+  if (programmedTarget == null || !Number.isFinite(programmedTarget)) {
+    return points.map((p) => ({ ...p, ethylene: null }));
+  }
   return points.map((p) => ({
     ...p,
     ethylene: modulateGourmetEthyleneDisplayPpm(p.ethylene, programmedTarget),

@@ -841,6 +841,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip': 'Sin inyección de etileno',
     'log_ctrl_ethylene_poll': 'Consulta de etileno (tipo 0)',
     'log_ctrl_ethylene_read': 'Lectura etileno: {{value}} ppm',
+    'log_ctrl_ethylene_read_ignored_zero': 'Lectura etileno ignorada (sensor en 0): raw {{raw}} ppm → se mantiene {{effective}} ppm',
     'log_ctrl_command_completed': 'Comando completado',
     'log_ctrl_command_failed': 'Comando fallido',
     'log_ctrl_command_error': 'Error de comando',
@@ -877,6 +878,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ethylene_steady_monitor': 'Monitoreo continuo maduración: poll tipo 0 dato 1 (cada 3 min).',
     'log_ctrl_reason_ethylene_steady_read': 'Lectura {{value}} ppm en monitoreo continuo. Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_read': 'Lectura {{value}} ppm (muestras: {{readings}}). Objetivo {{target}} ppm.',
+    'log_ctrl_reason_ethylene_read_ignored_zero':
+      'El sensor reportó 0 ppm tras inyección reciente; se mantiene {{effective}} ppm (raw {{raw}}). Sin inyección hasta nueva lectura válida. Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_manual': 'Comando manual de inyección de etileno.',
     'log_ctrl_reason_generic_data': 'Datos: {{data}}',
     'manual_control_logged': 'Cambios manuales registrados en Control de dispositivos.',
@@ -2024,6 +2027,7 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip': 'No ethylene injection',
     'log_ctrl_ethylene_poll': 'Ethylene poll (type 0)',
     'log_ctrl_ethylene_read': 'Ethylene reading: {{value}} ppm',
+    'log_ctrl_ethylene_read_ignored_zero': 'Ethylene reading ignored (sensor at 0): raw {{raw}} ppm → keeping {{effective}} ppm',
     'log_ctrl_command_completed': 'Command completed',
     'log_ctrl_command_failed': 'Command failed',
     'log_ctrl_command_error': 'Command error',
@@ -2060,6 +2064,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ethylene_steady_monitor': 'Continuous ripening monitor: type 0 poll value 1 (every 3 min).',
     'log_ctrl_reason_ethylene_steady_read': 'Reading {{value}} ppm during continuous monitor. Target {{target}} ppm.',
     'log_ctrl_reason_ethylene_read': 'Reading {{value}} ppm (samples: {{readings}}). Target {{target}} ppm.',
+    'log_ctrl_reason_ethylene_read_ignored_zero':
+      'Sensor reported 0 ppm after recent injection; keeping {{effective}} ppm (raw {{raw}}). No injection until a new valid reading. Target {{target}} ppm.',
     'log_ctrl_reason_ethylene_manual': 'Manual ethylene injection command.',
     'log_ctrl_reason_generic_data': 'Data: {{data}}',
     'manual_control_logged': 'Manual changes saved to Device Control.',

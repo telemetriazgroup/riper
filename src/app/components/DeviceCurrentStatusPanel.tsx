@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
+import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import { resolveFleetEthyleneDisplayPpm } from '@/app/lib/ethyleneDisplayPolicy';
 
 type TFn = (k: string, r?: Record<string, string> | string) => string;
 
@@ -110,8 +113,18 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   tempUnit,
   toggleTempUnit,
   formatDateTime,
-  hideCargoSensorNumbers = [],
+  hideCargoSensorNumbers,
 }) => {
+  const { activeTracking } = useRipeningActiveForDevice(device.id);
+  const { session: panelSession } = useDeviceControlSession(device.id);
+  const ethyleneDisplayPpm = useMemo(
+    () =>
+      resolveFleetEthyleneDisplayPpm(device, {
+        trackingProcess: activeTracking?.process ?? null,
+        panelActiveSession: panelSession?.status === 'active' ? panelSession : null,
+      }),
+    [device, activeTracking, panelSession]
+  );
   const [open, setOpen] = useState(false);
   const m = device.madurador;
   const tel = device.telemetry;
@@ -143,8 +156,8 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         icon: Flame,
         label: t('status_ethylene'),
         value:
-          tel.ethylene != null && Number.isFinite(tel.ethylene)
-            ? `${formatUiDecimal(tel.ethylene)} ppm`
+          ethyleneDisplayPpm != null && Number.isFinite(ethyleneDisplayPpm)
+            ? `${formatUiDecimal(ethyleneDisplayPpm)} ppm`
             : '—',
       },
       {
@@ -181,7 +194,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         value: m?.capacity_load != null && Number.isFinite(m.capacity_load) ? formatUiPercent(m.capacity_load) : '—',
       },
     ],
-    [device, m, t, formatTemp, tel]
+    [device, m, t, formatTemp, tel, ethyleneDisplayPpm]
   );
 
   const compTemp = m?.compress_coil_1_temp;

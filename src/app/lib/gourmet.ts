@@ -1,6 +1,7 @@
 import type { Device } from '@/app/data';
 import type { HistoryPoint } from '@/app/lib/api';
 import { getStoredUser } from '@/app/lib/auth';
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 import gourmetJson from '../../../data_gourmet.json';
 
 type RawRow = Record<string, unknown> & {
@@ -35,6 +36,20 @@ export function getGourmetTradingPinnedImeis(): string[] {
   return list.length > 0 ? list : [...GOURMET_TRADING_DEFAULT_IMEIS];
 }
 
+/** IMEIs pin + túnel agregado (seguimientos, flota, nombres). */
+export function getGourmetTradingFleetDeviceIds(): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of [...getGourmetTradingPinnedImeis(), GOURMET_TUNEL_DEVICE_ID]) {
+    const k = String(id).trim();
+    if (k && !seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  }
+  return out;
+}
+
 export function isGourmetSession(): boolean {
   try {
     const u = getStoredUser();
@@ -49,8 +64,6 @@ export function isGourmetMaduradorFleetSession(): boolean {
   if (!isGourmetSession()) return false;
   return Boolean(getStoredUser()?.identificador?.trim());
 }
-
-import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 
 /** Dispositivo IMEI Gourmet o túnel agregado: control manual vía API Tunel. */
 export function isGourmetTunnelCommandDevice(deviceId?: string | null): boolean {
