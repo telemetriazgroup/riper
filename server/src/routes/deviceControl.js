@@ -295,6 +295,12 @@ deviceControlRouter.get('/sessions', async (req, res) => {
     if (isPinnedFleetDemoEmail(req.user?.email) && req.user?.role !== 'superadmin') {
       data = filterRowsByPinnedFleetDeviceIds(req.user.email, rows, (r) => r.device_id);
     }
+    data = data.map((row) => {
+      if (row?.params) {
+        return { ...row, params: effectiveSessionParams(row) };
+      }
+      return row;
+    });
     return res.json({ data });
   } catch (e) {
     console.error(e);

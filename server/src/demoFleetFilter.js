@@ -42,7 +42,7 @@ export function isScopedRecipeDemoUser(req) {
   const role = req.user?.role;
   if (role === 'superadmin') return false;
   const email = req.user?.email;
-  return isGreenyardFleetEmail(email) || isGourmetTradingFleetEmail(email);
+  return isGreenyardFleetEmail(email) || isGourmetTradingFleetEmail(email) || isUltraorganicsFleetEmail(email);
 }
 
 export function scopedRecipeSql(userIdParamIndex) {

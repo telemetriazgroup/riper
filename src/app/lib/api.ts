@@ -11,6 +11,7 @@ import {
   fetchMaduradorRangoHistoryForImei,
   getMaduradorDevicesCached,
   hasMaduradorIdentificador,
+  shouldUseMaduradorDispositivosApi,
   shouldUseMaduradorRangoHistory,
 } from '@/app/lib/madurador';
 import {
@@ -118,7 +119,7 @@ export async function fetchDevices(): Promise<Device[]> {
       return [];
     }
   }
-  if (hasMaduradorIdentificador()) {
+  if (shouldUseMaduradorDispositivosApi()) {
     try {
       if (isGourmetSession() && isGourmetMaduradorFleetSession()) {
         const list = await fetchGourmetMaduradorFleet();
@@ -175,7 +176,7 @@ export async function fetchDevice(id: string): Promise<Device> {
       throw e;
     }
   }
-  if (hasMaduradorIdentificador()) {
+  if (shouldUseMaduradorDispositivosApi()) {
     let list: Device[] = [];
     if (isGourmetSession() && isGourmetMaduradorFleetSession()) {
       list = await fetchGourmetMaduradorFleet();

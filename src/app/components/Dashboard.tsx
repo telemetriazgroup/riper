@@ -3,6 +3,7 @@ import { Device } from '@/app/data';
 import { useDevices } from '@/app/hooks/useDevices';
 import { useFleetActiveControlMap } from '@/app/hooks/useFleetActiveControlMap';
 import { useFleetRipeningTrackingMap } from '@/app/hooks/useFleetRipeningTrackingMap';
+import { applyFleetProcessOverlay } from '@/app/lib/fleetProcessOverlay';
 import { DeviceCard } from './DeviceCard';
 import { Card, CardContent } from './ui/Card';
 import { Activity, AlertTriangle, CheckCircle, Zap, Loader2, Download, Search } from 'lucide-react';
@@ -27,9 +28,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
   const [deviceSearch, setDeviceSearch] = useState('');
 
   const filteredDevices = useMemo(() => {
+    const withProcesses = applyFleetProcessOverlay(
+      devices,
+      panelSessionsByDevice,
+      ripeningTrackingByDevice,
+      t
+    );
     const q = deviceSearch.trim().toLowerCase();
-    if (!q) return devices;
-    return devices.filter((d) => {
+    if (!q) return withProcesses;
+    return withProcesses.filter((d) => {
       const haystack = [
         d.name,
         d.id,
@@ -44,7 +51,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [devices, deviceSearch]);
+  }, [devices, deviceSearch, panelSessionsByDevice, ripeningTrackingByDevice, t]);
 
   const downloadExecutiveSummary = async () => {
     setDownloading(true);
@@ -276,7 +283,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
 
   const activeCount = devices.filter(d => d.status === 'active' || d.status === 'warning').length;
   const alarmNumeroSum = totalNumeroAlarmaFleet(devices);
-  const processesInCurso = countProcesosEnCurso(devices);
+  const fleetDevicesForKpi = applyFleetProcessOverlay(
+    devices,
+    panelSessionsByDevice,
+    ripeningTrackingByDevice,
+    t
+  );
+  const processesInCurso = countProcesosEnCurso(fleetDevicesForKpi);
   const rawKwh = devices.reduce((acc, d) => acc + (d.operational?.power_kwh ?? 0), 0);
   const totalKwh = rawKwh > 0 ? rawKwh : 145;
 

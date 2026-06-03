@@ -10,7 +10,7 @@ import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
 import { isFleetDemoSession, isUltraorganicsSession, getUltraorganicsPanelImeis, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
-import { isGourmetSession } from '@/app/lib/gourmet';
+import { isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
 import { getGourmetMaduradorFleetImeis } from '@/app/lib/gourmetTunnelFleet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
 import {
@@ -44,6 +44,17 @@ export function hasMaduradorIdentificador(): boolean {
   if (isMaduradorSuperadminFullList()) return true;
   const id = getStoredUser()?.identificador?.trim();
   return Boolean(id);
+}
+
+/** Cuentas demo que cargan dispositivos vía GET /api/v1/madurador/dispositivos (aunque identificador falte en JWT). */
+export function shouldUseMaduradorDispositivosApi(): boolean {
+  return (
+    hasMaduradorIdentificador() ||
+    isUltraorganicsSession() ||
+    isGreenyardSession() ||
+    isFleetDemoSession() ||
+    (isGourmetSession() && isGourmetMaduradorFleetSession())
+  );
 }
 
 /**
