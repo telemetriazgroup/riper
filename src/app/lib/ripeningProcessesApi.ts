@@ -1,6 +1,6 @@
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth, getToken } from '@/app/lib/auth';
-import { getThermoKingPinnedImei, isThermoKingSession, getGreenyardPinnedImeis, isGreenyardSession, getUltraorganicsPanelImeis, isUltraorganicsSession } from '@/app/lib/fleetDemo';
+import { getThermoKingPinnedImei, isThermoKingSession, getGreenyardPinnedImeis, isGreenyardSession, getUltraorganicsAllImeis, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 import { getGourmetTradingPinnedImeis, isGourmetSession } from '@/app/lib/gourmet';
 import {
   SIM_INKAPACKING_DEVICE_IDS,
@@ -87,7 +87,7 @@ export async function fetchRipeningProcesses(opts?: {
     rows = rows.filter((r) => allow.has(String((r.payload as { deviceId?: string })?.deviceId ?? '').trim()));
   }
   if (isUltraorganicsSession()) {
-    const allow = new Set(getUltraorganicsPanelImeis());
+    const allow = new Set(getUltraorganicsAllImeis());
     rows = rows.filter((r) => allow.has(String((r.payload as { deviceId?: string })?.deviceId ?? '').trim()));
   }
   if (isGourmetSession()) {

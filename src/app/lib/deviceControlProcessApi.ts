@@ -1,5 +1,6 @@
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth } from '@/app/lib/auth';
+import { getUltraorganicsAllImeis, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 
 function base() {
   return `${RIPENER_API_URL.replace(/\/$/, '')}/api/v1/device-control`;
@@ -123,10 +124,15 @@ export async function listControlSessions(opts?: { includeArchived?: boolean }):
   if (opts?.includeArchived) u.searchParams.set('includeArchived', '1');
   const res = await fetch(u.toString(), { headers: authHeaders() });
   const json = await handle<{ data: DeviceControlSessionRow[] }>(res);
-  return (json.data ?? []).map((r) => ({
+  let rows = (json.data ?? []).map((r) => ({
     ...r,
     archived_at: r.archived_at ?? null,
   }));
+  if (isUltraorganicsSession()) {
+    const allow = new Set(getUltraorganicsAllImeis());
+    rows = rows.filter((r) => allow.has(String(r.device_id ?? '').trim()));
+  }
+  return rows;
 }
 
 export const CONTROL_SESSIONS_LIST_SWR_KEY = 'device-control-sessions';

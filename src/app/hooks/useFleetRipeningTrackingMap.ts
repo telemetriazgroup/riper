@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import useSWR from 'swr';
 import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { getUltraorganicsPanelForImei, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 
 /** Una sola petición: procesos de seguimiento (pestaña Seguimiento) indexados por equipo (`payload.deviceId`). */
 export const RIPENING_PROCESSES_FLEET_SWR_KEY = 'ripening-processes-fleet-map';
@@ -18,7 +19,9 @@ export function useFleetRipeningTrackingMap() {
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
     for (const row of sorted) {
-      const did = String((row.payload as { deviceId?: string })?.deviceId ?? '').trim();
+      const rawDid = String((row.payload as { deviceId?: string })?.deviceId ?? '').trim();
+      if (!rawDid) continue;
+      const did = isUltraorganicsSession() ? getUltraorganicsPanelForImei(rawDid) : rawDid;
       if (!did || m.has(did)) continue;
       m.set(did, row);
     }

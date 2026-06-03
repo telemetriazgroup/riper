@@ -1,7 +1,8 @@
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import {
   getGreenyardPinnedImeis,
-  getUltraorganicsPanelImeis,
+  getUltraorganicsAllImeis,
+  getUltraorganicsPanelForImei,
   isGreenyardSession,
   isUltraorganicsSession,
 } from '@/app/lib/fleetDemo';
@@ -13,7 +14,7 @@ export function filterActiveControlSessionsForFleet(
 ): DeviceControlSessionRow[] {
   let rows = sessions.filter((s) => s.status === 'active');
   if (isUltraorganicsSession()) {
-    const allow = new Set(getUltraorganicsPanelImeis());
+    const allow = new Set(getUltraorganicsAllImeis());
     rows = rows.filter((s) => allow.has(String(s.device_id ?? '').trim()));
   } else if (isGreenyardSession()) {
     const allow = new Set(getGreenyardPinnedImeis());
@@ -30,7 +31,9 @@ export function indexControlSessionsByDevice(
 ): Map<string, DeviceControlSessionRow> {
   const m = new Map<string, DeviceControlSessionRow>();
   for (const s of filterActiveControlSessionsForFleet(sessions)) {
-    const id = String(s.device_id ?? '').trim();
+    const rawId = String(s.device_id ?? '').trim();
+    if (!rawId) continue;
+    const id = isUltraorganicsSession() ? getUltraorganicsPanelForImei(rawId) : rawId;
     if (!id || m.has(id)) continue;
     m.set(id, s);
   }

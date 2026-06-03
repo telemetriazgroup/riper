@@ -3,6 +3,7 @@ import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi'
 import { controlSessionProgressPct } from '@/app/lib/deviceControlProcessApi';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getPanelControlProcessTitle } from '@/app/lib/fleetProcessLabels';
+import { getUltraorganicsPanelForImei, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 import { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 
 function labelToStateProcess(label: string): TelemetryData['stateProcess'] {
@@ -30,9 +31,19 @@ export function applyFleetProcessOverlay(
   trackingByDevice: Map<string, RipeningProcessRow>,
   t: (key: string) => string
 ): Device[] {
+  const trackingByPanel = new Map<string, RipeningProcessRow>();
+  if (isUltraorganicsSession()) {
+    for (const [did, row] of trackingByDevice) {
+      const panelId = getUltraorganicsPanelForImei(did);
+      if (!trackingByPanel.has(panelId)) trackingByPanel.set(panelId, row);
+    }
+  }
+
   return devices.map((device) => {
     const id = String(device.id ?? '').trim();
-    const tracking = trackingByDevice.get(id);
+    const tracking = isUltraorganicsSession()
+      ? trackingByPanel.get(id) ?? trackingByDevice.get(id)
+      : trackingByDevice.get(id);
     const panel = panelByDevice.get(id);
 
     if (tracking) {

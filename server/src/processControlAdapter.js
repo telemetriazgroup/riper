@@ -13,8 +13,10 @@ import { greenyardEmpresaIdentificador, isGreenyardDeviceId } from './greenyardF
 import {
   identificadorForUltraorganicsImei,
   isUltraorganicsDeviceId,
+  isUltraorganicsScopedDeviceId,
   ultraorganicsCommandImeis,
   ultraorganicsFanOutUnits,
+  ultraorganicsPanelDeviceIdForImei,
   ultraorganicsTelemetryImei,
 } from './ultraorganicsFleet.js';
 import {
@@ -31,7 +33,7 @@ import {
 export function isAutomatedControlDeviceId(deviceId) {
   const id = String(deviceId || '').trim();
   return (
-    isGourmetTunnelCommandDeviceId(id) || isGreenyardDeviceId(id) || isUltraorganicsDeviceId(id)
+    isGourmetTunnelCommandDeviceId(id) || isGreenyardDeviceId(id) || isUltraorganicsScopedDeviceId(id)
   );
 }
 
@@ -39,8 +41,11 @@ export function isAutomatedControlDeviceId(deviceId) {
  * @param {string} deviceId
  */
 export function resolveProcessControlAdapter(deviceId) {
-  const id = String(deviceId || '').trim();
+  let id = String(deviceId || '').trim();
   if (!id) return null;
+  if (isUltraorganicsScopedDeviceId(id) && !isUltraorganicsDeviceId(id)) {
+    id = ultraorganicsPanelDeviceIdForImei(id);
+  }
 
   if (isGourmetTunnelCommandDeviceId(id)) {
     return {

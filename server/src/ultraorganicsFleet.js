@@ -58,6 +58,38 @@ export function ultraorganicsUpstreamIdentificadores() {
   return parseList(raw);
 }
 
+/** Todos los IMEI físicos de la cuenta (5 por defecto). */
+export function ultraorganicsAllPhysicalImeis() {
+  const set = new Set(ultraorganicsPanelImeis());
+  for (const imeis of Object.values(ultraorganicsDeviceGroupsMap())) {
+    for (const i of imeis) set.add(i);
+  }
+  return [...set];
+}
+
+/** IMEI panel (MEX1001/2001/3001) para cualquier IMEI del grupo. */
+export function ultraorganicsPanelDeviceIdForImei(imei) {
+  const id = String(imei || '').trim();
+  if (isUltraorganicsDeviceId(id)) return id;
+  const groups = ultraorganicsDeviceGroupsMap();
+  for (const [panel, imeis] of Object.entries(groups)) {
+    if (imeis.includes(id)) return panel;
+  }
+  return id;
+}
+
+/** Sesiones/seguimientos: incluir los 5 IMEI sin fusionar filas de telemetría. */
+export function isUltraorganicsScopedDeviceId(deviceId) {
+  const id = String(deviceId || '').trim();
+  return id.length > 0 && ultraorganicsAllPhysicalImeis().includes(id);
+}
+
+export function filterRowsByUltraorganicsScope(rows, pickDeviceId) {
+  if (!Array.isArray(rows) || rows.length === 0) return rows;
+  const allow = new Set(ultraorganicsAllPhysicalImeis());
+  return rows.filter((row) => allow.has(String(pickDeviceId(row) || '').trim()));
+}
+
 export function isUltraorganicsDeviceId(deviceId) {
   const id = String(deviceId || '').trim();
   return id.length > 0 && ultraorganicsPanelImeis().includes(id);

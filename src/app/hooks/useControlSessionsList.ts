@@ -4,6 +4,12 @@ import {
   CONTROL_SESSIONS_LIST_SWR_KEY,
   type DeviceControlSessionRow,
 } from '@/app/lib/deviceControlProcessApi';
+import { isGreenyardSession, isUltraorganicsSession } from '@/app/lib/fleetDemo';
+import { isGourmetSession } from '@/app/lib/gourmet';
+
+function refreshMs(): number {
+  return isUltraorganicsSession() || isGreenyardSession() || isGourmetSession() ? 30_000 : 60_000;
+}
 
 function keyFor(includeArchived: boolean) {
   return [CONTROL_SESSIONS_LIST_SWR_KEY, includeArchived] as const;
@@ -15,7 +21,7 @@ export function useControlSessionsList(includeArchived = false) {
   const { data, error, isLoading, mutate } = useSWR<DeviceControlSessionRow[]>(
     k,
     fetcher,
-    { revalidateOnFocus: true }
+    { revalidateOnFocus: true, refreshInterval: refreshMs() }
   );
   return { sessions: data ?? [], isLoading, isError: error, mutate };
 }

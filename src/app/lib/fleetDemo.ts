@@ -23,6 +23,46 @@ export function getUltraorganicsPanelImeis(): string[] {
     .filter(Boolean);
 }
 
+/** Los 5 IMEI físicos (panel + companions). Debe coincidir con servidor `ultraorganicsAllPhysicalImeis()`. */
+export function getUltraorganicsAllImeis(): string[] {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_ULTRAORGANICS_ALL_IMEIS?: string } }).env
+        ?.VITE_ULTRAORGANICS_ALL_IMEIS)) ||
+    'MEX1001,MEX1002,MEX2001,MEX2002,MEX3001';
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** IMEI panel para un IMEI físico del grupo (MEX1002 → MEX1001). */
+export function getUltraorganicsPanelForImei(imei: string): string {
+  const id = String(imei || '').trim();
+  const panels = getUltraorganicsPanelImeis();
+  if (panels.includes(id)) return id;
+  const groups: Record<string, string[]> = {
+    MEX1001: parseUltraorganicsGroupEnv('VITE_ULTRAORGANICS_DEVICE_1_IMEIS', 'MEX1001,MEX1002'),
+    MEX2001: parseUltraorganicsGroupEnv('VITE_ULTRAORGANICS_DEVICE_2_IMEIS', 'MEX2001,MEX2002'),
+    MEX3001: parseUltraorganicsGroupEnv('VITE_ULTRAORGANICS_DEVICE_3_IMEIS', 'MEX3001'),
+  };
+  for (const [panel, imeis] of Object.entries(groups)) {
+    if (imeis.includes(id)) return panel;
+  }
+  return id;
+}
+
+function parseUltraorganicsGroupEnv(key: string, fallback: string): string[] {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: Record<string, string | undefined> }).env?.[key])) ||
+    fallback;
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Cuenta ThermoKing: un solo equipo (empresa pin 3001). Login email por defecto; override con `VITE_THERMOKING_EMAIL`. */
 export function thermoKingLoginEmail(): string {
   const raw =
@@ -117,7 +157,7 @@ export function isAutomatedControlDevice(deviceId?: string | null): boolean {
   const id = String(deviceId).trim();
   if (isGourmetTunnelCommandDevice(id)) return true;
   if (isGreenyardSession() && getGreenyardPinnedImeis().includes(id)) return true;
-  if (isUltraorganicsSession() && getUltraorganicsPanelImeis().includes(id)) return true;
+  if (isUltraorganicsSession() && getUltraorganicsAllImeis().includes(id)) return true;
   return false;
 }
 
