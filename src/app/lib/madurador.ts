@@ -9,7 +9,7 @@ import type {
 import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isFleetDemoSession, isUltraorganicsSession, ULTRAORGANICS_PANEL_IMEIS, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, getUltraorganicsPanelImeis, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
 import { isGourmetSession } from '@/app/lib/gourmet';
 import { getGourmetMaduradorFleetImeis } from '@/app/lib/gourmetTunnelFleet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
@@ -65,7 +65,7 @@ export function filterDevicesToIdentificadorImeiSuffix(
 /** Panel ULTRAORGANICS: solo MEX1001, MEX2001, MEX3001 (orden fijo). */
 export function filterDevicesToUltraorganicsPanel(devices: Device[]): Device[] {
   const byId = new Map(devices.map((d) => [String(d.id).trim(), d]));
-  return (ULTRAORGANICS_PANEL_IMEIS as readonly string[])
+  return getUltraorganicsPanelImeis()
     .map((id) => byId.get(id))
     .filter((d): d is Device => Boolean(d));
 }

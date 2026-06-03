@@ -832,6 +832,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_humidity_adjust': 'Cambio de humedad → {{target}}%',
     'log_ctrl_co2_check': 'Verificación CO₂ (SP {{target}}, lectura {{actual}})',
     'log_ctrl_co2_adjust': 'Ajuste límite CO₂ → dato {{dato}}',
+    'log_ctrl_co2_adjust_attempt': 'Ajuste límite CO₂ → dato {{dato}} (intento {{attempt}}/{{maxAttempts}})',
+    'log_ctrl_co2_skip_max_attempts': 'CO₂ no ajustado tras {{attempts}} intentos (objetivo {{target}}, lectura {{actual}}) — continúa etileno',
     'log_ctrl_co2_ventilation': 'Ventilación por CO₂ elevado',
     'log_ctrl_ventilation_check': 'Verificación ventilación (AVL=220)',
     'log_ctrl_ventilation_adjust': 'Activación ventilación (tipo 6, dato 220)',
@@ -861,6 +863,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_humidity_manual_send': 'Comando manual de humedad a {{target}}%.',
     'log_ctrl_reason_co2_check': 'Comparar setpoint CO₂ ({{target}}) con lectura actual ({{actual}}).',
     'log_ctrl_reason_co2_limit_send': 'Enviar límite CO₂ tipo 3 con dato {{dato}} (programado {{target}}%).',
+    'log_ctrl_reason_co2_skip_max_attempts':
+      'Tras 3 intentos sin alcanzar el setpoint CO₂, se avanza al control de etileno (núcleo del proceso de maduración).',
     'log_ctrl_reason_co2_high': 'CO₂ elevado ({{co2}}%) con AVL bajo ({{avl}}): activar ventilación para reducir CO₂.',
     'log_ctrl_reason_ventilation_ok': 'Ventilación confirmada. {{results}}',
     'log_ctrl_reason_ventilation_deviation': 'AVL fuera de objetivo 220. {{results}}',
@@ -2010,6 +2014,9 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_humidity_adjust': 'Humidity change → {{target}}%',
     'log_ctrl_co2_check': 'CO₂ check (SP {{target}}, reading {{actual}})',
     'log_ctrl_co2_adjust': 'CO₂ limit adjustment → value {{dato}}',
+    'log_ctrl_co2_adjust_attempt': 'CO₂ limit adjustment → value {{dato}} (attempt {{attempt}}/{{maxAttempts}})',
+    'log_ctrl_co2_skip_max_attempts':
+      'CO₂ not adjusted after {{attempts}} attempts (target {{target}}, reading {{actual}}) — proceeding to ethylene',
     'log_ctrl_co2_ventilation': 'Ventilation due to high CO₂',
     'log_ctrl_ventilation_check': 'Ventilation check (AVL=220)',
     'log_ctrl_ventilation_adjust': 'Ventilation activated (type 6, value 220)',
@@ -2039,6 +2046,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_humidity_manual_send': 'Manual humidity command to {{target}}%.',
     'log_ctrl_reason_co2_check': 'Compare CO₂ setpoint ({{target}}) with current reading ({{actual}}).',
     'log_ctrl_reason_co2_limit_send': 'Send CO₂ limit type 3 value {{dato}} (programmed {{target}}%).',
+    'log_ctrl_reason_co2_skip_max_attempts':
+      'After 3 failed CO₂ setpoint attempts, advancing to ethylene control (core of the ripening process).',
     'log_ctrl_reason_co2_high': 'High CO₂ ({{co2}}%) with low AVL ({{avl}}): activate ventilation to reduce CO₂.',
     'log_ctrl_reason_ventilation_ok': 'Ventilation confirmed. {{results}}',
     'log_ctrl_reason_ventilation_deviation': 'AVL not at target 220. {{results}}',

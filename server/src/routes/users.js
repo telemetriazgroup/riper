@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { requireAdmin } from '../authMiddleware.js';
 import { normalizeUiPreferences, mergeUiPreferences, rawUiPreferences } from '../userUiPreferences.js';
+import { isUltraorganicsFleetEmail } from '../ultraorganicsFleet.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -32,11 +33,6 @@ function adminOrSelf(req, res, next) {
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
-}
-
-/** Misma convención que el front: cuentas *.ultraorganics@riper.local (sin CRUD de usuarios en API). */
-function isUltraorganicsFleetEmail(email) {
-  return normalizeEmail(email).endsWith('ultraorganics@riper.local');
 }
 
 function isThermoKingFleetEmail(email) {

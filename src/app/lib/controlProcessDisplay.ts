@@ -228,7 +228,12 @@ function resultsAllOk(results: unknown): boolean {
 
 const TEMP_ACTIONS = new Set(['check_temperature', 'send_temperature', 'send', 'read', 'read_fanout', 'send_fanout']);
 const HUM_ACTIONS = new Set(['check_humidity', 'send_humidity']);
-const CO2_ACTIONS = new Set(['check_co2_setpoint', 'send_co2_limit', 'send_co2_ventilation']);
+const CO2_ACTIONS = new Set([
+  'check_co2_setpoint',
+  'send_co2_limit',
+  'send_co2_ventilation',
+  'co2_skip_after_max_attempts',
+]);
 const ETH_ACTIONS = new Set([
   'ethylene_tipo5_initial',
   'ethylene_tipo5_proportional',
@@ -412,10 +417,24 @@ export function summarizeProcessEventParts(
   }
   if (action === 'send_co2_limit') {
     const dato = String(ev.dato ?? detail.dato ?? target);
+    const attempt = ev.attempt != null ? String(ev.attempt) : '';
+    const maxAttempts = ev.maxAttempts != null ? String(ev.maxAttempts) : '';
     return {
       kind,
-      description: t('log_ctrl_co2_adjust', { dato }),
+      description:
+        attempt && maxAttempts
+          ? t('log_ctrl_co2_adjust_attempt', { dato, attempt, maxAttempts })
+          : t('log_ctrl_co2_adjust', { dato }),
       reason: t('log_ctrl_reason_co2_limit_send', { dato, target }),
+    };
+  }
+  if (action === 'co2_skip_after_max_attempts') {
+    const actual = String(ev.actual ?? detail.actual ?? '—');
+    const attempts = String(ev.attempts ?? detail.attempts ?? '3');
+    return {
+      kind,
+      description: t('log_ctrl_co2_skip_max_attempts', { attempts, target, actual }),
+      reason: t('log_ctrl_reason_co2_skip_max_attempts'),
     };
   }
   if (action === 'send_co2_ventilation') {

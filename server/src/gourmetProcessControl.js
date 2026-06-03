@@ -13,12 +13,15 @@ import {
 import { appendTunnelEventLog } from './tunnelEventLog.js';
 import { controlParamNumber, normalizeControlProcessParams, parseSessionParams, effectiveSessionParams } from './controlProcessParams.js';
 import { isAutomatedControlDeviceId, resolveProcessControlAdapter } from './processControlAdapter.js';
+import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
 export const TEMP_VERIFY_MS = 2 * 60 * 1000;
 export const HUMIDITY_VERIFY_MS = 2 * 60 * 1000;
 export const CO2_VERIFY_MS = 4 * 60 * 1000;
+/** Intentos máximos para ajustar CO₂ en fase secuencial de maduración antes de pasar a etileno. */
+export const CO2_MAX_ADJUST_ATTEMPTS = 3;
 export const CO2_MAINTENANCE_MS = 30 * 60 * 1000;
 export const TEMP_HUMIDITY_MAINTENANCE_MS = 10 * 60 * 1000;
 export const HOURLY_REVIEW_MS = 60 * 60 * 1000;
@@ -84,7 +87,38 @@ function adapterFor(ctx) {
 async function fetchUnitRow(ctx, unitId) {
   const adapter = adapterFor(ctx);
   if (!adapter) return null;
-  return fetchDeviceRowByImei(unitId, adapter.empresaIdentificador);
+  const ident =
+    adapter.identificadorForImei?.(unitId) ??
+    adapter.empresaIdentificador ??
+    gourmetTradingEmpresaIdentificador();
+  return fetchDeviceRowByImei(unitId, ident);
+}
+
+function commandImeis(ctx, tipo) {
+  const adapter = adapterFor(ctx);
+  if (adapter?.commandImeis) return adapter.commandImeis(ctx.device_id, tipo);
+  if (Number(tipo) === 1 || Number(tipo) === 6) return fanOutUnits(ctx);
+  return [sensorUnit(ctx)];
+}
+
+async function telemetryRow(ctx, field) {
+  const adapter = adapterFor(ctx);
+  const imei = adapter?.telemetryImei
+    ? adapter.telemetryImei(ctx.device_id, field)
+    : sensorUnit(ctx);
+  return fetchUnitRow(ctx, imei);
+}
+
+async function sendCommandTargets(ctx, tipo, dato) {
+  const adapter = adapterFor(ctx);
+  if (!adapter) return [];
+  const targets = commandImeis(ctx, tipo);
+  const urls = [];
+  for (const unitId of targets) {
+    const sent = await adapter.sendCommand(unitId, tipo, dato);
+    urls.push({ imei: unitId, url: sent.url, dato: sent.dato });
+  }
+  return urls;
 }
 
 function fanOutUnits(ctx) {
@@ -98,8 +132,9 @@ function sensorUnit(ctx) {
 async function fanOutSend(ctx, units, tipo, dato) {
   const adapter = adapterFor(ctx);
   if (!adapter) return [];
+  const targets = adapter.commandImeis ? commandImeis(ctx, tipo) : units;
   const urls = [];
-  for (const unitId of units) {
+  for (const unitId of targets) {
     const sent = await adapter.sendCommand(unitId, tipo, dato);
     urls.push({ imei: unitId, url: sent.url, dato: sent.dato });
   }
@@ -236,17 +271,17 @@ async function ensureHumidity(ctx, params, auto) {
   const targetRaw = controlParamNumber(params, 'humiditySetPoint', 'humidity_set_point');
   const target = targetRaw != null ? Math.round(targetRaw) : null;
   if (target == null) return { auto, events: [], done: true };
-  const imei = sensorUnit(ctx);
+  const imei = commandImeis(ctx, 2)[0] ?? sensorUnit(ctx);
   const adapter = adapterFor(ctx);
-  const row = await fetchUnitRow(ctx, imei);
+  const row = await telemetryRow(ctx, 'humidity_set_point');
   const actual = readTelemetryField(row, 'humidity_set_point');
   const ok = valuesMatch(actual, target, HUMIDITY_TOLERANCE);
   const results = [{ imei, actual, ok }];
   const events = [{ action: 'check_humidity', target, imei, results }];
 
   if (!ok && adapter) {
-    const sent = await adapter.sendCommand(imei, 2, target);
-    events.push({ action: 'send_humidity', target, imei, url: sent.url, dato: sent.dato });
+    const urls = await sendCommandTargets(ctx, 2, target);
+    events.push({ action: 'send_humidity', target, imei, urls, dato: target });
     return {
       auto: { ...auto, nextActionAt: msFromNow(HUMIDITY_VERIFY_MS) },
       events,
@@ -256,27 +291,53 @@ async function ensureHumidity(ctx, params, auto) {
   return { auto, events, done: true };
 }
 
-async function ensureCo2Limit(ctx, params, auto) {
+async function ensureCo2Limit(ctx, params, auto, opts = {}) {
+  const { allowSkipAfterMaxAttempts = false } = opts;
   const commandVal = co2CommandValue(params);
   if (commandVal == null) return { auto, events: [], done: true };
-  const imei = sensorUnit(ctx);
+  const imei = commandImeis(ctx, 3)[0] ?? sensorUnit(ctx);
   const adapter = adapterFor(ctx);
-  const row = await fetchUnitRow(ctx, imei);
+  const row = await telemetryRow(ctx, 'set_point_co2');
   const actual = readTelemetryField(row, 'set_point_co2');
   const events = [{ action: 'check_co2_setpoint', imei, target: commandVal, actual }];
 
   if (!valuesMatch(actual, commandVal, CO2_TOLERANCE) && adapter) {
-    const sent = await adapter.sendCommand(imei, 3, commandVal);
-    events.push({ action: 'send_co2_limit', imei, dato: commandVal, url: sent.url });
+    const attempts = Number(auto.co2AdjustAttempts) || 0;
+    if (allowSkipAfterMaxAttempts && attempts >= CO2_MAX_ADJUST_ATTEMPTS) {
+      events.push({
+        action: 'co2_skip_after_max_attempts',
+        imei,
+        target: commandVal,
+        actual,
+        attempts,
+        reason: 'proceed_to_ethylene',
+      });
+      return {
+        auto: { ...auto, co2AdjustAttempts: 0 },
+        events,
+        done: true,
+        skipped: true,
+      };
+    }
+    const urls = await sendCommandTargets(ctx, 3, commandVal);
+    events.push({
+      action: 'send_co2_limit',
+      imei,
+      dato: commandVal,
+      urls,
+      attempt: attempts + 1,
+      maxAttempts: CO2_MAX_ADJUST_ATTEMPTS,
+    });
     return {
-      auto: { ...auto, nextActionAt: msFromNow(CO2_VERIFY_MS) },
+      auto: { ...auto, co2AdjustAttempts: attempts + 1, nextActionAt: msFromNow(CO2_VERIFY_MS) },
       events,
       rescheduled: true,
     };
   }
 
   const co2Reading = readTelemetryField(row, 'co2_reading');
-  const avlRaw = readTelemetryField(row, 'avl_raw');
+  const avlRow = await telemetryRow(ctx, 'avl_raw');
+  const avlRaw = readTelemetryField(avlRow, 'avl_raw');
   const programmed = controlParamNumber(params, 'co2', 'co2_limit');
   if (
     adapter &&
@@ -286,19 +347,19 @@ async function ensureCo2Limit(ctx, params, auto) {
     avlRaw != null &&
     avlRaw < AVL_VENT_MAX
   ) {
-    const sent = await adapter.sendCommand(imei, 6, AVL_VENT_TARGET);
+    const urls = await sendCommandTargets(ctx, 6, AVL_VENT_TARGET);
     events.push({
       action: 'send_co2_ventilation',
       reason: 'co2_high_avl_low',
       imei,
       co2Reading,
       avlRaw,
-      url: sent.url,
+      urls,
       dato: AVL_VENT_TARGET,
     });
   }
 
-  return { auto, events, done: true };
+  return { auto: { ...auto, co2AdjustAttempts: 0 }, events, done: true };
 }
 
 async function tickEthyleneSteadyMonitor(ctx, params, auto) {
@@ -307,7 +368,7 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
     return { auto: { ...auto, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) }, events: [] };
   }
 
-  const imei = sensorUnit(ctx);
+  const imei = commandImeis(ctx, 0)[0] ?? sensorUnit(ctx);
   const adapter = adapterFor(ctx);
   const eth = { ...(auto.ethylene ?? {}) };
   const events = [];
@@ -321,7 +382,7 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
     events.push({ action: 'ethylene_poll_error', message: String(e.message) });
   }
 
-  const row = await fetchUnitRow(ctx, imei);
+  const row = await telemetryRow(ctx, 'campo_1');
   const actual = readTelemetryField(row, 'campo_1');
   eth.lastMonitorAt = nowIso();
   eth.lastReading = actual;
@@ -375,7 +436,7 @@ async function tickEthyleneCycle(ctx, params, auto) {
     return { auto: { ...auto, nextActionAt: msFromNow(ETHYLENE_CYCLE_MS) }, events: [] };
   }
 
-  const imei = sensorUnit(ctx);
+  const imei = commandImeis(ctx, 0)[0] ?? sensorUnit(ctx);
   const adapter = adapterFor(ctx);
   let eth = { ...(auto.ethylene ?? {}) };
   let events = [];
@@ -384,7 +445,7 @@ async function tickEthyleneCycle(ctx, params, auto) {
 
   if (!eth.cycleStartedAt || now - cycleStart >= ETHYLENE_CYCLE_MS) {
     eth = { readings: [], baselineBeforeDose: null, lastTipo5Dato: 0, pollRound: 0, cycleStartedAt: nowIso() };
-    const row = await fetchUnitRow(ctx, imei);
+    const row = await telemetryRow(ctx, 'campo_1');
     const baseline = readTelemetryField(row, 'campo_1') ?? 0;
     eth.baselineBeforeDose = baseline;
 
@@ -419,7 +480,7 @@ async function tickEthyleneCycle(ctx, params, auto) {
     events.push({ action: 'ethylene_poll_error', message: String(e.message) });
   }
 
-  const row = await fetchUnitRow(ctx, imei);
+  const row = await telemetryRow(ctx, 'campo_1');
   const actual = readTelemetryField(row, 'campo_1');
   const readings = Array.isArray(eth.readings) ? [...eth.readings] : [];
   if (isValidEthyleneReading(actual, readings)) readings.push(actual);
@@ -620,7 +681,7 @@ async function tickRipening(ctx, params, auto) {
   }
 
   if (auto.phase === 'co2') {
-    const co2 = await ensureCo2Limit(ctx, params, auto);
+    const co2 = await ensureCo2Limit(ctx, params, auto, { allowSkipAfterMaxAttempts: true });
     events = [...events, ...co2.events];
     if (co2.rescheduled) {
       await patchAutomation(ctx, () => ({ ...co2.auto, newEvents: events }));
@@ -794,7 +855,7 @@ async function deviceHasActiveTracking(deviceId) {
   return rows.length > 0;
 }
 
-/** Procesa sesiones de control activas con automatización (Gourmet + Greenyard). */
+/** Procesa sesiones de control activas con automatización (Gourmet + Greenyard + UltraOrganics). */
 export async function processGourmetActiveControlSessions(limit = 12) {
   const { rows } = await pool.query(
     `SELECT * FROM app_device_control_sessions

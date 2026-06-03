@@ -1,6 +1,6 @@
 /**
- * Adaptador de comandos/telemetría por flota (Gourmet túnel vs Greenyard TermoKing standalone).
- * Misma lógica de procesos; cambia URL upstream y fan-out (5 máquinas vs 1 IMEI).
+ * Adaptador de comandos/telemetría por flota (Gourmet túnel / Greenyard / UltraOrganics TermoKing).
+ * Misma lógica de procesos; cambia URL upstream, fan-out y enrutamiento por tipo.
  */
 import {
   gourmetTradingEmpresaIdentificador,
@@ -10,6 +10,13 @@ import {
   isGourmetTunnelCommandDeviceId,
 } from './gourmetFleet.js';
 import { greenyardEmpresaIdentificador, isGreenyardDeviceId } from './greenyardFleet.js';
+import {
+  identificadorForUltraorganicsImei,
+  isUltraorganicsDeviceId,
+  ultraorganicsCommandImeis,
+  ultraorganicsFanOutUnits,
+  ultraorganicsTelemetryImei,
+} from './ultraorganicsFleet.js';
 import {
   sendEthyleneDoseCommand,
   sendEthylenePollCommand,
@@ -23,7 +30,9 @@ import {
 
 export function isAutomatedControlDeviceId(deviceId) {
   const id = String(deviceId || '').trim();
-  return isGourmetTunnelCommandDeviceId(id) || isGreenyardDeviceId(id);
+  return (
+    isGourmetTunnelCommandDeviceId(id) || isGreenyardDeviceId(id) || isUltraorganicsDeviceId(id)
+  );
 }
 
 /**
@@ -65,6 +74,37 @@ export function resolveProcessControlAdapter(deviceId) {
       empresaIdentificador: greenyardEmpresaIdentificador(),
       fanOutUnits(dev) {
         return [String(dev || '').trim()];
+      },
+      sensorUnit(dev) {
+        return String(dev || '').trim();
+      },
+      sendCommand(unitId, tipo, dato) {
+        return sendTermoKingControlCommand(unitId, tipo, dato);
+      },
+      sendEthylenePoll(unitId) {
+        return sendTermoKingEthylenePollCommand(unitId);
+      },
+      sendEthyleneDose(unitId, ppm) {
+        return sendTermoKingEthyleneDoseCommand(unitId, ppm);
+      },
+    };
+  }
+
+  if (isUltraorganicsDeviceId(id)) {
+    return {
+      fleet: 'ultraorganics',
+      empresaIdentificador: identificadorForUltraorganicsImei(id),
+      identificadorForImei(imei) {
+        return identificadorForUltraorganicsImei(imei);
+      },
+      fanOutUnits(dev) {
+        return ultraorganicsFanOutUnits(String(dev || '').trim());
+      },
+      commandImeis(dev, tipo) {
+        return ultraorganicsCommandImeis(String(dev || '').trim(), tipo);
+      },
+      telemetryImei(dev, field) {
+        return ultraorganicsTelemetryImei(String(dev || '').trim(), field);
       },
       sensorUnit(dev) {
         return String(dev || '').trim();

@@ -10,6 +10,14 @@ import {
   gourmetTradingMaduradorFleetImeis,
   isGourmetTradingFleetEmail,
 } from '../gourmetFleet.js';
+import {
+  isUltraorganicsFleetEmail,
+  ultraorganicsPanelImeis,
+  ultraorganicsUpstreamIdentificadores,
+  ultraorganicsEthyleneImei,
+  ultraorganicsHumidityImei,
+  packageUltraorganicsFleetRow,
+} from '../ultraorganicsFleet.js';
 
 export const maduradorRouter = express.Router();
 
@@ -60,9 +68,7 @@ function superadminEmpresa5001Identificador() {
 }
 
 /** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
-function isUltraorganicsFleetEmail(email) {
-  return String(email || '').toLowerCase().endsWith('ultraorganics@riper.local');
-}
+// isUltraorganicsFleetEmail from ultraorganicsFleet.js
 
 function thermoKingEmailLogin() {
   return String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();
@@ -81,7 +87,7 @@ function thermoKingPinnedDeviceImei() {
   return String(process.env.THERMOKING_DEVICE_IMEI || 'PRUEBA_CA000001').trim();
 }
 
-const ULTRAORGANICS_IMEI_ORDER = ['MEX1001', 'MEX2001', 'MEX3001'];
+const ULTRAORGANICS_IMEI_ORDER = ultraorganicsPanelImeis();
 
 function rowImeiFromMaduradorRow(row) {
   if (!row || typeof row !== 'object') return '';
@@ -249,7 +255,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
     }
 
     if (isUltraorganicsFleetEmail(email)) {
-      const idents = ['1001', '2001', '3001'];
+      const idents = ultraorganicsUpstreamIdentificadores();
       const fetches = idents.map((id) => {
         const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(id)}`;
         return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl }).then(async (r) => {
@@ -276,7 +282,12 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
           byImei.set(imei, row);
         }
       }
-      const out = ULTRAORGANICS_IMEI_ORDER.map((id) => byImei.get(id)).filter(Boolean);
+      const out = ULTRAORGANICS_IMEI_ORDER.map((panelId) => {
+        const primary = byImei.get(ultraorganicsEthyleneImei(panelId)) ?? byImei.get(panelId);
+        if (!primary) return null;
+        const humidity = byImei.get(ultraorganicsHumidityImei(panelId));
+        return packageUltraorganicsFleetRow(primary, humidity, panelId);
+      }).filter(Boolean);
       return res.json({ data: out });
     }
 

@@ -10,6 +10,19 @@ export const ULTRAORGANICS_DEMO_EMAIL = 'ultraorganics@riper.local';
 /** Orden fijo en el panel: un dispositivo por “familia” 1001 / 2001 / 3001. */
 export const ULTRAORGANICS_PANEL_IMEIS = ['MEX1001', 'MEX2001', 'MEX3001'] as const;
 
+/** IMEI visibles UltraOrganics (debe coincidir con servidor `ULTRAORGANICS_PANEL_IMEIS`). */
+export function getUltraorganicsPanelImeis(): string[] {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_ULTRAORGANICS_PANEL_IMEIS?: string } }).env
+        ?.VITE_ULTRAORGANICS_PANEL_IMEIS)) ||
+    'MEX1001,MEX2001,MEX3001';
+  return String(raw)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** Cuenta ThermoKing: un solo equipo (empresa pin 3001). Login email por defecto; override con `VITE_THERMOKING_EMAIL`. */
 export function thermoKingLoginEmail(): string {
   const raw =
@@ -98,12 +111,13 @@ export function getGreenyardPinnedImeis(): string[] {
     .filter(Boolean);
 }
 
-/** Equipos con control automático de procesos vía upstream (Gourmet túnel + Greenyard TermoKing). */
+/** Equipos con control automático de procesos vía upstream (Gourmet túnel + Greenyard + UltraOrganics TermoKing). */
 export function isAutomatedControlDevice(deviceId?: string | null): boolean {
   if (!deviceId) return false;
   const id = String(deviceId).trim();
   if (isGourmetTunnelCommandDevice(id)) return true;
   if (isGreenyardSession() && getGreenyardPinnedImeis().includes(id)) return true;
+  if (isUltraorganicsSession() && getUltraorganicsPanelImeis().includes(id)) return true;
   return false;
 }
 

@@ -133,7 +133,7 @@ export async function seedFleetDemoUser() {
   );
 }
 
-/** ULTRAORGANICS: listado vía identificador 2001 (MADURADOR_API_BASE, p. ej. http://localhost:9059 en dev). Mismo patrón que demo-flota. */
+/** ULTRAORGANICS: 3 equipos panel (MEX1001/MEX2001/MEX3001), control TermoKing por proceso/seguimiento. */
 export async function seedUltraorganicsUser() {
   const email = 'ultraorganics@riper.local';
   const { rows } = await pool.query(
@@ -145,16 +145,15 @@ export async function seedUltraorganicsUser() {
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
       `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
-       VALUES ($1, $2, 'viewer', $3, 'ULTRAORGANICS', false, true, '2001')`,
+       VALUES ($1, $2, 'admin', $3, 'ULTRAORGANICS', false, true, '2001')`,
       ['ULTRAORGANICS', email, hash]
     );
     console.log(`[seed] ULTRAORGANICS user: ${email} (set ULTRAORGANICS_DEMO_PASSWORD in production)`);
   }
 
   await pool.query(
-    `UPDATE app_users SET identificador = '2001', updated_at = now()
-     WHERE lower(email) = $1 AND deleted_at IS NULL
-       AND (identificador IS NULL OR btrim(identificador) = '')`,
+    `UPDATE app_users SET identificador = '2001', role = 'admin', updated_at = now()
+     WHERE lower(email) = $1 AND deleted_at IS NULL`,
     [email]
   );
 }
@@ -178,7 +177,7 @@ export async function seedUltraorganicsTeamUsers() {
     {
       email: 'operacionultraorganics@riper.local',
       name: 'Operación ULTRAORGANICS',
-      role: 'viewer',
+      role: 'operator',
       password: process.env.OPERACION_ULTRAORGANICS_PASSWORD || 'operacionultraorganics2026!',
     },
     {
@@ -209,10 +208,9 @@ export async function seedUltraorganicsTeamUsers() {
   for (const u of team) {
     const em = u.email.trim().toLowerCase();
     await pool.query(
-      `UPDATE app_users SET identificador = $1, company = $2, updated_at = now()
-       WHERE lower(email) = $3 AND deleted_at IS NULL
-         AND (identificador IS NULL OR btrim(identificador) = '')`,
-      [ident, company, em]
+      `UPDATE app_users SET identificador = $1, company = $2, role = $3, updated_at = now()
+       WHERE lower(email) = $4 AND deleted_at IS NULL`,
+      [ident, company, u.role, em]
     );
   }
 }
