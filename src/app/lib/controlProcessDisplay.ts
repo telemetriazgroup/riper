@@ -256,6 +256,7 @@ const CO2_ACTIONS = new Set([
 const ETH_ACTIONS = new Set([
   'ethylene_tipo5_initial',
   'ethylene_tipo5_proportional',
+  'ethylene_tipo5_fallback',
   'ethylene_skip_dose',
   'ethylene_poll',
   'ethylene_read',
@@ -605,12 +606,40 @@ export function summarizeProcessEventParts(
       }),
     };
   }
+  if (action === 'ethylene_tipo5_fallback') {
+    const dato = String(ev.dato ?? detail.dato ?? '—');
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_inject_client', { dato }),
+        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
+      };
+    }
+    const lastReading = String(ev.lastReading ?? detail.lastReading ?? ev.effective ?? detail.effective ?? '—');
+    const ethTarget = String(ev.target ?? detail.target ?? '—');
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_inject_fallback', { dato }),
+      reason: t('log_ctrl_reason_ethylene_fallback', { lastReading, target: ethTarget, dato }),
+    };
+  }
   if (action === 'ethylene_skip_dose') {
     if (clientSafe) {
       return {
         kind,
         description: t('log_ctrl_ethylene_skip_client'),
         reason: t('log_ctrl_reason_ethylene_skip_client'),
+      };
+    }
+    const skipReason = String(ev.reason ?? detail.reason ?? 'at_target');
+    if (skipReason === 'await_increment') {
+      const effective = String(ev.effective ?? detail.effective ?? '—');
+      const ethTarget = String(ev.target ?? detail.target ?? '—');
+      const baseline = String(ev.baseline ?? detail.baseline ?? '—');
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_skip_await'),
+        reason: t('log_ctrl_reason_ethylene_skip_await', { effective, target: ethTarget, baseline }),
       };
     }
     return {

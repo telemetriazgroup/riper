@@ -11,7 +11,10 @@ import {
 } from './tunnelCommandCompliance.js';
 import {
   applyEthyleneReadingToMeta,
+  clampEthyleneDose,
   computeProportionalEthyleneDose,
+  ETHYLENE_MAX_READING,
+  ETHYLENE_RECENT_DOSE_MS,
   recordEthyleneDose,
   resolveEthyleneReading,
 } from './ethyleneReading.js';
@@ -495,18 +498,24 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
   eth = applyEthyleneReadingToMeta(eth, resolved);
   eth.lastMonitorAt = nowIso();
 
+  const effective = resolved.effective;
+  const saturatedRead =
+    actualRaw != null && Number.isFinite(Number(actualRaw)) && Number(actualRaw) >= ETHYLENE_MAX_READING;
+
   events.push({
     action: resolved.ignoredZero ? 'ethylene_read_ignored_zero' : 'ethylene_read',
     value: actualRaw,
-    effective: resolved.effective,
+    effective,
     ignoredZero: resolved.ignoredZero,
+    saturatedRead,
     nonZeroReadings: [...resolved.history],
     target,
     reason: resolved.ignoredZero ? 'sensor_zero_after_dose' : 'steady_monitor',
-    inRange: resolved.effective != null && resolved.effective >= target - 0.5,
+    inRange: effective != null && effective >= target - 0.5,
   });
 
-  if (resolved.ignoredZero || !resolved.canInject) {
+  // Solo esperar si el sensor devolvió 0 espurio tras inyección reciente.
+  if (resolved.ignoredZero) {
     return {
       auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) },
       events,
@@ -514,27 +523,56 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
     };
   }
 
-  const effective = resolved.effective;
-  if (effective != null && effective < target - 0.5) {
-    const isInitial = !eth.lastTipo5Dato;
-    const dose = isInitial ? 2 : computeProportionalEthyleneDose(eth, target, effective);
-    if (dose > 0 && adapter) {
-      try {
-        const sent = await adapter.sendEthyleneDose(imei, dose);
-        eth = recordEthyleneDose(eth, sent.ppm, effective);
-        events.push({
-          action: isInitial ? 'ethylene_tipo5_initial' : 'ethylene_tipo5_proportional',
-          imei,
-          dato: sent.ppm,
-          baseline: effective,
-          lastReading: effective,
-          target,
-          url: sent.step.url,
-          reason: 'below_target_steady',
-        });
-      } catch (e) {
-        events.push({ action: 'ethylene_dose_error', message: String(e.message) });
-      }
+  if (effective == null || !Number.isFinite(effective) || effective >= target - 0.5 || !adapter) {
+    return {
+      auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) },
+      events,
+      rescheduled: true,
+    };
+  }
+
+  const isInitial = !eth.lastTipo5Dato;
+  let dose = isInitial ? 2 : computeProportionalEthyleneDose(eth, target, effective);
+  let doseAction = isInitial ? 'ethylene_tipo5_initial' : 'ethylene_tipo5_proportional';
+  let doseReason = isInitial ? 'initial' : 'proportional';
+
+  if (!isInitial && dose <= 0) {
+    const sinceDoseMs = eth.lastDoseAt ? Date.now() - new Date(eth.lastDoseAt).getTime() : Infinity;
+    if (sinceDoseMs >= ETHYLENE_RECENT_DOSE_MS) {
+      const remaining = target - effective;
+      dose = clampEthyleneDose(Math.max(1, Math.round(remaining / 4)));
+      doseAction = 'ethylene_tipo5_fallback';
+      doseReason = 'fallback_no_increment';
+    } else {
+      events.push({
+        action: 'ethylene_skip_dose',
+        reason: 'await_increment',
+        effective,
+        target,
+        baseline: eth.baselineBeforeDose,
+        lastTipo5Dato: eth.lastTipo5Dato,
+      });
+    }
+  }
+
+  if (dose > 0) {
+    try {
+      const sent = await adapter.sendEthyleneDose(imei, dose);
+      eth = recordEthyleneDose(eth, sent.ppm, effective);
+      events.push({
+        action: doseAction,
+        imei,
+        dato: sent.ppm,
+        baseline: effective,
+        lastReading: effective,
+        target,
+        url: sent.step.url,
+        reason: doseReason === 'fallback_no_increment' ? 'below_target_no_increment' : 'below_target_steady',
+        doseReason,
+        saturatedRead,
+      });
+    } catch (e) {
+      events.push({ action: 'ethylene_dose_error', message: String(e.message) });
     }
   }
 

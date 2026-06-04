@@ -903,6 +903,12 @@ const translations: Record<Language, Record<string, string>> = {
       'A {{minutes}} min del fin STOP PLAN: tipo 10 dato {{dato}} para preparar reanudación.',
     'log_ctrl_reason_ethylene_initial': 'Lectura inicial {{baseline}} ppm < objetivo {{target}} ppm → dosis inicial {{dato}}.',
     'log_ctrl_reason_ethylene_proportional': 'Lectura {{lastReading}} ppm < objetivo {{target}} ppm → dosis proporcional {{dato}}.',
+    'log_ctrl_ethylene_inject_fallback': 'Inyección etileno de respaldo tipo 5, dato {{dato}}',
+    'log_ctrl_reason_ethylene_fallback':
+      'Sin incremento tras dosis de prueba: lectura {{lastReading}} ppm, objetivo {{target}} ppm → dosis conservadora {{dato}}.',
+    'log_ctrl_ethylene_skip_await': 'Etileno bajo objetivo — esperando respuesta del sensor',
+    'log_ctrl_reason_ethylene_skip_await':
+      'Lectura {{effective}} ppm < {{target}} ppm; tras dosis de prueba aún no hay incremento respecto a {{baseline}} ppm (ventana de calibración).',
     'log_ctrl_reason_ethylene_at_target': 'Lectura {{baseline}} ppm ya alcanza objetivo {{target}} ppm; no se inyecta.',
     'log_ctrl_reason_ethylene_poll': 'Poll tipo 0 para obtener lectura de etileno antes de decidir dosis.',
     'log_ctrl_reason_ethylene_steady_monitor': 'Monitoreo continuo maduración: poll tipo 0 dato 1 (cada 3 min).',
@@ -2121,6 +2127,12 @@ const translations: Record<Language, Record<string, string>> = {
       'At {{minutes}} min before STOP PLAN end: type 10 value {{dato}} to prepare resume.',
     'log_ctrl_reason_ethylene_initial': 'Initial reading {{baseline}} ppm < target {{target}} ppm → initial dose {{dato}}.',
     'log_ctrl_reason_ethylene_proportional': 'Reading {{lastReading}} ppm < target {{target}} ppm → proportional dose {{dato}}.',
+    'log_ctrl_ethylene_inject_fallback': 'Fallback ethylene injection type 5, value {{dato}}',
+    'log_ctrl_reason_ethylene_fallback':
+      'No increment after test dose: reading {{lastReading}} ppm, target {{target}} ppm → conservative dose {{dato}}.',
+    'log_ctrl_ethylene_skip_await': 'Ethylene below target — waiting for sensor response',
+    'log_ctrl_reason_ethylene_skip_await':
+      'Reading {{effective}} ppm < {{target}} ppm; no increment yet vs test baseline {{baseline}} ppm (calibration window).',
     'log_ctrl_reason_ethylene_at_target': 'Reading {{baseline}} ppm already meets target {{target}} ppm; no injection.',
     'log_ctrl_reason_ethylene_poll': 'Type 0 poll to read ethylene before deciding dose.',
     'log_ctrl_reason_ethylene_steady_monitor': 'Continuous ripening monitor: type 0 poll value 1 (every 3 min).',
