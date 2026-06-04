@@ -113,7 +113,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   tempUnit,
   toggleTempUnit,
   formatDateTime,
-  hideCargoSensorNumbers,
+  hideCargoSensorNumbers = [],
 }) => {
   const { activeTracking } = useRipeningActiveForDevice(device.id);
   const { session: panelSession } = useDeviceControlSession(device.id);
