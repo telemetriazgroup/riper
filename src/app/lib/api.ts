@@ -247,7 +247,7 @@ export interface HistoryPoint {
   cargo_2_temp: number | null;
   cargo_3_temp: number | null;
   cargo_4_temp: number | null;
-  relative_humidity: number;
+  relative_humidity: number | null;
   /** CFM bruto del ventilador (Madurador `flat.avl`); para filtrar gráficas si > 200. */
   avl_raw?: number | null;
   avl_pct: number;
