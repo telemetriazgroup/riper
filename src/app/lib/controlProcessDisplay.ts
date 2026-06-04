@@ -2,6 +2,7 @@ import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi'
 import type { EventKind, LogEvent } from '@/app/data/eventLog';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
+import { shouldShowClientSafeProcessEvents } from '@/app/lib/ethyleneDisplayPolicy';
 
 /** Clave para ver detalle técnico del proceso (Gourmet). */
 export const GOURMET_PROCESS_DEBUG_PASSWORD = 'lpmp2018';
@@ -283,6 +284,17 @@ export function eventKindFromProcessEvent(ev: ProcessEventRow): EventKind {
   return 'control_general';
 }
 
+export type ProcessEventDisplayOpts = {
+  /** Ocultar ppm reales de sensor en eventos de etileno (usuarios normales). */
+  clientSafe?: boolean;
+};
+
+function useClientSafeEventDisplay(opts?: ProcessEventDisplayOpts): boolean {
+  if (opts?.clientSafe === false) return false;
+  if (opts?.clientSafe === true) return true;
+  return shouldShowClientSafeProcessEvents();
+}
+
 export type ProcessEventSummary = {
   description: string;
   reason?: string;
@@ -292,8 +304,10 @@ export type ProcessEventSummary = {
 /** Resumen legible con motivo del ajuste automático o manual. */
 export function summarizeProcessEventParts(
   ev: ProcessEventRow,
-  t: (key: string, replacements?: Record<string, string>) => string
+  t: (key: string, replacements?: Record<string, string>) => string,
+  displayOpts?: ProcessEventDisplayOpts
 ): ProcessEventSummary {
+  const clientSafe = useClientSafeEventDisplay(displayOpts);
   const action = String(ev.action ?? '');
   const detail = (ev.detail ?? {}) as Record<string, unknown>;
   const target = String(ev.target ?? detail.target ?? detail.target_value ?? '—');
@@ -473,6 +487,13 @@ export function summarizeProcessEventParts(
   }
   if (action === 'ethylene_tipo5_initial' || action === 'send_tipo5') {
     const dato = String(ev.dato ?? detail.dato ?? 2);
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_inject_client', { dato }),
+        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
+      };
+    }
     const baseline = String(ev.baseline ?? detail.baseline ?? '—');
     const ethTarget = String(ev.target ?? detail.target ?? '—');
     return {
@@ -483,6 +504,13 @@ export function summarizeProcessEventParts(
   }
   if (action === 'ethylene_tipo5_proportional' || action === 'send_tipo5_proportional') {
     const dato = String(ev.dato ?? detail.dato ?? '—');
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_inject_client', { dato }),
+        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
+      };
+    }
     const lastReading = String(ev.lastReading ?? detail.lastReading ?? '—');
     const ethTarget = String(ev.target ?? detail.target ?? '—');
     return {
@@ -496,6 +524,13 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_skip_dose') {
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_skip_client'),
+        reason: t('log_ctrl_reason_ethylene_skip_client'),
+      };
+    }
     return {
       kind,
       description: t('log_ctrl_ethylene_skip'),
@@ -506,16 +541,24 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_poll' || action === 'poll_tipo0') {
-    const isMonitor = ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor';
     return {
       kind,
-      description: t('log_ctrl_ethylene_poll'),
-      reason: isMonitor
-        ? t('log_ctrl_reason_ethylene_steady_monitor')
-        : t('log_ctrl_reason_ethylene_poll'),
+      description: t('log_ctrl_ethylene_poll_client'),
+      reason: clientSafe
+        ? t('log_ctrl_reason_ethylene_poll_client')
+        : ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor'
+          ? t('log_ctrl_reason_ethylene_steady_monitor')
+          : t('log_ctrl_reason_ethylene_poll'),
     };
   }
   if (action === 'ethylene_read_ignored_zero' || action === 'read_ethylene_ignored_zero') {
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_poll_client'),
+        reason: t('log_ctrl_reason_ethylene_poll_client'),
+      };
+    }
     const effective = String(ev.effective ?? detail.effective ?? '—');
     const raw = String(ev.value ?? detail.value ?? '0');
     const ethTarget = String(ev.target ?? detail.target ?? '—');
@@ -526,6 +569,13 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_read' || action === 'read_ethylene_poll' || action === 'read_ethylene') {
+    if (clientSafe) {
+      return {
+        kind,
+        description: t('log_ctrl_ethylene_poll_client'),
+        reason: t('log_ctrl_reason_ethylene_poll_client'),
+      };
+    }
     const readings = Array.isArray(ev.readings ?? detail.readings)
       ? (ev.readings ?? detail.readings as unknown[]).join(', ')
       : '';
@@ -586,9 +636,10 @@ export function summarizeProcessEvent(ev: ProcessEventRow): string {
 
 export function summarizeProcessEventI18n(
   ev: ProcessEventRow,
-  t: (key: string, replacements?: Record<string, string>) => string
+  t: (key: string, replacements?: Record<string, string>) => string,
+  displayOpts?: ProcessEventDisplayOpts
 ): string {
-  const parts = summarizeProcessEventParts(ev, t);
+  const parts = summarizeProcessEventParts(ev, t, displayOpts);
   return parts.reason ? `${parts.description} — ${parts.reason}` : parts.description;
 }
 
@@ -807,12 +858,13 @@ export function processAutomationPhaseLabel(
 
 export function lastProcessEventSummary(
   params: Record<string, unknown> | undefined,
-  t: (key: string, replacements?: Record<string, string>) => string
+  t: (key: string, replacements?: Record<string, string>) => string,
+  displayOpts?: ProcessEventDisplayOpts
 ): string | null {
   const log = processEventLogFromParams(params ?? {});
   if (!log.length) return null;
   const last = log[log.length - 1];
   if (!last) return null;
-  const parts = summarizeProcessEventParts(last, t);
+  const parts = summarizeProcessEventParts(last, t, displayOpts);
   return parts.reason ? `${parts.description} — ${parts.reason}` : parts.description;
 }

@@ -27,9 +27,7 @@ import {
   putDeviceDisplayName,
 } from '@/app/lib/deviceNamesApi';
 import { deviceNameStorageKey } from '@/app/lib/deviceLocalNames';
-import {
-  applyEthyleneDisplayPolicyToDevice,
-} from '@/app/lib/ethyleneDisplayPolicy';
+import { applyTelemetryDisplayPolicyToDevice } from '@/app/lib/telemetryDisplayPolicy';
 import { listControlSessions } from '@/app/lib/deviceControlProcessApi';
 
 async function finalizeClientFleetEthylene(list: Device[]): Promise<Device[]> {
@@ -47,7 +45,7 @@ async function finalizeClientFleetEthylene(list: Device[]): Promise<Device[]> {
         ethylene_raw: d.telemetry.ethylene_raw ?? d.telemetry.ethylene,
       },
     };
-    return applyEthyleneDisplayPolicyToDevice(withRaw, { sessions });
+    return applyTelemetryDisplayPolicyToDevice(withRaw, { sessions });
   });
 }
 
@@ -71,7 +69,7 @@ async function finalizeGourmetClientDevice(device: Device): Promise<Device> {
       ethylene_raw: named.telemetry.ethylene_raw ?? named.telemetry.ethylene,
     },
   };
-  return applyEthyleneDisplayPolicyToDevice(withRaw, { sessions });
+  return applyTelemetryDisplayPolicyToDevice(withRaw, { sessions });
 }
 
 async function mergeSavedDisplayNames(list: Device[]): Promise<Device[]> {

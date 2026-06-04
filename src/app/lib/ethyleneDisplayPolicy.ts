@@ -11,8 +11,12 @@ import {
   resolveGourmetProgrammedEthyleneFromSessions,
 } from '@/app/lib/gourmetEthyleneDisplay';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
+import { showsUnfilteredTelemetry, type TelemetryViewOptions } from '@/app/lib/telemetryViewPolicy';
 
 export const UNFILTERED_ETHYLENE_VIEWER_EMAIL = 'superadmin@riper.local';
+
+/** Sin proceso activo: solo mostrar etileno si lectura cruda < 40 ppm. */
+export const ETHYLENE_IDLE_DISPLAY_MAX_PPM = 40;
 
 /** Solo esta cuenta ve etileno crudo en flota y gráficas. */
 export function isUnfilteredEthyleneViewer(): boolean {
@@ -60,16 +64,30 @@ function panelSessionQualifiesForEthylene(session: DeviceControlSessionRow | nul
   return false;
 }
 
-/** Resto de cuentas: etileno visible solo con seguimiento que incluye maduración o panel en maduración/manual con inyección. */
+/** Proceso/seguimiento activo con maduración o panel Ripening/Manual con inyección. */
+export function hasActiveEthyleneProcessContext(opts: {
+  trackingProcess?: RipeningProcessRow | null;
+  panelActiveSession?: DeviceControlSessionRow | null;
+}): boolean {
+  if (panelSessionQualifiesForEthylene(opts.panelActiveSession)) return true;
+  const tracking = opts.trackingProcess;
+  return Boolean(tracking?.status === 'active' && trackingRecipeHasRipeningPhase(tracking.payload));
+}
+
+/** @deprecated use hasActiveEthyleneProcessContext */
 export function shouldShowEthyleneToUser(opts: {
   trackingProcess?: RipeningProcessRow | null;
   panelActiveSession?: DeviceControlSessionRow | null;
 }): boolean {
   if (isUnfilteredEthyleneViewer()) return true;
-  if (panelSessionQualifiesForEthylene(opts.panelActiveSession)) return true;
-  const tracking = opts.trackingProcess;
-  if (tracking?.status === 'active' && trackingRecipeHasRipeningPhase(tracking.payload)) return true;
-  return false;
+  return hasActiveEthyleneProcessContext(opts);
+}
+
+function resolveIdleEthyleneDisplayPpm(raw: number | null | undefined): number | null {
+  if (raw == null || !Number.isFinite(Number(raw))) return null;
+  const n = Number(raw);
+  if (n <= 0 || n >= ETHYLENE_IDLE_DISPLAY_MAX_PPM) return null;
+  return Number(n.toFixed(2));
 }
 
 export function resolveEthyleneDisplayTargetPpm(opts: {
@@ -128,6 +146,7 @@ export function resolveFleetEthyleneDisplayPpm(
     trackingProcess?: RipeningProcessRow | null;
     panelActiveSession?: DeviceControlSessionRow | null;
     sessions?: DeviceControlSessionRow[] | null;
+    view?: TelemetryViewOptions;
   }
 ): number | null {
   const raw =
@@ -135,11 +154,13 @@ export function resolveFleetEthyleneDisplayPpm(
       ? device.telemetry.ethylene_raw
       : device.telemetry.ethylene;
 
-  if (!shouldShowEthyleneToUser(opts ?? {})) return null;
-
-  if (isUnfilteredEthyleneViewer()) {
+  if (showsUnfilteredTelemetry(opts?.view)) {
     if (raw == null || !Number.isFinite(Number(raw))) return null;
     return Number(raw);
+  }
+
+  if (!hasActiveEthyleneProcessContext(opts ?? {})) {
+    return resolveIdleEthyleneDisplayPpm(raw);
   }
 
   const target = resolveEthyleneDisplayTargetPpm({
@@ -160,10 +181,11 @@ export function formatFleetEthyleneLabel(
     trackingProcess?: RipeningProcessRow | null;
     panelActiveSession?: DeviceControlSessionRow | null;
     sessions?: DeviceControlSessionRow[] | null;
+    view?: TelemetryViewOptions;
   }
 ): string {
   const ppm = resolveFleetEthyleneDisplayPpm(device, opts);
-  if (isUnfilteredEthyleneViewer()) {
+  if (showsUnfilteredTelemetry(opts?.view)) {
     if (ppm == null || !Number.isFinite(ppm)) return '—';
     if (ppm === 0) return 'NA';
     return `${formatUiDecimal(ppm)} PPM`;
@@ -178,7 +200,13 @@ export type EthyleneDisplayPolicyContext = {
   panelActiveSession?: DeviceControlSessionRow | null;
   sessions?: DeviceControlSessionRow[] | null;
   device?: Device | null;
+  view?: TelemetryViewOptions;
 };
+
+/** Bitácora / panel: ocultar lecturas crudas de etileno al cliente. */
+export function shouldShowClientSafeProcessEvents(): boolean {
+  return !isUnfilteredEthyleneViewer();
+}
 
 /** Suaviza ceros breves en series históricas (lecturas filtradas estables en gráfica). */
 function smoothFilteredEthyleneHistory(values: (number | null | undefined)[]): (number | null)[] {
@@ -210,6 +238,7 @@ export function applyEthyleneDisplayPolicyToDevice(
     trackingProcess?: RipeningProcessRow | null;
     panelActiveSession?: DeviceControlSessionRow | null;
     sessions?: DeviceControlSessionRow[] | null;
+    view?: TelemetryViewOptions;
   }
 ): Device {
   const raw =
@@ -241,14 +270,18 @@ export function applyEthyleneDisplayPolicyToHistory(
   opts: EthyleneDisplayPolicyContext
 ): HistoryPoint[] {
   if (!points.length) return points;
-  if (isUnfilteredEthyleneViewer()) return points;
+  if (showsUnfilteredTelemetry(opts.view)) return points;
+
   if (
-    !shouldShowEthyleneToUser({
+    !hasActiveEthyleneProcessContext({
       trackingProcess: opts.trackingProcess,
       panelActiveSession: opts.panelActiveSession,
     })
   ) {
-    return points.map((p) => ({ ...p, ethylene: null }));
+    return points.map((p) => ({
+      ...p,
+      ethylene: resolveIdleEthyleneDisplayPpm(p.ethylene),
+    }));
   }
 
   const target = resolveEthyleneDisplayTargetPpm(opts);

@@ -90,6 +90,8 @@ export interface TelemetryData {
   temp_supply_1: number;
   return_air: number;
   relative_humidity: number;
+  /** Lectura real (%). Solo trazabilidad interna; la UI aplica filtro de cliente. */
+  relative_humidity_raw?: number | null;
   ethylene: number | null;
   /** Lectura real campo_1 (solo trazabilidad interna Gourmet). */
   ethylene_raw?: number | null;

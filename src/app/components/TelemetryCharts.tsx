@@ -8,9 +8,10 @@ import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevi
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import {
-  applyEthyleneDisplayPolicyToHistory,
-  type EthyleneDisplayPolicyContext,
-} from '@/app/lib/ethyleneDisplayPolicy';
+  applyTelemetryDisplayPolicyToHistory,
+  type TelemetryDisplayContext,
+} from '@/app/lib/telemetryDisplayPolicy';
+import { isUnfilteredEthyleneViewer } from '@/app/lib/ethyleneDisplayPolicy';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
@@ -188,11 +189,35 @@ interface TelemetryChartsProps {
   deviceId?: string;
 }
 
+function ViewAsClientToggle({
+  checked,
+  onChange,
+  t,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  t: (k: string) => string;
+}) {
+  return (
+    <label className="inline-flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
+      <input
+        type="checkbox"
+        className="rounded border-border"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      {t('telemetry_view_as_client')}
+    </label>
+  );
+}
+
 export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) => {
   const { t, convertTemp, tempUnit, language } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [viewAsClient, setViewAsClient] = useState(false);
+  const showViewAsClientToggle = isUnfilteredEthyleneViewer();
   
   const [timeRange] = useState<'12h' | '24h' | '7d'>('12h');
   const { history, isLoading } = useDeviceHistory(deviceId || null);
@@ -201,7 +226,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   const { session: panelSession } = useDeviceControlSession(deviceId);
   const { sessions: controlSessions } = useControlSessionsList();
 
-  const ethylenePolicyCtx = useMemo((): EthyleneDisplayPolicyContext | null => {
+  const telemetryPolicyCtx = useMemo((): TelemetryDisplayContext | null => {
     if (!deviceId) return null;
     return {
       deviceId,
@@ -209,14 +234,15 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
       panelActiveSession: panelSession?.status === 'active' ? panelSession : null,
       sessions: controlSessions,
       device: device ?? null,
+      view: { viewAsClient },
     };
-  }, [deviceId, activeTracking, panelSession, controlSessions, device]);
+  }, [deviceId, activeTracking, panelSession, controlSessions, device, viewAsClient]);
 
   const policyHistory = useMemo(() => {
     const raw = history ?? [];
-    if (!ethylenePolicyCtx || raw.length === 0) return raw;
-    return applyEthyleneDisplayPolicyToHistory(raw, ethylenePolicyCtx);
-  }, [history, ethylenePolicyCtx]);
+    if (!telemetryPolicyCtx || raw.length === 0) return raw;
+    return applyTelemetryDisplayPolicyToHistory(raw, telemetryPolicyCtx);
+  }, [history, telemetryPolicyCtx]);
 
   const isTkCharts = isThermoKingSession();
   const dataClassic = useMemo(
@@ -242,7 +268,10 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
     <Card className="col-span-1 lg:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle>{t('last_12_hours')}</CardTitle>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {showViewAsClientToggle && (
+            <ViewAsClientToggle checked={viewAsClient} onChange={setViewAsClient} t={t} />
+          )}
           <Button variant="outline" size="sm" onClick={() => setIsModalOpen(true)}>
             <History className="h-4 w-4 mr-2" />
             {t('historical_data')}
@@ -538,13 +567,19 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         deviceId={deviceId}
-        ethylenePolicyCtx={ethylenePolicyCtx}
+        telemetryPolicyCtx={telemetryPolicyCtx}
+        viewAsClient={viewAsClient}
+        onViewAsClientChange={setViewAsClient}
+        showViewAsClientToggle={showViewAsClientToggle}
       />
       <HistoricalDataTableModal
         isOpen={isTableModalOpen}
         onClose={() => setIsTableModalOpen(false)}
         deviceId={deviceId}
-        ethylenePolicyCtx={ethylenePolicyCtx}
+        telemetryPolicyCtx={telemetryPolicyCtx}
+        viewAsClient={viewAsClient}
+        onViewAsClientChange={setViewAsClient}
+        showViewAsClientToggle={showViewAsClientToggle}
       />
     </Card>
   );
@@ -556,12 +591,18 @@ const HistoricalDataModal = ({
   isOpen,
   onClose,
   deviceId,
-  ethylenePolicyCtx,
+  telemetryPolicyCtx,
+  viewAsClient,
+  onViewAsClientChange,
+  showViewAsClientToggle,
 }: {
   isOpen: boolean;
   onClose: () => void;
   deviceId?: string;
-  ethylenePolicyCtx?: EthyleneDisplayPolicyContext | null;
+  telemetryPolicyCtx?: TelemetryDisplayContext | null;
+  viewAsClient?: boolean;
+  onViewAsClientChange?: (v: boolean) => void;
+  showViewAsClientToggle?: boolean;
 }) => {
   const { t, tempUnit, displayTimeZone, language, dateFormat } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
@@ -655,8 +696,8 @@ const HistoricalDataModal = ({
       }
       const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
       const history =
-        ethylenePolicyCtx && historyRaw.length > 0
-          ? applyEthyleneDisplayPolicyToHistory(historyRaw, ethylenePolicyCtx)
+        telemetryPolicyCtx && historyRaw.length > 0
+          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
           : historyRaw;
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
@@ -977,8 +1018,19 @@ const HistoricalDataModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
         <DialogHeader className="flex-shrink-0 py-2">
-          <DialogTitle>{t('historical_data')}</DialogTitle>
-          <DialogDescription>{t('viewing_history')} — {deviceId}</DialogDescription>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <DialogTitle>{t('historical_data')}</DialogTitle>
+              <DialogDescription>{t('viewing_history')} — {deviceId}</DialogDescription>
+            </div>
+            {showViewAsClientToggle && onViewAsClientChange && (
+              <ViewAsClientToggle
+                checked={viewAsClient ?? false}
+                onChange={onViewAsClientChange}
+                t={t}
+              />
+            )}
+          </div>
         </DialogHeader>
 
         <div className="flex flex-1 min-h-0 gap-4 pt-2">
@@ -1431,12 +1483,18 @@ const HistoricalDataTableModal = ({
   isOpen,
   onClose,
   deviceId,
-  ethylenePolicyCtx,
+  telemetryPolicyCtx,
+  viewAsClient,
+  onViewAsClientChange,
+  showViewAsClientToggle,
 }: {
   isOpen: boolean;
   onClose: () => void;
   deviceId?: string;
-  ethylenePolicyCtx?: EthyleneDisplayPolicyContext | null;
+  telemetryPolicyCtx?: TelemetryDisplayContext | null;
+  viewAsClient?: boolean;
+  onViewAsClientChange?: (v: boolean) => void;
+  showViewAsClientToggle?: boolean;
 }) => {
   const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp, language } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
@@ -1467,8 +1525,8 @@ const HistoricalDataTableModal = ({
       }
       const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
       const history =
-        ethylenePolicyCtx && historyRaw.length > 0
-          ? applyEthyleneDisplayPolicyToHistory(historyRaw, ethylenePolicyCtx)
+        telemetryPolicyCtx && historyRaw.length > 0
+          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
           : historyRaw;
       const data = history.map((h: any) => {
         const d = new Date(h.timestamp);
@@ -1601,8 +1659,19 @@ const HistoricalDataTableModal = ({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="!max-w-[98vw] w-[98vw] sm:!max-w-[98vw] h-[96vh] max-h-[96vh] flex flex-col p-3 gap-0 overflow-hidden">
         <DialogHeader className="flex-shrink-0 py-2">
-          <DialogTitle>{t('historical_data_table')}</DialogTitle>
-          <DialogDescription>{t('viewing_history')} — {deviceId} · {t('search_by_date')}</DialogDescription>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <DialogTitle>{t('historical_data_table')}</DialogTitle>
+              <DialogDescription>{t('viewing_history')} — {deviceId} · {t('search_by_date')}</DialogDescription>
+            </div>
+            {showViewAsClientToggle && onViewAsClientChange && (
+              <ViewAsClientToggle
+                checked={viewAsClient ?? false}
+                onChange={onViewAsClientChange}
+                t={t}
+              />
+            )}
+          </div>
         </DialogHeader>
         <div className="flex flex-1 min-h-0 gap-4 pt-2">
           <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">

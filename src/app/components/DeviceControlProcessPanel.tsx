@@ -20,12 +20,14 @@ import { inferCurrentNextPhase } from '@/app/lib/ripeningProcessMappers';
 import { ProcessTechnicalDetailsDialog } from '@/app/components/ProcessTechnicalDetailsDialog';
 import { cn } from '@/app/lib/utils';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
+import { shouldShowClientSafeProcessEvents } from '@/app/lib/ethyleneDisplayPolicy';
 import { toast } from 'sonner';
 
 type Props = { deviceId: string };
 
 export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   const { t, formatDateTime, formatTemp } = useSettings();
+  const clientSafeEvents = shouldShowClientSafeProcessEvents();
   const isTunnel = deviceId === GOURMET_TUNEL_DEVICE_ID;
   const { session, isLoading, mutate } = useDeviceControlSession(deviceId, isTunnel ? 10000 : 30000);
   const { activeTracking, isLoading: trackingLoading } = useRipeningActiveForDevice(deviceId);
@@ -130,7 +132,7 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
                   {trackingAutoPhaseLabel}
                 </p>
               )}
-              {trackingLastAction && (
+              {!clientSafeEvents && trackingLastAction && (
                 <p className="text-xs text-emerald-800/90 dark:text-emerald-200/90 leading-relaxed">
                   <span className="font-medium">{t('control_automation_last_action')}:</span> {trackingLastAction}
                 </p>
@@ -155,7 +157,9 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
             title={t('control_process_technical_detail')}
             payload={trackingPayload}
             eventLog={trackEvents}
-            formatEvent={(ev) => summarizeProcessEventI18n(ev, t)}
+            formatEvent={(ev) =>
+              summarizeProcessEventI18n(ev, t, { clientSafe: clientSafeEvents })
+            }
             formatDateTime={formatDateTime}
           />
         </>
@@ -266,7 +270,7 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
                 {phaseLabel}
               </p>
             )}
-            {lastAction && (
+            {!clientSafeEvents && lastAction && (
               <p className="text-xs text-emerald-800/90 dark:text-emerald-200/90 leading-relaxed">
                 <span className="font-medium">{t('control_automation_last_action')}:</span> {lastAction}
               </p>
@@ -292,7 +296,7 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
         title={t('control_process_technical_detail')}
         payload={technicalPayload}
         eventLog={eventLog}
-        formatEvent={(ev) => summarizeProcessEventI18n(ev, t)}
+        formatEvent={(ev) => summarizeProcessEventI18n(ev, t, { clientSafe: clientSafeEvents })}
         formatDateTime={formatDateTime}
       />
     </>

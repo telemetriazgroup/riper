@@ -28,6 +28,7 @@ import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { resolveFleetEthyleneDisplayPpm } from '@/app/lib/ethyleneDisplayPolicy';
+import { modulateHumidityDisplayPct } from '@/app/lib/humidityDisplayPolicy';
 
 type TFn = (k: string, r?: Record<string, string> | string) => string;
 
@@ -117,6 +118,10 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
 }) => {
   const { activeTracking } = useRipeningActiveForDevice(device.id);
   const { session: panelSession } = useDeviceControlSession(device.id);
+  const [open, setOpen] = useState(false);
+  const m = device.madurador;
+  const tel = device.telemetry;
+  const op = device.operational;
   const ethyleneDisplayPpm = useMemo(
     () =>
       resolveFleetEthyleneDisplayPpm(device, {
@@ -125,10 +130,13 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
       }),
     [device, activeTracking, panelSession]
   );
-  const [open, setOpen] = useState(false);
-  const m = device.madurador;
-  const tel = device.telemetry;
-  const op = device.operational;
+  const humidityDisplayPct = useMemo(
+    () =>
+      modulateHumidityDisplayPct(
+        tel.relative_humidity_raw ?? tel.relative_humidity
+      ),
+    [tel.relative_humidity, tel.relative_humidity_raw]
+  );
 
   const lastSampleText = useMemo(() => {
     if (!formatDateTime || !device.last_seen) return null;
@@ -176,7 +184,10 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         key: 'rh',
         icon: Droplets,
         label: t('status_humidity'),
-        value: Number.isFinite(tel.relative_humidity) ? formatUiPercent(tel.relative_humidity) : '—',
+        value:
+          humidityDisplayPct != null && Number.isFinite(humidityDisplayPct)
+            ? formatUiPercent(humidityDisplayPct)
+            : '—',
       },
       {
         key: 'c2',
@@ -194,7 +205,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         value: m?.capacity_load != null && Number.isFinite(m.capacity_load) ? formatUiPercent(m.capacity_load) : '—',
       },
     ],
-    [device, m, t, formatTemp, tel, ethyleneDisplayPpm]
+    [device, m, t, formatTemp, tel, ethyleneDisplayPpm, humidityDisplayPct]
   );
 
   const compTemp = m?.compress_coil_1_temp;
