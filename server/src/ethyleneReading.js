@@ -4,6 +4,8 @@
  */
 
 export const ETHYLENE_MAX_READING = 300;
+/** Máximo dato enviado en tipo 5 por inyección (ppm/comando). */
+export const ETHYLENE_MAX_DOSE = 120;
 export const ETHYLENE_NONZERO_HISTORY_MAX = 5;
 /** Tras una inyección tipo 5, un 0 ppm suele ser fallo de sensor, no nivel real. */
 export const ETHYLENE_RECENT_DOSE_MS = 10 * 60 * 1000;
@@ -48,6 +50,50 @@ export function recentlyInjectedEthylene(ethMeta, withinMs = ETHYLENE_RECENT_DOS
     if (Number.isFinite(t) && Date.now() - t < withinMs) return true;
   }
   return false;
+}
+
+/** Limita dato tipo 5 a [1, ETHYLENE_MAX_DOSE]; 0 si no hay dosis válida. */
+export function clampEthyleneDose(dose) {
+  const n = Math.round(Number(dose));
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.min(ETHYLENE_MAX_DOSE, n);
+}
+
+/** Primera inyección de ciclo: dosis fija de prueba (2). */
+export function computeInitialEthyleneDose(_baseline, target) {
+  const remaining = Math.max(0, Number(target) - Number(_baseline ?? 0));
+  if (remaining <= 0) return 0;
+  return 2;
+}
+
+/**
+ * Dosis proporcional según incremento observado tras la última inyección.
+ * Sin avance en lectura → 0 (seguir sondeando, no escalar).
+ */
+export function computeProportionalEthyleneDose(meta, target, lastReading) {
+  const targetN = Number(target);
+  const reading = Number(lastReading);
+  if (!Number.isFinite(targetN) || !Number.isFinite(reading)) return 0;
+
+  const remaining = targetN - reading;
+  if (remaining <= 0) return 0;
+
+  const baseline = Number(meta?.baselineBeforeDose);
+  const lastDose = Number(meta?.lastTipo5Dato);
+
+  if (!Number.isFinite(baseline) || !Number.isFinite(lastDose) || lastDose <= 0) {
+    return clampEthyleneDose(Math.max(1, Math.round(remaining)));
+  }
+
+  const increment = reading - baseline;
+  if (increment <= 0) return 0;
+
+  const ppmPerUnit = increment / lastDose;
+  if (ppmPerUnit <= 0) return 0;
+
+  const estimated = Math.round(remaining / ppmPerUnit);
+  const bounded = Math.max(1, Math.min(estimated, Math.round(remaining)));
+  return clampEthyleneDose(bounded);
 }
 
 /**
@@ -121,7 +167,7 @@ export function applyEthyleneReadingToMeta(ethMeta, resolved) {
 }
 
 export function recordEthyleneDose(ethMeta, dosePpm, baselineBeforeDose) {
-  const ppm = Math.max(0, Math.round(Number(dosePpm)));
+  const ppm = clampEthyleneDose(dosePpm);
   return {
     ...ethMeta,
     lastTipo5Dato: ppm,

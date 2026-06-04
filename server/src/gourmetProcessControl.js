@@ -11,6 +11,7 @@ import {
 } from './tunnelCommandCompliance.js';
 import {
   applyEthyleneReadingToMeta,
+  computeProportionalEthyleneDose,
   recordEthyleneDose,
   resolveEthyleneReading,
 } from './ethyleneReading.js';
@@ -58,21 +59,6 @@ function parseParams(session) {
 function valuesMatch(actual, target, tolerance) {
   if (actual == null || !Number.isFinite(actual)) return false;
   return Math.abs(actual - target) <= tolerance;
-}
-
-function computeProportionalEthyleneDose(meta, target, lastReading) {
-  const baseline = Number(meta.baselineBeforeDose);
-  const lastDose = Number(meta.lastTipo5Dato);
-  if (!Number.isFinite(baseline) || !Number.isFinite(lastDose) || lastDose <= 0) {
-    return Math.max(1, Math.round(target - lastReading));
-  }
-  const increment = lastReading - baseline;
-  if (increment <= 0) return Math.max(1, Math.round(target - lastReading));
-  const remaining = target - lastReading;
-  if (remaining <= 0) return 0;
-  const ppmPerUnit = increment / lastDose;
-  if (ppmPerUnit <= 0) return Math.max(1, Math.round(remaining));
-  return Math.max(1, Math.round(remaining / ppmPerUnit));
 }
 
 function adapterFor(ctx) {

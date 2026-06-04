@@ -1,3 +1,5 @@
+import { clampEthyleneDose } from './ethyleneReading.js';
+
 /** Cliente upstream: GET /Tunel/comando_control_tunel/{imei}?tipo=&dato= */
 
 export function maduradorApiBase() {
@@ -69,7 +71,8 @@ export async function sendEthyleneInjectionCommand(imei, ppm) {
 
 /** Inyección incremental túnel: solo tipo 5. */
 export async function sendEthyleneDoseCommand(imei, ppm) {
-  const value = Math.max(0, Math.round(Number(ppm)));
+  const value = clampEthyleneDose(ppm);
+  if (value <= 0) throw new Error('ethylene dose must be > 0');
   const sent = await sendTunnelControlCommand(imei, 5, value);
   return { ppm: value, step: sent };
 }

@@ -1,6 +1,7 @@
 /** Cliente upstream TermoKing: GET /TermoKing/comando_control/{deviceId}?tipo=&dato= */
 
 import { formatTunnelDato, maduradorApiBase } from './tunelControlClient.js';
+import { clampEthyleneDose } from './ethyleneReading.js';
 
 /**
  * @param {string} deviceId IMEI / identificador del equipo (ej. MEX3001, NEWY2001)
@@ -46,7 +47,8 @@ export async function sendTermoKingEthylenePollCommand(deviceId) {
 
 /** Inyección incremental: tipo 5 (ppm). */
 export async function sendTermoKingEthyleneDoseCommand(deviceId, ppm) {
-  const value = Math.max(0, Math.round(Number(ppm)));
+  const value = clampEthyleneDose(ppm);
+  if (value <= 0) throw new Error('ethylene dose must be > 0');
   const sent = await sendTermoKingControlCommand(deviceId, 5, value);
   return { ppm: value, step: sent };
 }
