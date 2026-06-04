@@ -1,4 +1,5 @@
 import { clampEthyleneDose } from './ethyleneReading.js';
+import { noteImeiCommandSent } from './deviceCommandLedger.js';
 
 /** Cliente upstream: GET /Tunel/comando_control_tunel/{imei}?tipo=&dato= */
 
@@ -15,6 +16,7 @@ export function formatTunnelDato(tipo, dato) {
   if (!Number.isFinite(n)) throw new Error('invalid dato');
   const t = Number(tipo);
   if (t === 1) return Number(n.toFixed(1));
+  if (t === 3) return Number(n.toFixed(1));
   if (t === 2 || t === 5 || t === 0 || t === 6) return Math.round(n);
   return n;
 }
@@ -52,6 +54,8 @@ export async function sendTunnelControlCommand(imei, tipo, dato) {
     err.body = body;
     throw err;
   }
+
+  noteImeiCommandSent(id, { tipo, dato: formatted, url });
 
   return { ok: true, url, status: r.status, body, dato: formatted, tipo };
 }

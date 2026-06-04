@@ -121,7 +121,10 @@ export function controlParamsFromPhaseRaw(phaseRaw, processType) {
   const eth = Number(p.ethylene);
   if (Number.isFinite(eth)) out.ethylene = eth;
   const co2 = Number(p.co2Limit);
-  if (Number.isFinite(co2)) out.co2 = co2;
+  if (Number.isFinite(co2)) {
+    out.co2 = co2;
+    if (processType === 'Ventilation') out.targetCo2 = co2;
+  }
   const dur = Number(p.duration);
   if (Number.isFinite(dur) && dur > 0) {
     if (processType === 'Ventilation') out.durationMin = dur;

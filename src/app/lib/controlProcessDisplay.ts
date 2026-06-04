@@ -227,8 +227,16 @@ function resultsAllOk(results: unknown): boolean {
   return results.every((r) => (r as { ok?: boolean }).ok === true);
 }
 
-const TEMP_ACTIONS = new Set(['check_temperature', 'send_temperature', 'send', 'read', 'read_fanout', 'send_fanout']);
-const HUM_ACTIONS = new Set(['check_humidity', 'send_humidity']);
+const TEMP_ACTIONS = new Set([
+  'check_temperature',
+  'send_temperature',
+  'send',
+  'read',
+  'read_fanout',
+  'send_fanout',
+  'temp_skip_after_max_attempts',
+]);
+const HUM_ACTIONS = new Set(['check_humidity', 'send_humidity', 'humidity_skip_after_max_attempts']);
 const CO2_ACTIONS = new Set([
   'check_co2_setpoint',
   'send_co2_limit',
@@ -249,6 +257,7 @@ const ETH_ACTIONS = new Set([
   'read_ethylene',
   'read_ethylene_poll',
   'retry_ethylene',
+  'ethylene_idle_poll',
 ]);
 const VENT_ACTIONS = new Set([
   'check_ventilation_avl',
@@ -404,6 +413,16 @@ export function summarizeProcessEventParts(
         : t('log_ctrl_reason_temp_manual_send', { target, count: n }),
     };
   }
+  if (action === 'temp_skip_after_max_attempts') {
+    return {
+      kind,
+      description: t('log_ctrl_temp_skip_max_attempts', {
+        attempts: String(ev.attempts ?? detail.attempts ?? '3'),
+        target: String(ev.target ?? detail.target ?? '—'),
+      }),
+      reason: t('log_ctrl_reason_temp_skip_max_attempts'),
+    };
+  }
   if (action === 'check_humidity') {
     return {
       kind,
@@ -420,6 +439,16 @@ export function summarizeProcessEventParts(
       reason: isAuto
         ? t('log_ctrl_reason_humidity_auto_send', { target, results: resultsStr })
         : t('log_ctrl_reason_humidity_manual_send', { target }),
+    };
+  }
+  if (action === 'humidity_skip_after_max_attempts') {
+    return {
+      kind,
+      description: t('log_ctrl_humidity_skip_max_attempts', {
+        attempts: String(ev.attempts ?? detail.attempts ?? '3'),
+        target: String(ev.target ?? detail.target ?? '—'),
+      }),
+      reason: t('log_ctrl_reason_humidity_skip_max_attempts'),
     };
   }
   if (action === 'check_co2_setpoint') {
@@ -479,10 +508,11 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ventilation_end_tipo3') {
+    const dato = String(ev.dato ?? detail.dato ?? ev.targetCo2 ?? detail.targetCo2 ?? '—');
     return {
       kind,
-      description: t('control_process_ev_ventilation_end'),
-      reason: t('log_ctrl_reason_ventilation_end'),
+      description: t('control_process_ev_ventilation_end', { dato }),
+      reason: t('log_ctrl_reason_ventilation_end', { dato, minutes: '5' }),
     };
   }
   if (action === 'ethylene_tipo5_initial' || action === 'send_tipo5') {
@@ -549,6 +579,13 @@ export function summarizeProcessEventParts(
         : ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor'
           ? t('log_ctrl_reason_ethylene_steady_monitor')
           : t('log_ctrl_reason_ethylene_poll'),
+    };
+  }
+  if (action === 'ethylene_idle_poll') {
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_idle_poll'),
+      reason: t('log_ctrl_reason_ethylene_idle_poll'),
     };
   }
   if (action === 'ethylene_read_ignored_zero' || action === 'read_ethylene_ignored_zero') {

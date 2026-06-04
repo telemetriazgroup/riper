@@ -2,6 +2,7 @@
 
 import { formatTunnelDato, maduradorApiBase } from './tunelControlClient.js';
 import { clampEthyleneDose } from './ethyleneReading.js';
+import { noteImeiCommandSent } from './deviceCommandLedger.js';
 
 /**
  * @param {string} deviceId IMEI / identificador del equipo (ej. MEX3001, NEWY2001)
@@ -36,6 +37,8 @@ export async function sendTermoKingControlCommand(deviceId, tipo, dato) {
     err.body = body;
     throw err;
   }
+
+  noteImeiCommandSent(id, { tipo, dato: formatted, url });
 
   return { ok: true, url, status: r.status, body, dato: formatted, tipo };
 }

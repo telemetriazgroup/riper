@@ -25,12 +25,16 @@ export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 export const TEMP_VERIFY_MS = 2 * 60 * 1000;
 export const HUMIDITY_VERIFY_MS = 2 * 60 * 1000;
 export const CO2_VERIFY_MS = 4 * 60 * 1000;
-/** Intentos máximos para ajustar CO₂ en fase secuencial de maduración antes de pasar a etileno. */
+/** Intentos máximos por fase secuencial antes de avanzar al siguiente control. */
+export const TEMP_MAX_ADJUST_ATTEMPTS = 3;
+export const HUMIDITY_MAX_ADJUST_ATTEMPTS = 3;
 export const CO2_MAX_ADJUST_ATTEMPTS = 3;
 export const CO2_MAINTENANCE_MS = 30 * 60 * 1000;
 export const TEMP_HUMIDITY_MAINTENANCE_MS = 10 * 60 * 1000;
 export const HOURLY_REVIEW_MS = 60 * 60 * 1000;
 export const VENTILATION_VERIFY_MS = 4 * 60 * 1000;
+/** Enviar límite CO₂ (tipo 3) con el objetivo programado 5 min antes del fin de ventilación. */
+export const VENTILATION_END_LEAD_MS = 5 * 60 * 1000;
 export const ETHYLENE_CYCLE_MS = 10 * 60 * 1000;
 /** Maduración activa (steady): poll tipo 0 cada 3 min aunque el etileno ya esté en objetivo. */
 export const ETHYLENE_STEADY_MONITOR_MS = 3 * 60 * 1000;
@@ -152,6 +156,15 @@ function co2CommandValue(params) {
   return Math.round(programmed + 1);
 }
 
+/** Dato tipo 3 al cerrar ventilación: CO₂ objetivo programado (p. ej. 0.5 %). */
+function ventilationEndCo2Dato(params) {
+  const target = controlParamNumber(params, 'targetCo2', 'target_co2');
+  if (target != null && Number.isFinite(target)) return target;
+  const co2 = controlParamNumber(params, 'co2', 'co2_limit');
+  if (co2 != null && Number.isFinite(co2)) return co2;
+  return null;
+}
+
 function appendLog(params, entry) {
   return appendTunnelEventLog(params, { source: 'process_automation', ...entry });
 }
@@ -238,9 +251,10 @@ export async function initGourmetProcessOnSessionStart(sessionRow) {
   return { ...sessionRow, params: nextParams };
 }
 
-async function ensureTemperature(ctx, params, auto, processType) {
+async function ensureTemperature(ctx, params, auto, processType, opts = {}) {
+  const { allowSkipAfterMaxAttempts = false } = opts;
   const target = commandTempC(params, processType);
-  if (target == null) return { auto, events: [] };
+  if (target == null) return { auto, events: [], done: true };
   const adapter = adapterFor(ctx);
 
   let results;
@@ -261,18 +275,37 @@ async function ensureTemperature(ctx, params, auto, processType) {
   const events = [{ action: 'check_temperature', target, results }];
 
   if (!allOk) {
-    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, target);
-    events.push({ action: 'send_temperature', target, urls });
+    const attempts = Number(auto.tempAdjustAttempts) || 0;
+    if (allowSkipAfterMaxAttempts && attempts >= TEMP_MAX_ADJUST_ATTEMPTS) {
+      events.push({
+        action: 'temp_skip_after_max_attempts',
+        target,
+        results,
+        attempts,
+        reason: 'proceed_to_next_phase',
+      });
+      return {
+        auto: { ...auto, tempAdjustAttempts: 0 },
+        events,
+        done: true,
+        skipped: true,
+      };
+    }
+    if (adapter) {
+      const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, target);
+      events.push({ action: 'send_temperature', target, urls });
+    }
     return {
-      auto: { ...auto, nextActionAt: msFromNow(TEMP_VERIFY_MS) },
+      auto: { ...auto, tempAdjustAttempts: attempts + 1, nextActionAt: msFromNow(TEMP_VERIFY_MS) },
       events,
       rescheduled: true,
     };
   }
-  return { auto, events, done: true };
+  return { auto: { ...auto, tempAdjustAttempts: 0 }, events, done: true };
 }
 
-async function ensureHumidity(ctx, params, auto) {
+async function ensureHumidity(ctx, params, auto, opts = {}) {
+  const { allowSkipAfterMaxAttempts = false } = opts;
   const targetRaw = controlParamNumber(params, 'humiditySetPoint', 'humidity_set_point');
   const target = targetRaw != null ? Math.round(targetRaw) : null;
   if (target == null) return { auto, events: [], done: true };
@@ -285,15 +318,32 @@ async function ensureHumidity(ctx, params, auto) {
   const events = [{ action: 'check_humidity', target, imei, results }];
 
   if (!ok && adapter) {
+    const attempts = Number(auto.humidityAdjustAttempts) || 0;
+    if (allowSkipAfterMaxAttempts && attempts >= HUMIDITY_MAX_ADJUST_ATTEMPTS) {
+      events.push({
+        action: 'humidity_skip_after_max_attempts',
+        target,
+        imei,
+        results,
+        attempts,
+        reason: 'proceed_to_next_phase',
+      });
+      return {
+        auto: { ...auto, humidityAdjustAttempts: 0 },
+        events,
+        done: true,
+        skipped: true,
+      };
+    }
     const urls = await sendCommandTargets(ctx, 2, target);
     events.push({ action: 'send_humidity', target, imei, urls, dato: target });
     return {
-      auto: { ...auto, nextActionAt: msFromNow(HUMIDITY_VERIFY_MS) },
+      auto: { ...auto, humidityAdjustAttempts: attempts + 1, nextActionAt: msFromNow(HUMIDITY_VERIFY_MS) },
       events,
       rescheduled: true,
     };
   }
-  return { auto, events, done: true };
+  return { auto: { ...auto, humidityAdjustAttempts: 0 }, events, done: true };
 }
 
 async function ensureCo2Limit(ctx, params, auto, opts = {}) {
@@ -643,8 +693,9 @@ async function tickHomogenization(ctx, params, auto) {
   }
 
   let events = [];
+  const phaseSkip = { allowSkipAfterMaxAttempts: auto.mode === 'sequential' };
   if (auto.phase === 'temperature') {
-    const temp = await ensureTemperature(ctx, params, auto, ctx.process_type);
+    const temp = await ensureTemperature(ctx, params, auto, ctx.process_type, phaseSkip);
     events = temp.events;
     if (temp.rescheduled) {
       await patchAutomation(ctx, () => ({ ...temp.auto, newEvents: events }));
@@ -654,7 +705,7 @@ async function tickHomogenization(ctx, params, auto) {
   }
 
   if (auto.phase === 'humidity') {
-    const hum = await ensureHumidity(ctx, params, auto);
+    const hum = await ensureHumidity(ctx, params, auto, phaseSkip);
     events = [...events, ...hum.events];
     if (hum.rescheduled) {
       await patchAutomation(ctx, () => ({ ...hum.auto, newEvents: events }));
@@ -717,8 +768,9 @@ async function tickRipening(ctx, params, auto) {
   }
 
   let events = [];
+  const phaseSkip = { allowSkipAfterMaxAttempts: true };
   if (auto.phase === 'temperature') {
-    const temp = await ensureTemperature(ctx, params, auto, ctx.process_type);
+    const temp = await ensureTemperature(ctx, params, auto, ctx.process_type, phaseSkip);
     events = temp.events;
     if (temp.rescheduled) {
       await patchAutomation(ctx, () => ({ ...temp.auto, newEvents: events }));
@@ -728,7 +780,7 @@ async function tickRipening(ctx, params, auto) {
   }
 
   if (auto.phase === 'humidity') {
-    const hum = await ensureHumidity(ctx, params, auto);
+    const hum = await ensureHumidity(ctx, params, auto, phaseSkip);
     events = [...events, ...hum.events];
     if (hum.rescheduled) {
       await patchAutomation(ctx, () => ({ ...hum.auto, newEvents: events }));
@@ -766,7 +818,7 @@ async function tickRipening(ctx, params, auto) {
 }
 
 async function tickCooling(ctx, params, auto) {
-  const temp = await ensureTemperature(ctx, params, auto, 'Cooling');
+  const temp = await ensureTemperature(ctx, params, auto, 'Cooling', { allowSkipAfterMaxAttempts: true });
   await patchAutomation(ctx, () => ({
     ...temp.auto,
     nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
@@ -778,12 +830,25 @@ async function tickVentilation(ctx, params, auto) {
   const endMs = ctx.estimated_end_at ? new Date(ctx.estimated_end_at).getTime() : null;
   const events = [];
 
-  if (endMs != null && Date.now() >= endMs && !auto.ventilationEndSent) {
-    const imei = sensorUnit(ctx);
+  const endLeadMs = endMs != null ? endMs - VENTILATION_END_LEAD_MS : null;
+  if (endLeadMs != null && Date.now() >= endLeadMs && !auto.ventilationEndSent) {
+    const co2Dato = ventilationEndCo2Dato(params);
     const adapter = adapterFor(ctx);
-    if (adapter) {
-      const sent = await adapter.sendCommand(imei, 3, 3);
-      events.push({ action: 'ventilation_end_tipo3', imei, url: sent.url, dato: 3 });
+    if (adapter && co2Dato != null) {
+      const urls = await sendCommandTargets(ctx, 3, co2Dato);
+      events.push({
+        action: 'ventilation_end_tipo3',
+        targetCo2: co2Dato,
+        dato: co2Dato,
+        urls,
+        reason: 'five_min_before_end',
+        minutesBeforeEnd: 5,
+      });
+    } else if (co2Dato == null) {
+      events.push({
+        action: 'ventilation_end_skipped',
+        reason: 'missing_target_co2',
+      });
     }
     await patchAutomation(ctx, () => ({
       ...auto,

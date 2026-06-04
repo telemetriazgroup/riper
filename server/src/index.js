@@ -42,6 +42,7 @@ import {
   kickTrackingControlForProcess,
   processGourmetActiveTrackingSessions,
 } from './ripeningTrackingControl.js';
+import { processOnlineDeviceEthyleneIdlePolls } from './deviceEthyleneIdlePoll.js';
 
 const PORT = Number(process.env.PORT) || 4000;
 const AUTO_FINALIZE_MS = Math.max(15000, Number(process.env.AUTO_FINALIZE_INTERVAL_MS) || 60000);
@@ -117,6 +118,7 @@ async function main() {
     Promise.all([
       processGourmetActiveControlSessions(),
       processGourmetActiveTrackingSessions(),
+      processOnlineDeviceEthyleneIdlePolls(),
     ]).catch((e) => console.error('[gourmet-process]', e.message));
   }, GOURMET_PROCESS_POLL_MS).unref?.();
 }
