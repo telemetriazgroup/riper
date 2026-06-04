@@ -389,7 +389,7 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
 
   const imei = commandImeis(ctx, 0)[0] ?? sensorUnit(ctx);
   const adapter = adapterFor(ctx);
-  const eth = { ...(auto.ethylene ?? {}) };
+  let eth = { ...(auto.ethylene ?? {}) };
   const events = [];
 
   try {
