@@ -518,6 +518,7 @@ export function summarizeProcessEventParts(
   if (action === 'ethylene_read_ignored_zero' || action === 'read_ethylene_ignored_zero') {
     const effective = String(ev.effective ?? detail.effective ?? '—');
     const raw = String(ev.value ?? detail.value ?? '0');
+    const ethTarget = String(ev.target ?? detail.target ?? '—');
     return {
       kind,
       description: t('log_ctrl_ethylene_read_ignored_zero', { raw, effective }),
