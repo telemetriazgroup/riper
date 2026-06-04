@@ -801,6 +801,8 @@ const translations: Record<Language, Record<string, string>> = {
     'control_process_ev_check_ventilation': 'Verificar ventilación (AVL=220)',
     'control_process_ev_send_ventilation': 'Enviar ventilación tipo 6 dato 220',
     'control_process_ev_ventilation_end': 'Fin ventilación — tipo 3 dato {{dato}} % CO₂ (5 min antes)',
+    'control_process_ev_stop_plan_maintain': 'STOP PLAN — tipo 10 dato {{dato}} (mantener suspendido)',
+    'control_process_ev_stop_plan_end': 'STOP PLAN fin — tipo 10 dato {{dato}} (5 min antes)',
     'control_process_ev_ethylene_initial': 'Inyección etileno inicial tipo 5, dato {{dato}}',
     'control_process_ev_ethylene_proportional': 'Inyección etileno proporcional tipo 5, dato {{dato}}',
     'control_process_ev_ethylene_skip': 'Etileno ya en objetivo — sin dosis',
@@ -888,6 +890,17 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ventilation_send': 'Enviar ventilación tipo 6 dato 220 para alcanzar AVL objetivo.',
     'log_ctrl_reason_ventilation_end':
       'A {{minutes}} min del fin: enviar límite CO₂ tipo 3 con dato {{dato}} % (objetivo programado).',
+    'log_ctrl_stop_plan_phase_check': 'Verificar consumo trifásico en STOP PLAN (< {{threshold}} A)',
+    'log_ctrl_reason_stop_plan_phases_ok':
+      'Fases por debajo de {{threshold}} A — equipo suspendido. {{results}}',
+    'log_ctrl_reason_stop_plan_phases_high':
+      'Consumo de fase ≥ {{threshold}} A — posible máquina activa. {{results}}',
+    'log_ctrl_reason_stop_plan_maintain_hourly':
+      'Mantenimiento horario STOP PLAN: tipo 10 dato {{dato}} para conservar suspensión.',
+    'log_ctrl_reason_stop_plan_maintain_phases':
+      'Tras {{minutes}} min con fases ≥ 0.5 A: reenvío tipo 10 dato {{dato}}.',
+    'log_ctrl_reason_stop_plan_end':
+      'A {{minutes}} min del fin STOP PLAN: tipo 10 dato {{dato}} para preparar reanudación.',
     'log_ctrl_reason_ethylene_initial': 'Lectura inicial {{baseline}} ppm < objetivo {{target}} ppm → dosis inicial {{dato}}.',
     'log_ctrl_reason_ethylene_proportional': 'Lectura {{lastReading}} ppm < objetivo {{target}} ppm → dosis proporcional {{dato}}.',
     'log_ctrl_reason_ethylene_at_target': 'Lectura {{baseline}} ppm ya alcanza objetivo {{target}} ppm; no se inyecta.',
@@ -2003,6 +2016,8 @@ const translations: Record<Language, Record<string, string>> = {
     'control_process_ev_check_ventilation': 'Verify ventilation (AVL=220)',
     'control_process_ev_send_ventilation': 'Send ventilation type 6 value 220',
     'control_process_ev_ventilation_end': 'Ventilation end — type 3 value {{dato}} % CO₂ (5 min before)',
+    'control_process_ev_stop_plan_maintain': 'STOP PLAN — type 10 value {{dato}} (maintain suspend)',
+    'control_process_ev_stop_plan_end': 'STOP PLAN end — type 10 value {{dato}} (5 min before)',
     'control_process_ev_ethylene_initial': 'Initial ethylene injection type 5, value {{dato}}',
     'control_process_ev_ethylene_proportional': 'Proportional ethylene injection type 5, value {{dato}}',
     'control_process_ev_ethylene_skip': 'Ethylene already at target — no dose',
@@ -2093,6 +2108,17 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ventilation_send': 'Send ventilation type 6 value 220 to reach AVL target.',
     'log_ctrl_reason_ventilation_end':
       'At {{minutes}} min before end: send CO₂ limit type 3 with value {{dato}} % (programmed target).',
+    'log_ctrl_stop_plan_phase_check': 'Verify three-phase consumption in STOP PLAN (< {{threshold}} A)',
+    'log_ctrl_reason_stop_plan_phases_ok':
+      'Phases below {{threshold}} A — unit suspended. {{results}}',
+    'log_ctrl_reason_stop_plan_phases_high':
+      'Phase consumption ≥ {{threshold}} A — machine may still be active. {{results}}',
+    'log_ctrl_reason_stop_plan_maintain_hourly':
+      'Hourly STOP PLAN maintenance: type 10 value {{dato}} to keep suspension.',
+    'log_ctrl_reason_stop_plan_maintain_phases':
+      'After {{minutes}} min with phases ≥ 0.5 A: resend type 10 value {{dato}}.',
+    'log_ctrl_reason_stop_plan_end':
+      'At {{minutes}} min before STOP PLAN end: type 10 value {{dato}} to prepare resume.',
     'log_ctrl_reason_ethylene_initial': 'Initial reading {{baseline}} ppm < target {{target}} ppm → initial dose {{dato}}.',
     'log_ctrl_reason_ethylene_proportional': 'Reading {{lastReading}} ppm < target {{target}} ppm → proportional dose {{dato}}.',
     'log_ctrl_reason_ethylene_at_target': 'Reading {{baseline}} ppm already meets target {{target}} ppm; no injection.',

@@ -10,7 +10,7 @@ import {
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
-import { initGourmetProcessOnSessionStart, shouldInitAutomatedProcessControl, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
+import { initGourmetProcessOnSessionStart, initStopPlanOnSessionStart, shouldInitAutomatedProcessControl, shouldInitStopPlanAutomation, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
 import { appendSessionTunnelEvent, appendTunnelEventLog, programmedSummaryFromParams } from '../tunnelEventLog.js';
 import { normalizeControlProcessParams, validateControlProcessParams, effectiveSessionParams, buildControlSnapshot } from '../controlProcessParams.js';
 
@@ -219,6 +219,11 @@ deviceControlRouter.post('/start', async (req, res) => {
       sessionRow = await initGourmetProcessOnSessionStart(sessionRow);
       kickGourmetProcessForSession(sessionRow).catch((e) =>
         console.warn('[gourmet-process] kickoff', e.message)
+      );
+    } else if (shouldInitStopPlanAutomation(deviceId, processType, auditLog)) {
+      sessionRow = await initStopPlanOnSessionStart(sessionRow);
+      kickGourmetProcessForSession(sessionRow).catch((e) =>
+        console.warn('[stop-plan] kickoff', e.message)
       );
     }
     sessionRow.params = effectiveSessionParams(sessionRow);

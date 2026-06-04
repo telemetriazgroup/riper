@@ -214,8 +214,18 @@ function fmtResults(results: unknown): string {
   if (!Array.isArray(results)) return '';
   return results
     .map((r) => {
-      const row = r as { imei?: string; actual?: unknown; ok?: boolean; avl?: unknown };
-      const ok = row.ok ? '✓' : '✗';
+      const row = r as {
+        imei?: string;
+        actual?: unknown;
+        ok?: boolean | null;
+        avl?: unknown;
+        phases?: unknown[];
+      };
+      const ok = row.ok === true ? '✓' : row.ok === false ? '✗' : '?';
+      if (Array.isArray(row.phases)) {
+        const ph = row.phases.map((v) => v ?? '—').join('/');
+        return `${ok} ${row.imei ?? '?'} F1-3=[${ph}]A`;
+      }
       if (row.avl != null) return `${ok} ${row.imei ?? '?'} AVL=${row.avl}`;
       return `${ok} ${row.imei ?? '?'}=${row.actual ?? '—'}`;
     })
@@ -264,6 +274,11 @@ const VENT_ACTIONS = new Set([
   'send_ventilation',
   'ventilation_end_tipo3',
 ]);
+const STOP_PLAN_ACTIONS = new Set([
+  'check_stop_plan_phases',
+  'stop_plan_maintain_tipo10',
+  'stop_plan_end_tipo10',
+]);
 const LIFECYCLE_ACTIONS = new Set([
   'process_started',
   'process_automation_started',
@@ -288,6 +303,7 @@ export function eventKindFromProcessEvent(ev: ProcessEventRow): EventKind {
   if (jobKind === 'humidity' || HUM_ACTIONS.has(action) || tipo === 2) return 'control_humidity';
   if (jobKind === 'ethylene' || ETH_ACTIONS.has(action)) return 'control_ethylene';
   if (jobKind === 'ventilation' || VENT_ACTIONS.has(action) || tipo === 6) return 'control_ventilation';
+  if (STOP_PLAN_ACTIONS.has(action) || tipo === 10) return 'control_general';
   if (CO2_ACTIONS.has(action) || tipo === 3) return 'control_co2';
 
   return 'control_general';
@@ -513,6 +529,42 @@ export function summarizeProcessEventParts(
       kind,
       description: t('control_process_ev_ventilation_end', { dato }),
       reason: t('log_ctrl_reason_ventilation_end', { dato, minutes: '5' }),
+    };
+  }
+  if (action === 'check_stop_plan_phases') {
+    const checks = ev.checks ?? detail.checks;
+    const resultsStr = fmtResults(checks);
+    const threshold = String(ev.threshold ?? detail.threshold ?? '0.5');
+    const allOk = resultsAllOk(checks);
+    return {
+      kind,
+      description: t('log_ctrl_stop_plan_phase_check', { threshold }),
+      reason: allOk
+        ? t('log_ctrl_reason_stop_plan_phases_ok', { results: resultsStr, threshold })
+        : t('log_ctrl_reason_stop_plan_phases_high', { results: resultsStr, threshold }),
+    };
+  }
+  if (action === 'stop_plan_maintain_tipo10') {
+    const dato = String(ev.dato ?? detail.dato ?? '7200');
+    const reasonKey =
+      ev.reason === 'phase_consumption_high' || detail.reason === 'phase_consumption_high'
+        ? 'log_ctrl_reason_stop_plan_maintain_phases'
+        : 'log_ctrl_reason_stop_plan_maintain_hourly';
+    return {
+      kind,
+      description: t('control_process_ev_stop_plan_maintain', { dato }),
+      reason: t(reasonKey, {
+        dato,
+        minutes: String(ev.violationMinutes ?? detail.violationMinutes ?? '10'),
+      }),
+    };
+  }
+  if (action === 'stop_plan_end_tipo10') {
+    const dato = String(ev.dato ?? detail.dato ?? '300');
+    return {
+      kind,
+      description: t('control_process_ev_stop_plan_end', { dato }),
+      reason: t('log_ctrl_reason_stop_plan_end', { dato, minutes: '5' }),
     };
   }
   if (action === 'ethylene_tipo5_initial' || action === 'send_tipo5') {

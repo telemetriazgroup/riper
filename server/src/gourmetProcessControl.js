@@ -35,6 +35,14 @@ export const HOURLY_REVIEW_MS = 60 * 60 * 1000;
 export const VENTILATION_VERIFY_MS = 4 * 60 * 1000;
 /** Enviar límite CO₂ (tipo 3) con el objetivo programado 5 min antes del fin de ventilación. */
 export const VENTILATION_END_LEAD_MS = 5 * 60 * 1000;
+/** STOP PLAN: mantener suspendido (tipo 10 dato 7200) cada hora; fin con dato 300 a 5 min del cierre. */
+export const STOP_PLAN_MAINTAIN_DATO = 7200;
+export const STOP_PLAN_END_DATO = 300;
+export const STOP_PLAN_HOURLY_MS = 60 * 60 * 1000;
+export const STOP_PLAN_PHASE_MAX_A = 0.5;
+export const STOP_PLAN_PHASE_VIOLATION_MS = 10 * 60 * 1000;
+export const STOP_PLAN_END_LEAD_MS = 5 * 60 * 1000;
+export const STOP_PLAN_POLL_MS = 30 * 1000;
 export const ETHYLENE_CYCLE_MS = 10 * 60 * 1000;
 /** Maduración activa (steady): poll tipo 0 cada 3 min aunque el etileno ya esté en objetivo. */
 export const ETHYLENE_STEADY_MONITOR_MS = 3 * 60 * 1000;
@@ -47,6 +55,9 @@ const AVL_VENT_TARGET = 220;
 const AVL_VENT_MAX = 30;
 
 export const AUTOMATED_PROCESS_TYPES = ['Homogenization', 'Ripening', 'Ventilation', 'Cooling'];
+export const CONTROL_AUTOMATION_PROCESS_TYPES = [...AUTOMATED_PROCESS_TYPES, 'StopPlan'];
+
+const STOP_PLAN_PHASE_FIELDS = ['consumption_ph_1', 'consumption_ph_2', 'consumption_ph_3'];
 
 function nowIso() {
   return new Date().toISOString();
@@ -89,7 +100,7 @@ async function fetchUnitRow(ctx, unitId) {
 function commandImeis(ctx, tipo) {
   const adapter = adapterFor(ctx);
   if (adapter?.commandImeis) return adapter.commandImeis(ctx.device_id, tipo);
-  if (Number(tipo) === 1 || Number(tipo) === 6) return fanOutUnits(ctx);
+  if (Number(tipo) === 1 || Number(tipo) === 6 || Number(tipo) === 10) return fanOutUnits(ctx);
   return [sensorUnit(ctx)];
 }
 
@@ -220,6 +231,47 @@ export function shouldInitAutomatedProcessControl(deviceId, processType, auditLo
   if (auditLog) return false;
   if (!isAutomatedControlDeviceId(deviceId)) return false;
   return AUTOMATED_PROCESS_TYPES.includes(String(processType || '').trim());
+}
+
+export function shouldInitStopPlanAutomation(deviceId, processType, auditLog) {
+  if (auditLog) return false;
+  if (!isAutomatedControlDeviceId(deviceId)) return false;
+  return String(processType || '').trim() === 'StopPlan';
+}
+
+export function initStopPlanAutomation(session) {
+  return {
+    initializedAt: nowIso(),
+    processType: 'StopPlan',
+    mode: 'stop_plan',
+    nextActionAt: nowIso(),
+    lastMaintainCommandAt: null,
+    phaseViolatingSince: null,
+    stopPlanEndSent: false,
+  };
+}
+
+export async function initStopPlanOnSessionStart(sessionRow) {
+  if (!shouldInitStopPlanAutomation(sessionRow.device_id, sessionRow.process_type, false)) {
+    return sessionRow;
+  }
+  const params = effectiveSessionParams(sessionRow);
+  if (params.processAutomation) return { ...sessionRow, params };
+
+  const auto = initStopPlanAutomation(sessionRow);
+  const nextParams = {
+    ...params,
+    source: 'process_automation',
+    processAutomation: auto,
+    tunnelOverallStatus: 'in_progress',
+    tunnelEventLog: appendLog(params, {
+      action: 'process_automation_started',
+      processType: 'StopPlan',
+      mode: 'stop_plan',
+    }),
+  };
+  await saveSessionParams(sessionRow.id, nextParams);
+  return { ...sessionRow, params: nextParams };
 }
 
 /** @deprecated alias */
@@ -826,6 +878,108 @@ async function tickCooling(ctx, params, auto) {
   }));
 }
 
+function unitPhasesBelowStopThreshold(row) {
+  const phases = STOP_PLAN_PHASE_FIELDS.map((f) => readTelemetryField(row, f));
+  if (phases.some((v) => v == null || !Number.isFinite(v))) {
+    return { ok: null, phases };
+  }
+  const ok = phases.every((v) => v < STOP_PLAN_PHASE_MAX_A);
+  return { ok, phases };
+}
+
+async function checkStopPlanPhaseConsumption(ctx) {
+  const units = fanOutUnits(ctx);
+  const checks = [];
+  let hasReading = false;
+  let anyHigh = false;
+  for (const imei of units) {
+    const row = await fetchUnitRow(ctx, imei);
+    const { ok, phases } = unitPhasesBelowStopThreshold(row);
+    if (ok != null) hasReading = true;
+    if (ok === false) anyHigh = true;
+    checks.push({ imei, phases, ok });
+  }
+  return { checks, violating: hasReading && anyHigh };
+}
+
+async function sendStopPlanTipo10(ctx, dato) {
+  const urls = await fanOutSend(ctx, fanOutUnits(ctx), 10, dato);
+  return urls;
+}
+
+async function tickStopPlan(ctx, params, auto) {
+  const endMs = ctx.estimated_end_at ? new Date(ctx.estimated_end_at).getTime() : null;
+  const events = [];
+  const adapter = adapterFor(ctx);
+  const now = Date.now();
+
+  const endLeadMs = endMs != null ? endMs - STOP_PLAN_END_LEAD_MS : null;
+  if (endLeadMs != null && now >= endLeadMs && !auto.stopPlanEndSent) {
+    if (adapter) {
+      const urls = await sendStopPlanTipo10(ctx, STOP_PLAN_END_DATO);
+      events.push({
+        action: 'stop_plan_end_tipo10',
+        dato: STOP_PLAN_END_DATO,
+        urls,
+        reason: 'five_min_before_end',
+        minutesBeforeEnd: 5,
+      });
+    }
+    await patchAutomation(ctx, () => ({
+      ...auto,
+      stopPlanEndSent: true,
+      nextActionAt: msFromNow(STOP_PLAN_POLL_MS),
+      newEvents: events,
+    }));
+    return;
+  }
+
+  const { checks, violating } = await checkStopPlanPhaseConsumption(ctx);
+  events.push({ action: 'check_stop_plan_phases', checks, threshold: STOP_PLAN_PHASE_MAX_A });
+
+  let phaseViolatingSince = auto.phaseViolatingSince ?? null;
+  if (violating) {
+    if (!phaseViolatingSince) phaseViolatingSince = nowIso();
+  } else {
+    phaseViolatingSince = null;
+  }
+
+  const violationMs =
+    phaseViolatingSince != null ? now - new Date(phaseViolatingSince).getTime() : 0;
+  const lastMaintainMs = auto.lastMaintainCommandAt
+    ? now - new Date(auto.lastMaintainCommandAt).getTime()
+    : null;
+
+  let maintainSent = false;
+  if (adapter && !auto.stopPlanEndSent) {
+    const shouldResendViolation =
+      violating && violationMs >= STOP_PLAN_PHASE_VIOLATION_MS;
+    const shouldSendHourly =
+      lastMaintainMs == null || lastMaintainMs >= STOP_PLAN_HOURLY_MS;
+    if (shouldResendViolation || shouldSendHourly) {
+      const urls = await sendStopPlanTipo10(ctx, STOP_PLAN_MAINTAIN_DATO);
+      events.push({
+        action: 'stop_plan_maintain_tipo10',
+        dato: STOP_PLAN_MAINTAIN_DATO,
+        urls,
+        reason: shouldResendViolation ? 'phase_consumption_high' : 'hourly_maintain',
+        violationMinutes: shouldResendViolation ? Math.round(violationMs / 60000) : undefined,
+        checks,
+      });
+      maintainSent = true;
+    }
+  }
+
+  await patchAutomation(ctx, () => ({
+    ...auto,
+    phaseViolatingSince,
+    ...(maintainSent ? { lastMaintainCommandAt: nowIso() } : {}),
+    ...(maintainSent && violating ? { phaseViolatingSince: null } : {}),
+    nextActionAt: msFromNow(STOP_PLAN_POLL_MS),
+    newEvents: events,
+  }));
+}
+
 async function tickVentilation(ctx, params, auto) {
   const endMs = ctx.estimated_end_at ? new Date(ctx.estimated_end_at).getTime() : null;
   const events = [];
@@ -899,8 +1053,9 @@ export async function tickGourmetControlContext(ctx) {
   if (!ctx.adapter) return;
 
   let auto = ctx.params?.processAutomation;
+  const processType = String(ctx.process_type || '').trim();
   if (!auto) {
-    auto = initGourmetProcessAutomation(ctx);
+    auto = processType === 'StopPlan' ? initStopPlanAutomation(ctx) : initGourmetProcessAutomation(ctx);
     const nextParams = {
       ...ctx.params,
       processAutomation: auto,
@@ -915,7 +1070,10 @@ export async function tickGourmetControlContext(ctx) {
   }
 
   const params = ctx.params ?? {};
-  const processType = String(ctx.process_type || '').trim();
+  if (processType === 'StopPlan') {
+    await tickStopPlan(ctx, params, auto);
+    return;
+  }
   if (processType === 'Ventilation') {
     await tickVentilation(ctx, params, auto);
     return;
@@ -933,16 +1091,25 @@ export async function tickGourmetControlContext(ctx) {
   }
 }
 
-/** Arranque inmediato tras crear sesión Gourmet (no esperar al poller). */
+/** Arranque inmediato tras crear sesión Gourmet / STOP PLAN (no esperar al poller). */
 export async function kickGourmetProcessForSession(sessionRow) {
   if (!sessionRow?.id) return;
-  if (!shouldInitAutomatedProcessControl(sessionRow.device_id, sessionRow.process_type, false)) return;
-  if (await deviceHasActiveTracking(sessionRow.device_id)) return;
+  const processType = String(sessionRow.process_type || '').trim();
+  const isStopPlan = processType === 'StopPlan';
+  if (
+    !shouldInitAutomatedProcessControl(sessionRow.device_id, processType, false) &&
+    !shouldInitStopPlanAutomation(sessionRow.device_id, processType, false)
+  ) {
+    return;
+  }
+  if (!isStopPlan && (await deviceHasActiveTracking(sessionRow.device_id))) return;
 
   let row = sessionRow;
   const params = parseParams(row);
   if (!params.processAutomation) {
-    row = await initGourmetProcessOnSessionStart(row);
+    row = isStopPlan
+      ? await initStopPlanOnSessionStart(row)
+      : await initGourmetProcessOnSessionStart(row);
   }
 
   const { rows: fresh } = await pool.query(
@@ -977,7 +1144,7 @@ async function deviceHasActiveTracking(deviceId) {
   return rows.length > 0;
 }
 
-/** Procesa sesiones de control activas con automatización (Gourmet + Greenyard + UltraOrganics). */
+/** Procesa sesiones de control activas con automatización (Gourmet + Greenyard + UltraOrganics + STOP PLAN). */
 export async function processGourmetActiveControlSessions(limit = 12) {
   const { rows } = await pool.query(
     `SELECT * FROM app_device_control_sessions
@@ -986,13 +1153,15 @@ export async function processGourmetActiveControlSessions(limit = 12) {
        AND process_type = ANY($1::text[])
      ORDER BY updated_at ASC
      LIMIT $2`,
-    [AUTOMATED_PROCESS_TYPES, limit]
+    [CONTROL_AUTOMATION_PROCESS_TYPES, limit]
   );
 
   let processed = 0;
   for (const session of rows) {
     if (!isAutomatedControlDeviceId(session.device_id)) continue;
-    if (await deviceHasActiveTracking(session.device_id)) continue;
+    if (session.process_type !== 'StopPlan' && (await deviceHasActiveTracking(session.device_id))) {
+      continue;
+    }
     try {
       await tickSession(session);
       processed += 1;

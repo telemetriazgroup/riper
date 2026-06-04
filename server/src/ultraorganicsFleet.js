@@ -129,13 +129,13 @@ export function ultraorganicsCommandImeis(panelDeviceId, tipo) {
   const panel = String(panelDeviceId || '').trim();
   const t = Number(tipo);
   if (panel === 'MEX1001') {
-    if (t === 1 || t === 6) return ['MEX1001', 'MEX1002'];
+    if (t === 1 || t === 6 || t === 10) return ['MEX1001', 'MEX1002'];
     if (t === 2 || t === 3) return ['MEX1002'];
     if (t === 0 || t === 5) return ['MEX1001'];
     return ['MEX1001'];
   }
   if (panel === 'MEX2001') {
-    if (t === 1 || t === 6) return ['MEX2001', 'MEX2002'];
+    if (t === 1 || t === 6 || t === 10) return ['MEX2001', 'MEX2002'];
     if (t === 2 || t === 3) return ['MEX2002'];
     if (t === 0 || t === 5) return ['MEX2001'];
     return ['MEX2001'];

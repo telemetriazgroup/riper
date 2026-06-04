@@ -12,7 +12,6 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { startControlProcess } from '@/app/lib/deviceControlProcessApi';
-import { sendControlCommand } from '@/app/lib/api';
 import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 
@@ -88,9 +87,6 @@ export const StopPlanScheduleModal: React.FC<Props> = ({
       });
       await revalidateControlSessionsList();
       await revalidateFleetActiveControlSessions();
-      await sendControlCommand(deviceId, 'stop_plan', {
-        planned_end_at: endIso,
-      });
       await onCompleted();
       toast.success(t('stop_plan_registered'));
       onOpenChange(false);
