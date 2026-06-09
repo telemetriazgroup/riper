@@ -4,10 +4,9 @@ import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession, isGour
 import {
   GOURMET_TUNNEL_ETHYLENE_IMEI,
   appendGourmetTunnelAggregate,
-  buildGourmetTunnelDeviceFromUnitRows,
+  findGourmetTunnelDeviceInList,
   listContainsGourmetTunnelUnits,
   packageGourmetFleetDevices,
-  GOURMET_TUNNEL_GROUP_IMEIS,
 } from '@/app/lib/gourmetTunnelFleet';
 import { isFleetDemoSession } from '@/app/lib/fleetDemo';
 import { fetchFleetDemoMaduradorDetail, fetchFleetDemoMaduradorList } from '@/app/lib/maduradorFleetDirect';
@@ -149,7 +148,10 @@ export async function fetchDevices(): Promise<Device[]> {
       } else if (isGourmetSession()) {
         list = await appendGourmetTunnelIfNeeded(list);
       }
-      return finalizeGourmetClientFleet(list);
+      const named = await mergeSavedDisplayNames(list);
+      return isGourmetSession()
+        ? finalizeGourmetClientFleet(named)
+        : finalizeClientFleetEthylene(named);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
       if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
@@ -204,19 +206,29 @@ export async function fetchDevice(id: string): Promise<Device> {
       list = await fetchGourmetMaduradorFleet();
     } else {
       list = await getMaduradorDevicesCached();
-      if (id === GOURMET_TUNEL_DEVICE_ID && listContainsGourmetTunnelUnits(list)) {
-        const byId = new Map(list.map((d) => [d.id, d]));
-        const tunnelRows = GOURMET_TUNNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
-          (d): d is Device => d != null
-        );
-        if (tunnelRows.length > 0) {
-          return finalizeGourmetClientDevice(buildGourmetTunnelDeviceFromUnitRows(tunnelRows));
+      if (id === GOURMET_TUNEL_DEVICE_ID) {
+        const tunnel = findGourmetTunnelDeviceInList(list);
+        if (tunnel) {
+          const named = await mergeSavedDisplayNameOne(tunnel);
+          if (isGourmetSession()) return finalizeGourmetClientDevice(named);
+          const [out] = await finalizeClientFleetEthylene([named]);
+          return out ?? named;
         }
       }
     }
     const device = list.find((d) => d.id === id);
-    if (device) return finalizeGourmetClientDevice(device);
-    if (list.length) return finalizeGourmetClientDevice(list[0]);
+    if (device) {
+      const named = await mergeSavedDisplayNameOne(device);
+      if (isGourmetSession()) return finalizeGourmetClientDevice(named);
+      const [out] = await finalizeClientFleetEthylene([named]);
+      return out ?? named;
+    }
+    if (list.length) {
+      const named = await mergeSavedDisplayNameOne(list[0]);
+      if (isGourmetSession()) return finalizeGourmetClientDevice(named);
+      const [out] = await finalizeClientFleetEthylene([named]);
+      return out ?? named;
+    }
     return new Promise((resolve) =>
       setTimeout(async () => resolve(await mergeSavedDisplayNameOne(MOCK_DEVICES[0])), 200)
     );

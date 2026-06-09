@@ -274,7 +274,27 @@ export function buildGourmetTunnelDeviceFromUnitRows(unitRows: Device[]): Device
     },
   };
 
-  return aggregateGourmetTunnelDevice(base, allSelected);
+  const sensorRow = byImei.get(GOURMET_TUNNEL_ETHYLENE_IMEI);
+  const aggregated = aggregateGourmetTunnelDevice(base, allSelected);
+  if (!sensorRow) return aggregated;
+
+  return {
+    ...aggregated,
+    last_seen: sensorRow.last_seen ?? aggregated.last_seen,
+    procesoApi: sensorRow.procesoApi ?? aggregated.procesoApi,
+    idProcesoApi: sensorRow.idProcesoApi ?? aggregated.idProcesoApi,
+    process: sensorRow.process ?? aggregated.process,
+    maduradorSummary: sensorRow.maduradorSummary ?? aggregated.maduradorSummary,
+    madurador: sensorRow.madurador ?? aggregated.madurador,
+    telemetry: {
+      ...aggregated.telemetry,
+      ethylene: sensorRow.telemetry.ethylene ?? aggregated.telemetry.ethylene,
+      co2_reading: sensorRow.telemetry.co2_reading ?? aggregated.telemetry.co2_reading,
+      relative_humidity:
+        sensorRow.telemetry.relative_humidity ?? aggregated.telemetry.relative_humidity,
+      set_point: sensorRow.telemetry.set_point ?? aggregated.telemetry.set_point,
+    },
+  };
 }
 
 function cacheTunnelIfBuilt(device: Device): Device {
@@ -298,7 +318,7 @@ export function packageGourmetFleetDevices(allDevices: Device[]): Device[] {
   return out;
 }
 
-/** Superadmin / listas amplias: conserva todos los equipos y añade el túnel agregado si hay unidades. */
+/** Superadmin / listas amplias: añade túnel agregado; oculta IMEIs del grupo (datos vía UNIT333). */
 export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
   if (allDevices.some((d) => d.id === GOURMET_TUNEL_DEVICE_ID)) return allDevices;
   const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));
@@ -306,12 +326,24 @@ export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
     (d): d is Device => d != null
   );
   if (tunnelRows.length === 0) return allDevices;
-  return [...allDevices, cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows))];
+  const tunnel = cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows));
+  const hideUnitImeis = new Set(GOURMET_TUNNEL_GROUP_IMEIS);
+  return [...allDevices.filter((d) => !hideUnitImeis.has(String(d.id).trim())), tunnel];
 }
 
 export function listContainsGourmetTunnelUnits(devices: Device[]): boolean {
   const ids = new Set(devices.map((d) => String(d.id).trim()));
   return GOURMET_TUNNEL_GROUP_IMEIS.some((imei) => ids.has(imei));
+}
+
+/** Construye el dispositivo túnel a partir de filas Madurador ya en memoria. */
+export function findGourmetTunnelDeviceInList(allDevices: Device[]): Device | null {
+  const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));
+  const tunnelRows = GOURMET_TUNNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
+    (d): d is Device => d != null
+  );
+  if (tunnelRows.length === 0) return null;
+  return buildGourmetTunnelDeviceFromUnitRows(tunnelRows);
 }
 
 export function defaultGourmetTunnelSelectedUnits(): string[] {
