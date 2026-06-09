@@ -34,6 +34,12 @@ export function canManageCompanies(): boolean {
   return canEditRecipesAndCatalog();
 }
 
+/** Ver las 5 máquinas del túnel además del dispositivo agregado (admin / superadmin). */
+export function canViewGourmetTunnelUnitDevices(): boolean {
+  const r = getAppRole();
+  return r === 'admin' || r === 'superadmin';
+}
+
 /** Panel Homogenización / manual: Visualizador no ejecuta ni inicia procesos del panel. */
 export function canOperateDeviceControl(): boolean {
   return !isViewer();

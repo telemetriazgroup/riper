@@ -7,6 +7,7 @@ import {
   minutesSinceUtcMs,
 } from '@/app/lib/maduradorTimestamps';
 import { roundUiNumber } from '@/app/lib/formatUiNumber';
+import { canViewGourmetTunnelUnitDevices } from '@/app/lib/permissions';
 
 /** IMEI del dispositivo Gourmet fuera del túnel (5 máquinas). */
 export const GOURMET_STANDALONE_IMEI = '866262036100104';
@@ -314,11 +315,14 @@ export function packageGourmetFleetDevices(allDevices: Device[]): Device[] {
 
   const out: Device[] = [];
   if (standalone) out.push(standalone);
+  if (canViewGourmetTunnelUnitDevices()) {
+    out.push(...tunnelRows);
+  }
   if (tunnelRows.length > 0) out.push(cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows)));
   return out;
 }
 
-/** Superadmin / listas amplias: añade túnel agregado; oculta IMEIs del grupo (datos vía UNIT333). */
+/** Listas amplias: añade túnel agregado; admin/superadmin conservan también los 5 IMEIs. */
 export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
   if (allDevices.some((d) => d.id === GOURMET_TUNEL_DEVICE_ID)) return allDevices;
   const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));
@@ -327,6 +331,9 @@ export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
   );
   if (tunnelRows.length === 0) return allDevices;
   const tunnel = cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows));
+  if (canViewGourmetTunnelUnitDevices()) {
+    return [...allDevices, tunnel];
+  }
   const hideUnitImeis = new Set(GOURMET_TUNNEL_GROUP_IMEIS);
   return [...allDevices.filter((d) => !hideUnitImeis.has(String(d.id).trim())), tunnel];
 }
