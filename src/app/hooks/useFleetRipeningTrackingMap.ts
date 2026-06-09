@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import useSWR from 'swr';
 import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getUltraorganicsPanelForImei, isUltraorganicsSession } from '@/app/lib/fleetDemo';
+import { isGourmetTunnelGroupImei } from '@/app/lib/gourmetTunnelFleet';
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 
 /** Una sola petición: procesos de seguimiento (pestaña Seguimiento) indexados por equipo (`payload.deviceId`). */
 export const RIPENING_PROCESSES_FLEET_SWR_KEY = 'ripening-processes-fleet-map';
@@ -24,6 +26,12 @@ export function useFleetRipeningTrackingMap() {
       const did = isUltraorganicsSession() ? getUltraorganicsPanelForImei(rawDid) : rawDid;
       if (!did || m.has(did)) continue;
       m.set(did, row);
+      if (
+        (did === GOURMET_TUNEL_DEVICE_ID || isGourmetTunnelGroupImei(did)) &&
+        !m.has(GOURMET_TUNEL_DEVICE_ID)
+      ) {
+        m.set(GOURMET_TUNEL_DEVICE_ID, row);
+      }
     }
     return m;
   }, [data]);

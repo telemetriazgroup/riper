@@ -175,11 +175,18 @@ export function aggregateGourmetTunnelDevice(
     fresh_air_ex_mode: sources[0]?.operational.fresh_air_ex_mode ?? 0,
   };
 
+  const processSource =
+    ethDevice?.process ?? sources.find((d) => d.process)?.process ?? base.process;
+
   return {
     ...base,
     ...conn,
     last_seen: lastSeen,
     numeroAlarmaTotal: sumAlarms(sources),
+    procesoApi: ethDevice?.procesoApi ?? sources.find((d) => d.procesoApi)?.procesoApi,
+    idProcesoApi: ethDevice?.idProcesoApi ?? sources.find((d) => d.idProcesoApi)?.idProcesoApi,
+    process: processSource,
+    maduradorSummary: ethDevice?.maduradorSummary ?? base.maduradorSummary,
     telemetry: {
       ...base.telemetry,
       temp_supply_1: avgSupply ?? avgReturn ?? base.telemetry.temp_supply_1,
@@ -192,7 +199,7 @@ export function aggregateGourmetTunnelDevice(
       alarm_present: sources.some((d) => d.telemetry.alarm_present === 1) ? 1 : 0,
     },
     operational,
-    madurador: mergeMaduradorRef(sources),
+    madurador: ethDevice?.madurador ?? mergeMaduradorRef(sources),
     tunnel: {
       ...tunnel,
       units: tunnel.units,
@@ -289,6 +296,22 @@ export function packageGourmetFleetDevices(allDevices: Device[]): Device[] {
   if (standalone) out.push(standalone);
   if (tunnelRows.length > 0) out.push(cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows)));
   return out;
+}
+
+/** Superadmin / listas amplias: conserva todos los equipos y añade el túnel agregado si hay unidades. */
+export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
+  if (allDevices.some((d) => d.id === GOURMET_TUNEL_DEVICE_ID)) return allDevices;
+  const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));
+  const tunnelRows = GOURMET_TUNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
+    (d): d is Device => d != null
+  );
+  if (tunnelRows.length === 0) return allDevices;
+  return [...allDevices, cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows))];
+}
+
+export function listContainsGourmetTunnelUnits(devices: Device[]): boolean {
+  const ids = new Set(devices.map((d) => String(d.id).trim()));
+  return GOURMET_TUNNEL_GROUP_IMEIS.some((imei) => ids.has(imei));
 }
 
 export function defaultGourmetTunnelSelectedUnits(): string[] {

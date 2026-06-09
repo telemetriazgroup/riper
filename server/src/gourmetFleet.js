@@ -85,3 +85,35 @@ export function filterRowsByGourmetDeviceIds(rows, pickDeviceId) {
   if (!Array.isArray(rows) || rows.length === 0) return rows;
   return rows.filter((row) => isGourmetTunnelCommandDeviceId(String(pickDeviceId(row) || '').trim()));
 }
+
+/**
+ * IDs equivalentes para seguimiento / control de panel (túnel agregado ↔ unidades del grupo).
+ * El standalone (866262036100104) no se cruza con el túnel.
+ */
+export function gourmetLinkedDeviceIds(deviceId) {
+  const id = String(deviceId || '').trim();
+  if (!id) return [];
+  const tunnelId = gourmetTunnelDeviceId();
+  const units = gourmetTradingTunnelUnitImeis();
+  const standalone = gourmetTradingStandaloneImei();
+  const seen = new Set();
+  const out = [];
+  const push = (x) => {
+    const k = String(x || '').trim();
+    if (k && !seen.has(k)) {
+      seen.add(k);
+      out.push(k);
+    }
+  };
+  if (id === standalone) {
+    push(standalone);
+    return out;
+  }
+  if (id === tunnelId || units.includes(id)) {
+    push(tunnelId);
+    for (const u of units) push(u);
+    return out;
+  }
+  push(id);
+  return out;
+}

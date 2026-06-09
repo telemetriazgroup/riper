@@ -1,10 +1,11 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Device } from '@/app/data';
-import { ArrowLeft, Layers, Package, Edit2, Check, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Layers, Package, Edit2, Check, X, Loader2, BarChart2, ClipboardList, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { clsx } from 'clsx';
+import * as Tabs from '@radix-ui/react-tabs';
 import { resolveDeviceDisplayName, deviceNameStorageKey, applySobrenombresToDevice } from '@/app/lib/deviceLocalNames';
 import { updateDeviceName } from '@/app/lib/api';
 import { toast } from 'sonner';
@@ -15,6 +16,9 @@ import {
 } from '@/app/lib/gourmetTunnelFleet';
 import { DeviceCurrentStatusPanel } from '@/app/components/DeviceCurrentStatusPanel';
 import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcessPanel';
+import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
+import { DeviceMonitoringAnalysis } from '@/app/components/DeviceMonitoringAnalysis';
+import { MaduradorOperativoSummaryPanel } from '@/app/components/MaduradorOperativoSummaryPanel';
 import { TelemetryCharts } from '@/app/components/TelemetryCharts';
 import { ControlPanel } from '@/app/components/ControlPanel';
 import { resolveControlPanelTab } from '@/app/lib/madurador';
@@ -27,9 +31,14 @@ import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 interface TunnelDeviceDetailProps {
   device: Device;
   onBack: () => void;
+  onGoToCreateTracking?: () => void;
 }
 
-export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, onBack }) => {
+export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
+  device,
+  onBack,
+  onGoToCreateTracking,
+}) => {
   const { t, formatTemp, tempUnit, toggleTempUnit, language, formatDateTime } = useSettings();
   const { mutate: refreshDevices } = useDevices();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -70,6 +79,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
     }
   };
   const [controlMode, setControlMode] = useState('manual');
+  const [activeView, setActiveView] = useState<'operation' | 'analysis' | 'log'>('operation');
   const tunnel = device.tunnel;
   const [selectedUnits, setSelectedUnits] = useState<string[]>(() => defaultGourmetTunnelSelectedUnits());
 
@@ -242,8 +252,52 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
             </div>
           </div>
         </div>
+        <Tabs.Root value={activeView} onValueChange={(v) => setActiveView(v as typeof activeView)}>
+          <Tabs.List className="inline-flex rounded-lg bg-muted p-1 gap-1">
+            <Tabs.Trigger
+              value="operation"
+              className={clsx(
+                'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                activeView === 'operation'
+                  ? 'bg-card text-blue-700 dark:text-blue-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('operation')}</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="analysis"
+              className={clsx(
+                'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                activeView === 'analysis'
+                  ? 'bg-card text-blue-700 dark:text-blue-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <BarChart2 className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('monitoring')}</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger
+              value="log"
+              className={clsx(
+                'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                activeView === 'log'
+                  ? 'bg-card text-blue-700 dark:text-blue-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <ClipboardList className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('event_log')}</span>
+            </Tabs.Trigger>
+          </Tabs.List>
+        </Tabs.Root>
       </div>
 
+      <DeviceRipeningTrackingOverview deviceId={GOURMET_TUNEL_DEVICE_ID} />
+
+      {activeView === 'operation' ? (
+        <>
       <Card className="border-indigo-200/80 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20">
         <CardHeader className="pb-2">
           <CardTitle className="text-base text-foreground">
@@ -346,7 +400,33 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({ device, 
         </div>
       </div>
 
-      <EventLog deviceId={GOURMET_TUNEL_DEVICE_ID} />
+        </>
+      ) : activeView === 'log' ? (
+        <EventLog deviceId={GOURMET_TUNEL_DEVICE_ID} />
+      ) : (
+        <div className="space-y-6">
+          <div className="bg-card p-6 rounded-lg border border-border shadow-sm min-h-[400px]">
+            <DeviceMonitoringAnalysis
+              deviceId={GOURMET_TUNEL_DEVICE_ID}
+              onGoToCreateTracking={onGoToCreateTracking}
+            />
+          </div>
+          {displayDevice.maduradorSummary ? (
+            <MaduradorOperativoSummaryPanel
+              summary={displayDevice.maduradorSummary}
+              ultimaFechaEncendido={displayDevice.madurador?.ultima_fecha_encendido}
+            />
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                {language === 'es'
+                  ? 'Historial de ajustes (etileno, humedad, CO₂, encendido) no disponible en telemetría actual.'
+                  : 'Settings history (ethylene, humidity, CO₂, power) not available in current telemetry.'}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 };

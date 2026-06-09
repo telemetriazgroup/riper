@@ -14,6 +14,7 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { cancelActiveControlSessionsForDevice, kickTrackingControlForProcess } from '../ripeningTrackingControl.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -204,14 +205,15 @@ ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
     return res.status(403).json({ error: 'forbidden', message: 'device not in fleet scope' });
   }
   try {
+    const linkedIds = gourmetLinkedDeviceIds(deviceId);
     const { rows } = await pool.query(
       `SELECT * FROM app_ripening_processes
        WHERE deleted_at IS NULL
          AND status = 'active'
-         AND (payload->>'deviceId') = $1
+         AND (payload->>'deviceId') = ANY($1::text[])
        ORDER BY created_at DESC
        LIMIT 1`,
-      [deviceId]
+      [linkedIds.length ? linkedIds : [deviceId]]
     );
     if (!rows.length) {
       return res.json({ data: null });

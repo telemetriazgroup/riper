@@ -9,6 +9,7 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
 import { initGourmetProcessOnSessionStart, initStopPlanOnSessionStart, shouldInitAutomatedProcessControl, shouldInitStopPlanAutomation, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
 import { appendSessionTunnelEvent, appendTunnelEventLog, programmedSummaryFromParams } from '../tunnelEventLog.js';
@@ -61,16 +62,17 @@ deviceControlRouter.get('/active', async (req, res) => {
     if (isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
       return res.status(403).json({ error: 'forbidden', message: 'device not in fleet scope' });
     }
+    const linkedIds = gourmetLinkedDeviceIds(deviceId);
     const { rows } = await pool.query(
       `SELECT s.*, u.name AS user_name, u.email AS user_email,
               uc.name AS cancelled_by_name, uc.email AS cancelled_by_email
        FROM app_device_control_sessions s
        JOIN app_users u ON u.id = s.user_id
        LEFT JOIN app_users uc ON uc.id = s.cancelled_by_user_id
-       WHERE s.device_id = $1 AND s.status = 'active' AND s.archived_at IS NULL
+       WHERE s.device_id = ANY($1::text[]) AND s.status = 'active' AND s.archived_at IS NULL
        ORDER BY s.started_at DESC
        LIMIT 1`,
-      [deviceId]
+      [linkedIds.length ? linkedIds : [deviceId]]
     );
     const row = rows[0] ?? null;
     if (row) row.params = effectiveSessionParams(row);

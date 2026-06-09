@@ -3,7 +3,11 @@ import { API_BASE_URL } from '@/app/config';
 import { buildGourmetDevice, buildGourmetHistoryPoints, isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
 import {
   GOURMET_TUNNEL_ETHYLENE_IMEI,
+  appendGourmetTunnelAggregate,
+  buildGourmetTunnelDeviceFromUnitRows,
+  listContainsGourmetTunnelUnits,
   packageGourmetFleetDevices,
+  GOURMET_TUNNEL_GROUP_IMEIS,
 } from '@/app/lib/gourmetTunnelFleet';
 import { isFleetDemoSession } from '@/app/lib/fleetDemo';
 import { fetchFleetDemoMaduradorDetail, fetchFleetDemoMaduradorList } from '@/app/lib/maduradorFleetDirect';
@@ -137,9 +141,15 @@ export async function fetchDevices(): Promise<Device[]> {
         const list = await fetchGourmetMaduradorFleet();
         return finalizeGourmetClientFleet(list);
       }
-      const list = await getMaduradorDevicesCached();
-      const withTunnel = await appendGourmetTunnelIfNeeded(list);
-      return finalizeGourmetClientFleet(withTunnel);
+      let list = await getMaduradorDevicesCached();
+      if (listContainsGourmetTunnelUnits(list)) {
+        list = isGourmetSession()
+          ? packageGourmetFleetDevices(list)
+          : appendGourmetTunnelAggregate(list);
+      } else if (isGourmetSession()) {
+        list = await appendGourmetTunnelIfNeeded(list);
+      }
+      return finalizeGourmetClientFleet(list);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
       if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
@@ -194,6 +204,15 @@ export async function fetchDevice(id: string): Promise<Device> {
       list = await fetchGourmetMaduradorFleet();
     } else {
       list = await getMaduradorDevicesCached();
+      if (id === GOURMET_TUNEL_DEVICE_ID && listContainsGourmetTunnelUnits(list)) {
+        const byId = new Map(list.map((d) => [d.id, d]));
+        const tunnelRows = GOURMET_TUNNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
+          (d): d is Device => d != null
+        );
+        if (tunnelRows.length > 0) {
+          return finalizeGourmetClientDevice(buildGourmetTunnelDeviceFromUnitRows(tunnelRows));
+        }
+      }
     }
     const device = list.find((d) => d.id === id);
     if (device) return finalizeGourmetClientDevice(device);

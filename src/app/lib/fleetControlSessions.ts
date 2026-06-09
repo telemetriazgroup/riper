@@ -6,7 +6,9 @@ import {
   isGreenyardSession,
   isUltraorganicsSession,
 } from '@/app/lib/fleetDemo';
-import { getGourmetTradingPinnedImeis, isGourmetSession } from '@/app/lib/gourmet';
+import { getGourmetTradingFleetDeviceIds, isGourmetSession } from '@/app/lib/gourmet';
+import { isGourmetTunnelGroupImei } from '@/app/lib/gourmetTunnelFleet';
+import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 
 /** Sesiones activas visibles para la flota del usuario actual. */
 export function filterActiveControlSessionsForFleet(
@@ -20,7 +22,7 @@ export function filterActiveControlSessionsForFleet(
     const allow = new Set(getGreenyardPinnedImeis());
     rows = rows.filter((s) => allow.has(String(s.device_id ?? '').trim()));
   } else if (isGourmetSession()) {
-    const allow = new Set(getGourmetTradingPinnedImeis());
+    const allow = new Set(getGourmetTradingFleetDeviceIds());
     rows = rows.filter((s) => allow.has(String(s.device_id ?? '').trim()));
   }
   return rows;
@@ -34,8 +36,11 @@ export function indexControlSessionsByDevice(
     const rawId = String(s.device_id ?? '').trim();
     if (!rawId) continue;
     const id = isUltraorganicsSession() ? getUltraorganicsPanelForImei(rawId) : rawId;
-    if (!id || m.has(id)) continue;
-    m.set(id, s);
+    if (!id) continue;
+    if (!m.has(id)) m.set(id, s);
+    if (isGourmetTunnelGroupImei(rawId) && !m.has(GOURMET_TUNEL_DEVICE_ID)) {
+      m.set(GOURMET_TUNEL_DEVICE_ID, s);
+    }
   }
   return m;
 }

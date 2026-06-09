@@ -109,7 +109,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
   if (!device) return <div>{t('device_not_found')}</div>;
 
   if (device.tunnel) {
-    return <TunnelDeviceDetail device={device} onBack={onBack} />;
+    return <TunnelDeviceDetail device={device} onBack={onBack} onGoToCreateTracking={onGoToCreateTracking} />;
   }
 
   const lastCommFormatted =
