@@ -1,6 +1,8 @@
 import React from 'react';
 import type { MaduradorHistorialTramo, MaduradorOperativoSummary } from '@/app/data';
 import { useSettings } from '@/app/contexts/SettingsContext';
+import { DeviceAlarmsPanel } from '@/app/components/DeviceAlarmsPanel';
+import { parseAlarmCount } from '@/app/lib/thermoKingAlarms';
 
 function asTramoRows(rows: MaduradorHistorialTramo[] | undefined): MaduradorHistorialTramo[] {
   return Array.isArray(rows) ? rows : [];
@@ -71,34 +73,6 @@ function TramosTable({
   );
 }
 
-/** La API a veces envía `ultima_alarmas` como objeto único en lugar de arreglo. */
-function formatUltimaAlarmas(entries: unknown, fmtDate: (iso: string | undefined) => string): React.ReactNode {
-  const list: unknown[] = Array.isArray(entries)
-    ? entries
-    : entries != null && typeof entries === 'object'
-      ? [entries]
-      : [];
-  return list.map((entry, i) => {
-    if (!entry || typeof entry !== 'object') return <li key={i}>{String(entry)}</li>;
-    const parts: string[] = [];
-    for (const [k, v] of Object.entries(entry as Record<string, unknown>)) {
-      if (v && typeof v === 'object' && 'numero' in (v as object)) {
-        const o = v as { numero?: unknown; desde?: string; hasta?: string };
-        parts.push(
-          `${k}: #${o.numero ?? '—'} (${fmtDate(o.desde)} → ${fmtDate(o.hasta)})`
-        );
-      } else {
-        parts.push(`${k}: ${JSON.stringify(v)}`);
-      }
-    }
-    return (
-      <li key={i} className="bg-muted/50 p-2 rounded text-xs font-mono text-foreground">
-        {parts.join(' · ')}
-      </li>
-    );
-  });
-}
-
 /** Etiqueta traducible del modo ventilación (fresh_air_ex_mode). */
 function ventModeLabel(mode: number | undefined, t: (key: string) => string): string {
   const m = mode ?? 0;
@@ -124,8 +98,6 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
     activas?: unknown[];
     ultima_alarmas?: unknown;
   } | undefined;
-
-  const activasCount = Array.isArray(alarmas?.activas) ? alarmas!.activas!.length : 0;
 
   const cc = s.compressCoilHealth;
 
@@ -164,25 +136,14 @@ export const MaduradorOperativoSummaryPanel: React.FC<MaduradorOperativoSummaryP
       </div>
 
       {alarmas ? (
-        <div className="mt-4 border-t border-border pt-4">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">{t('operativo_alarms')}</h4>
-          <p className="text-xs text-muted-foreground mb-2">
-            {t('operativo_alarm_api_number')}{' '}
-            <span className="font-mono text-foreground">{alarmas.numero_alarma ?? '—'}</span>
-          </p>
-          <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">
-            {t('operativo_alarms_active')} {activasCount}
-          </p>
-          {activasCount > 0 ? (
-            <pre className="text-xs bg-red-50/80 dark:bg-red-950/40 border border-red-100 dark:border-red-900 text-foreground p-2 rounded overflow-x-auto max-h-28 mb-3">
-              {JSON.stringify(alarmas.activas, null, 2)}
-            </pre>
-          ) : null}
-          <p className="text-xs font-medium text-foreground mb-1">{t('operativo_last_alarms')}</p>
-          <ul className="text-xs space-y-1 max-h-40 overflow-y-auto">
-            {formatUltimaAlarmas(alarmas.ultima_alarmas, fmtDate)}
-          </ul>
-        </div>
+        <DeviceAlarmsPanel
+          alarmas={alarmas}
+          numeroAlarma={
+            typeof alarmas.numero_alarma === 'number'
+              ? alarmas.numero_alarma
+              : parseAlarmCount(alarmas.numero_alarma)
+          }
+        />
       ) : null}
 
       <TramosTable title={t('operativo_hist_ethylene_sp')} rows={s.historial_sp_etileno} fmtDate={fmtDate} t={t} />

@@ -14,6 +14,7 @@ import {
   seedGreenyardUser,
 } from './seed.js';
 import { seedCatalog } from './seedCatalog.js';
+import { seedAlarmCodes } from './seedAlarmCodes.js';
 import { authRouter } from './routes/auth.js';
 import { authMiddleware } from './authMiddleware.js';
 import { productsRouter } from './routes/products.js';
@@ -28,6 +29,7 @@ import { deviceControlRouter } from './routes/deviceControl.js';
 import { auditRouter } from './routes/audit.js';
 import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
+import { alarmCodesRouter } from './routes/alarmCodes.js';
 import { emailNotificationsRouter } from './routes/emailNotifications.js';
 import {
   finalizeDueRipeningProcesses,
@@ -59,6 +61,7 @@ async function main() {
   await seedThermoKingUser();
   await seedGreenyardUser();
   await seedCatalog();
+  await seedAlarmCodes();
 
   const app = express();
   const corsOrigin = process.env.CORS_ORIGIN;
@@ -92,6 +95,7 @@ async function main() {
   app.use('/api/v1/device-control', authMiddleware, deviceControlRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/companies', authMiddleware, companiesRouter);
+  app.use('/api/v1/alarm-codes', authMiddleware, alarmCodesRouter);
   app.use('/api/v1/tunnel-commands', authMiddleware, tunnelCommandsRouter);
   app.use('/api/v1/email-notifications', authMiddleware, emailNotificationsRouter);
 

@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { pool } from './db.js';
+import { SQL_ALARM_CODES } from './migrateAlarmCodes.js';
 
 const SQL_INITIAL = `
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -296,6 +297,7 @@ export async function runMigrate() {
     await client.query(SQL_TUNNEL_COMMAND_JOBS);
     await client.query(SQL_AUDIT);
     await client.query(SQL_COMPANIES);
+    await client.query(SQL_ALARM_CODES);
     await client.query(SQL_EMAIL_NOTIFICATIONS);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');

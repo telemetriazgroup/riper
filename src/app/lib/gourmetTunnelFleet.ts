@@ -315,14 +315,11 @@ export function packageGourmetFleetDevices(allDevices: Device[]): Device[] {
 
   const out: Device[] = [];
   if (standalone) out.push(standalone);
-  if (canViewGourmetTunnelUnitDevices()) {
-    out.push(...tunnelRows);
-  }
   if (tunnelRows.length > 0) out.push(cacheTunnelIfBuilt(buildGourmetTunnelDeviceFromUnitRows(tunnelRows)));
   return out;
 }
 
-/** Listas amplias: añade túnel agregado; admin/superadmin conservan también los 5 IMEIs. */
+/** Listas amplias (p. ej. superadmin): añade túnel agregado; opcionalmente conserva los 5 IMEIs. */
 export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
   if (allDevices.some((d) => d.id === GOURMET_TUNEL_DEVICE_ID)) return allDevices;
   const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));

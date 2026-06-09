@@ -12,6 +12,7 @@ import { DetailedUserManual } from '@/app/components/DetailedUserManual';
 import { CompaniesPage } from '@/app/components/CompaniesPage';
 import { AuditLog } from '@/app/components/AuditLog';
 import { EmailNotificationsPage } from '@/app/components/EmailNotificationsPage';
+import { ThermoKingAlarmsPage } from '@/app/components/ThermoKingAlarmsPage';
 import { Toaster, toast } from 'sonner';
 import { motion, AnimatePresence } from 'motion/react';
 import { LoginPage } from '@/app/components/LoginPage';
@@ -142,6 +143,8 @@ function AppContent() {
             }}
           />
         );
+      case 'alarms':
+        return <ThermoKingAlarmsPage />;
       case 'recipes':
         return <Recipes />;
       case 'companies':

@@ -1,4 +1,5 @@
 import { getStoredUser } from '@/app/lib/auth';
+import { isGourmetSession } from '@/app/lib/gourmet';
 
 /** Reglas de rol: Visualizador sólo lectura; Operador sin recetas ni nuevo seguimiento; Administrador escritura recetas y nuevos seguimientos. */
 
@@ -34,8 +35,9 @@ export function canManageCompanies(): boolean {
   return canEditRecipesAndCatalog();
 }
 
-/** Ver las 5 máquinas del túnel además del dispositivo agregado (admin / superadmin). */
+/** Ver las 5 máquinas del túnel (solo superadmin / admin fuera de cuenta Gourmet). */
 export function canViewGourmetTunnelUnitDevices(): boolean {
+  if (isGourmetSession()) return false;
   const r = getAppRole();
   return r === 'admin' || r === 'superadmin';
 }
