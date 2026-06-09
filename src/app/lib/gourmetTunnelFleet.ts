@@ -322,7 +322,7 @@ export function packageGourmetFleetDevices(allDevices: Device[]): Device[] {
 export function appendGourmetTunnelAggregate(allDevices: Device[]): Device[] {
   if (allDevices.some((d) => d.id === GOURMET_TUNEL_DEVICE_ID)) return allDevices;
   const byId = new Map(allDevices.map((d) => [String(d.id).trim(), d]));
-  const tunnelRows = GOURMET_TUNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
+  const tunnelRows = GOURMET_TUNNEL_GROUP_IMEIS.map((imei) => byId.get(imei)).filter(
     (d): d is Device => d != null
   );
   if (tunnelRows.length === 0) return allDevices;
