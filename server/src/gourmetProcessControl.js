@@ -50,16 +50,40 @@ export const ETHYLENE_CYCLE_MS = 10 * 60 * 1000;
 /** Maduración activa (steady): poll tipo 0 cada 3 min aunque el etileno ya esté en objetivo. */
 export const ETHYLENE_STEADY_MONITOR_MS = 3 * 60 * 1000;
 export const COOLING_TEMP_OFFSET_C = 2;
-/** Por debajo o igual a este setpoint se envía la consigna tal cual; por encima se resta {@link COOLING_TEMP_OFFSET_C}. */
-export const COOLING_TEMP_OFFSET_THRESHOLD_C = 10;
+export const COOLING_TEMP_AGGRESSIVE_OFFSET_C = 3;
+/** Si return_air supera el objetivo en más de este valor (°C), consigna = objetivo − 3. */
+export const COOLING_RETURN_EXCESS_THRESHOLD_C = 3;
 
-/** Consigna tipo 1 enviada en enfriamiento a partir del setpoint programado. */
-export function coolingCommandTempC(programmedSetPointC) {
+/**
+ * Consigna tipo 1 en enfriamiento.
+ * Normal: objetivo − 2. Si retorno > objetivo + 3: objetivo − 3.
+ */
+export function coolingCommandTempC(programmedSetPointC, returnAirC) {
   if (programmedSetPointC == null || !Number.isFinite(programmedSetPointC)) return null;
-  if (programmedSetPointC > COOLING_TEMP_OFFSET_THRESHOLD_C) {
-    return programmedSetPointC - COOLING_TEMP_OFFSET_C;
+  const aggressive =
+    returnAirC != null &&
+    Number.isFinite(returnAirC) &&
+    returnAirC - programmedSetPointC > COOLING_RETURN_EXCESS_THRESHOLD_C;
+  const offset = aggressive ? COOLING_TEMP_AGGRESSIVE_OFFSET_C : COOLING_TEMP_OFFSET_C;
+  return programmedSetPointC - offset;
+}
+
+export function coolingCommandMeta(programmedSetPointC, returnAirC) {
+  if (programmedSetPointC == null || !Number.isFinite(programmedSetPointC)) {
+    return { commandC: null, programmedSetPointC, returnAirC, offsetC: null, aggressive: false };
   }
-  return programmedSetPointC;
+  const aggressive =
+    returnAirC != null &&
+    Number.isFinite(returnAirC) &&
+    returnAirC - programmedSetPointC > COOLING_RETURN_EXCESS_THRESHOLD_C;
+  const offsetC = aggressive ? COOLING_TEMP_AGGRESSIVE_OFFSET_C : COOLING_TEMP_OFFSET_C;
+  return {
+    commandC: programmedSetPointC - offsetC,
+    programmedSetPointC,
+    returnAirC: returnAirC ?? null,
+    offsetC,
+    aggressive,
+  };
 }
 
 const TEMP_TOLERANCE = 0.35;
@@ -168,11 +192,22 @@ async function allUnitsMatch(ctx, units, field, target, tolerance) {
   return { results, allOk: results.length > 0 && results.every((r) => r.ok) };
 }
 
-function commandTempC(params, processType) {
+async function resolveCommandTempC(ctx, params, processType) {
   const sp = controlParamNumber(params, 'setPoint', 'set_point');
-  if (sp == null) return null;
-  if (processType === 'Cooling') return coolingCommandTempC(sp);
-  return sp;
+  if (sp == null) return { target: null, meta: {} };
+  if (processType !== 'Cooling') return { target: sp, meta: {} };
+  const row = await telemetryRow(ctx, 'return_air');
+  const returnAir = readTelemetryField(row, 'return_air');
+  const meta = coolingCommandMeta(sp, returnAir);
+  return {
+    target: meta.commandC,
+    meta: {
+      programmedSetPoint: sp,
+      returnAir: meta.returnAirC,
+      coolingOffsetC: meta.offsetC,
+      coolingAggressive: meta.aggressive,
+    },
+  };
 }
 
 function co2CommandValue(params) {
@@ -319,7 +354,7 @@ export async function initGourmetProcessOnSessionStart(sessionRow) {
 
 async function ensureTemperature(ctx, params, auto, processType, opts = {}) {
   const { allowSkipAfterMaxAttempts = false } = opts;
-  const target = commandTempC(params, processType);
+  const { target, meta: tempMeta } = await resolveCommandTempC(ctx, params, processType);
   if (target == null) return { auto, events: [], done: true };
   const adapter = adapterFor(ctx);
 
@@ -338,7 +373,7 @@ async function ensureTemperature(ctx, params, auto, processType, opts = {}) {
     ({ results, allOk } = await allUnitsMatch(ctx, fanOutUnits(ctx), 'set_point', target, TEMP_TOLERANCE));
   }
 
-  const events = [{ action: 'check_temperature', target, results }];
+  const events = [{ action: 'check_temperature', target, ...tempMeta, results }];
 
   if (!allOk) {
     const attempts = Number(auto.tempAdjustAttempts) || 0;
@@ -359,7 +394,7 @@ async function ensureTemperature(ctx, params, auto, processType, opts = {}) {
     }
     if (adapter) {
       const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, target);
-      events.push({ action: 'send_temperature', target, urls });
+      events.push({ action: 'send_temperature', target, ...tempMeta, urls });
     }
     return {
       auto: { ...auto, tempAdjustAttempts: attempts + 1, nextActionAt: msFromNow(TEMP_VERIFY_MS) },
