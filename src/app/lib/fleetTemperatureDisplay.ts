@@ -2,6 +2,7 @@ import type { Device } from '@/app/data';
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { inferCurrentNextPhase, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
+import { coolingCommandTempC } from '@/app/lib/coolingCommandTemp';
 
 /** Equipo en fase de enfriamiento: telemetría o sesión activa de panel tipo Cooling. */
 export function isFleetDeviceInCoolingProcess(
@@ -64,6 +65,10 @@ export function getFleetCardTemperatureDisplay(
     trackingProgressPct
   );
   const primaryC = device.telemetry.return_air;
-  const setpointC = inCooling && finalC != null ? finalC : device.telemetry.set_point;
+  const programmedC = inCooling && finalC != null ? finalC : device.telemetry.set_point;
+  const setpointC =
+    inCooling && programmedC != null && Number.isFinite(programmedC)
+      ? (coolingCommandTempC(programmedC) ?? programmedC)
+      : device.telemetry.set_point;
   return { primaryC, setpointC, inCooling };
 }

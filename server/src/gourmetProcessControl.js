@@ -50,6 +50,17 @@ export const ETHYLENE_CYCLE_MS = 10 * 60 * 1000;
 /** Maduración activa (steady): poll tipo 0 cada 3 min aunque el etileno ya esté en objetivo. */
 export const ETHYLENE_STEADY_MONITOR_MS = 3 * 60 * 1000;
 export const COOLING_TEMP_OFFSET_C = 2;
+/** Por debajo o igual a este setpoint se envía la consigna tal cual; por encima se resta {@link COOLING_TEMP_OFFSET_C}. */
+export const COOLING_TEMP_OFFSET_THRESHOLD_C = 10;
+
+/** Consigna tipo 1 enviada en enfriamiento a partir del setpoint programado. */
+export function coolingCommandTempC(programmedSetPointC) {
+  if (programmedSetPointC == null || !Number.isFinite(programmedSetPointC)) return null;
+  if (programmedSetPointC > COOLING_TEMP_OFFSET_THRESHOLD_C) {
+    return programmedSetPointC - COOLING_TEMP_OFFSET_C;
+  }
+  return programmedSetPointC;
+}
 
 const TEMP_TOLERANCE = 0.35;
 const HUMIDITY_TOLERANCE = 1;
@@ -160,7 +171,7 @@ async function allUnitsMatch(ctx, units, field, target, tolerance) {
 function commandTempC(params, processType) {
   const sp = controlParamNumber(params, 'setPoint', 'set_point');
   if (sp == null) return null;
-  if (processType === 'Cooling') return sp - COOLING_TEMP_OFFSET_C;
+  if (processType === 'Cooling') return coolingCommandTempC(sp);
   return sp;
 }
 
