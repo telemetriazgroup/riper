@@ -165,6 +165,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       : sanitizeEthylenePpmSeries(rawEth);
     const co2San = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
     const co2 = co2San.map((v) => (v === 0 ? null : v));
+    const o2 = pts.map((p: HistoryPoint) => chartNullIfZero(p.o2_reading));
     return pts.map((p: HistoryPoint, i: number) => ({
       tick: chartTick(p.timestamp),
       ts: p.timestamp,
@@ -172,6 +173,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       temp_air: tempAir[i],
       ethylene: eth[i],
       co2: co2[i],
+      o2: o2[i],
     }));
   }, [rangoData?.points, pruebaCaMonitoring]);
 
@@ -450,8 +452,8 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                   <LineChart data={chartRows}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="tick" fontSize={10} tickLine={false} axisLine={false} minTickGap={24} />
-                    <YAxis yAxisId="l" domain={pruebaCaMonitoring ? [0, 1] : [0, CHART_ETHYLENE_MAX_PPM]} fontSize={11} />
-                    <YAxis yAxisId="r" orientation="right" domain={['auto', 'auto']} fontSize={11} />
+                    <YAxis yAxisId="l" domain={[0, CHART_ETHYLENE_MAX_PPM]} fontSize={11} />
+                    <YAxis yAxisId="r" orientation="right" domain={[0, 25]} fontSize={11} />
                     <Tooltip />
                     <Legend />
                     <Line
@@ -470,6 +472,17 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       dataKey="co2"
                       name={'CO₂ (%)'}
                       stroke="#64748b"
+                      strokeDasharray="5 5"
+                      dot={false}
+                      strokeWidth={2}
+                      connectNulls
+                    />
+                    <Line
+                      yAxisId="r"
+                      type="monotone"
+                      dataKey="o2"
+                      name={t('chart_metric_o2_reading') + ' (%)'}
+                      stroke="#0ea5e9"
                       dot={false}
                       strokeWidth={2}
                       connectNulls

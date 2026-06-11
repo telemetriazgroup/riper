@@ -229,7 +229,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     return { prepared, chartPrepared, daily, summary, gasRows, tempRows, prueba };
   }, [data?.points, deviceId, language, convertTemp]);
 
-  const ethDomain: [number, number] = analysis?.prueba ? [0, 1] : [0, CHART_ETHYLENE_MAX_PPM];
+  const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
