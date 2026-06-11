@@ -112,44 +112,74 @@ function appendCanvasToPdfMultiPage(pdf: jsPDF, canvas: HTMLCanvasElement, margi
   }
 }
 
-/** Captura secciones DOM marcadas con `sectionAttr` y genera un PDF multipágina. */
+/** Recolecta nodos marcados con un atributo data-* (p. ej. data-ca-pdf-section). */
+export function collectDomPdfSections(root: HTMLElement, attrName: string): HTMLElement[] {
+  const isEl = (n: Element): n is HTMLElement => n instanceof HTMLElement;
+  const bySelector = Array.from(root.querySelectorAll(`[${attrName}]`)).filter(isEl);
+  if (bySelector.length) return bySelector;
+
+  const byWalk: HTMLElement[] = [];
+  for (const el of root.querySelectorAll('*')) {
+    if (isEl(el) && el.hasAttribute(attrName)) byWalk.push(el);
+  }
+  if (byWalk.length) return byWalk;
+
+  if (root.hasAttribute(attrName)) return [root];
+  return [root];
+}
+
+async function captureSectionToPdf(
+  pdf: jsPDF,
+  section: HTMLElement,
+  opts: { marginMm: number; scale: number; attrName: string; isFirst: boolean }
+): Promise<void> {
+  const canvas = await html2canvas(section, {
+    scale: opts.scale,
+    useCORS: true,
+    logging: false,
+    backgroundColor: '#ffffff',
+    windowWidth: Math.max(section.scrollWidth, section.offsetWidth, 1),
+    windowHeight: Math.max(section.scrollHeight, section.offsetHeight, 1),
+    onclone: (clonedDoc, clonedEl) => {
+      stripUnsupportedPdfStylesFromClone(clonedDoc);
+      const cloneRoot =
+        clonedEl instanceof HTMLElement
+          ? clonedEl
+          : (clonedDoc.querySelector(`[${opts.attrName}]`) as HTMLElement | null);
+      if (cloneRoot instanceof HTMLElement) inlinePdfCloneStyles(section, cloneRoot);
+      if (cloneRoot instanceof HTMLElement) sanitizeHtml2CanvasCopiedStylesInSubtree(cloneRoot);
+    },
+  });
+  if (!opts.isFirst) pdf.addPage();
+  appendCanvasToPdfMultiPage(pdf, canvas, opts.marginMm);
+}
+
+/** Captura secciones DOM y genera un PDF multipágina. */
 export async function downloadDomSectionsAsPdf(opts: {
   root: HTMLElement;
   sectionAttr?: string;
+  sections?: HTMLElement[];
   filename: string;
   marginMm?: number;
   scale?: number;
 }): Promise<void> {
-  const attr = opts.sectionAttr ?? 'data-pdf-section';
-  const sections = Array.from(root.querySelectorAll(`[${attr}]`)).filter(
-    (n): n is HTMLElement => n instanceof HTMLElement
-  );
-  if (!sections.length) throw new Error('no pdf sections');
+  const attrName = opts.sectionAttr ?? 'data-pdf-section';
   const margin = opts.marginMm ?? 10;
   const scale = opts.scale ?? 1.55;
+  const sections =
+    opts.sections?.length
+      ? opts.sections.filter((n): n is HTMLElement => n instanceof HTMLElement)
+      : collectDomPdfSections(opts.root, attrName);
+
+  if (!sections.length) {
+    throw new Error('no pdf sections');
+  }
+
   const pdf = new jsPDF('p', 'mm', 'a4');
-  let first = true;
+  let isFirst = true;
   for (const section of sections) {
-    const canvas = await html2canvas(section, {
-      scale,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      windowWidth: section.scrollWidth,
-      windowHeight: section.scrollHeight,
-      onclone: (clonedDoc, clonedEl) => {
-        stripUnsupportedPdfStylesFromClone(clonedDoc);
-        const cloneRoot =
-          clonedEl instanceof HTMLElement
-            ? clonedEl
-            : (clonedDoc.querySelector(`[${attr}]`) as HTMLElement | null);
-        if (cloneRoot instanceof HTMLElement) inlinePdfCloneStyles(section, cloneRoot);
-        if (cloneRoot instanceof HTMLElement) sanitizeHtml2CanvasCopiedStylesInSubtree(cloneRoot);
-      },
-    });
-    if (!first) pdf.addPage();
-    first = false;
-    appendCanvasToPdfMultiPage(pdf, canvas, margin);
+    await captureSectionToPdf(pdf, section, { marginMm: margin, scale, attrName, isFirst });
+    isFirst = false;
   }
   pdf.save(opts.filename);
 }

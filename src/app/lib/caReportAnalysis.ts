@@ -10,8 +10,8 @@ import {
 } from '@/app/lib/pruebaCaMonitoringOverrides';
 
 export const CA_CHART_MAX_POINTS = 96;
-export const CA_CO2_TOLERANCE_PCT = 0.5;
-export const CA_O2_TOLERANCE_PCT = 0.5;
+export const CA_CO2_TOLERANCE_PCT = 0.7;
+export const CA_O2_TOLERANCE_PCT = 0.7;
 export const CA_TEMP_TOLERANCE_C = 0.6;
 export const CA_ETHYLENE_TOLERANCE_PPM = 0.15;
 export const CA_ETHYLENE_MAX_PPM_DEFAULT = 5;

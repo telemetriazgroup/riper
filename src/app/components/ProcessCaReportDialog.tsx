@@ -37,7 +37,9 @@ import {
   prepareCaHistoryPoints,
   type DailyCaAnalysis,
 } from '@/app/lib/caReportAnalysis';
-import { downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
+import { collectDomPdfSections, downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
+
+const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
 import { clsx } from 'clsx';
 
@@ -242,16 +244,25 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
   const handleDownloadPdf = useCallback(async () => {
-    const root = printRef.current;
-    if (!root || !analysis) return;
+    if (!analysis) return;
     setPdfBusy(true);
     toast.info(t('ca_report_pdf_generating'));
-    await new Promise((r) => setTimeout(r, 450));
+    await new Promise<void>((r) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => r()));
+    });
+    await new Promise((r) => setTimeout(r, 600));
     try {
+      const root = printRef.current;
+      if (!root) {
+        toast.error(t('ca_report_pdf_error'));
+        return;
+      }
+      const sections = collectDomPdfSections(root, CA_PDF_SECTION_ATTR);
       const idShort = view.id ? String(view.id).replace(/-/g, '').slice(0, 8) : 'ca';
       await downloadDomSectionsAsPdf({
         root,
-        sectionAttr: 'data-ca-pdf-section',
+        sectionAttr: CA_PDF_SECTION_ATTR,
+        sections,
         filename: `ca_report_${idShort}_${formatFileTimestamp()}.pdf`,
       });
       toast.success(t('ca_report_pdf_success'));
@@ -317,7 +328,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
           <div ref={printRef} className="space-y-6 pt-2">
             <div
               data-ca-pdf-section="cover"
-              className="rounded-lg border border-teal-100 bg-teal-50/60 p-4 text-sm space-y-2"
+              className="ca-pdf-section rounded-lg border border-teal-100 bg-teal-50/60 p-4 text-sm space-y-2"
             >
               <p className="font-semibold text-teal-950">{view.batch?.product ?? '—'} · {view.client?.name ?? '—'}</p>
               <p className="text-teal-900 text-xs">
@@ -342,14 +353,14 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               )}
             </div>
 
-            <div data-ca-pdf-section="summary" className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div data-ca-pdf-section="summary" className="ca-pdf-section grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <SummaryTile label="CO₂" pct={analysis.summary.co2GlobalInRangePct} />
               <SummaryTile label="O₂" pct={analysis.summary.o2GlobalInRangePct} />
               <SummaryTile label={t('ethylene')} pct={analysis.summary.ethyleneGlobalInRangePct} />
               <SummaryTile label={t('ca_report_return_air')} pct={analysis.summary.tempGlobalInRangePct} />
             </div>
 
-            <section data-ca-pdf-section="gases" className="space-y-2">
+            <section data-ca-pdf-section="gases" className="ca-pdf-section space-y-2">
               <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_gases_chart')}</h3>
               <p className="text-xs text-gray-500">{t('ca_report_gases_hint')}</p>
               <div className="h-72 w-full">
@@ -369,7 +380,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </div>
             </section>
 
-            <section data-ca-pdf-section="temperature" className="space-y-2">
+            <section data-ca-pdf-section="temperature" className="ca-pdf-section space-y-2">
               <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_temp_chart')}</h3>
               <p className="text-xs text-gray-500">{t('ca_report_temp_hint')}</p>
               <div className="h-72 w-full">
@@ -387,7 +398,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </div>
             </section>
 
-            <section data-ca-pdf-section="daily" className="space-y-2">
+            <section data-ca-pdf-section="daily" className="ca-pdf-section space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-bold text-gray-900">{t('ca_report_daily_title')}</h3>
                 <p className="text-xs text-gray-500">
