@@ -51,6 +51,11 @@ import {
   lastRawRow,
   ventilationLabelFromAvlRaw,
 } from '@/app/lib/deviceMonitoringMetrics';
+import {
+  clampPruebaCaEthylenePpm,
+  clampPruebaCaEthyleneSeries,
+  isPruebaCaMonitoringDevice,
+} from '@/app/lib/pruebaCaMonitoringOverrides';
 import { inferCurrentNextPhase, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { getStoredUser } from '@/app/lib/auth';
 import { canRegisterRipeningSampling } from '@/app/lib/permissions';
@@ -141,12 +146,22 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
     return inferCurrentNextPhase(activeTracking.process.payload, pct);
   }, [activeTracking, view]);
 
+  const trackingDeviceId = useMemo(() => {
+    const p = activeTracking?.process?.payload as { deviceId?: string } | undefined;
+    return String(p?.deviceId ?? deviceId ?? '').trim();
+  }, [activeTracking?.process, deviceId]);
+
+  const pruebaCaMonitoring = isPruebaCaMonitoringDevice(trackingDeviceId);
+
   const chartRows = useMemo(() => {
     const pts = rangoData?.points ?? [];
     if (!pts.length) return [];
     const tempPulp = pts.map((p: HistoryPoint) => chartNullIfZero(p.return_air));
     const tempAir = pts.map((p: HistoryPoint) => chartNullIfZero(p.temp_supply_1));
-    const eth = sanitizeEthylenePpmSeries(pts.map((p: HistoryPoint) => p.ethylene));
+    const rawEth = pts.map((p: HistoryPoint) => p.ethylene);
+    const eth = pruebaCaMonitoring
+      ? clampPruebaCaEthyleneSeries(rawEth)
+      : sanitizeEthylenePpmSeries(rawEth);
     const co2San = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
     const co2 = co2San.map((v) => (v === 0 ? null : v));
     return pts.map((p: HistoryPoint, i: number) => ({
@@ -157,19 +172,34 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       ethylene: eth[i],
       co2: co2[i],
     }));
-  }, [rangoData?.points]);
+  }, [rangoData?.points, pruebaCaMonitoring]);
 
   const metrics = useMemo(() => {
     const raw = rangoData?.rawDatos;
     const pts = rangoData?.points ?? [];
-    const ft3 = raw?.length ? cumulativeVentilationFt3FromRawRows(raw) : 0;
-    const m3 = ft3ToM3(ft3);
+    const ft3 = pruebaCaMonitoring
+      ? 0
+      : raw?.length
+        ? cumulativeVentilationFt3FromRawRows(raw)
+        : 0;
+    const m3 = pruebaCaMonitoring ? 0 : ft3ToM3(ft3);
     const kwh = energyKwhDeltaFromPoints(pts);
     const last = lastRawRow(raw);
-    const avlLbl = ventilationLabelFromAvlRaw(last?.avl);
-    const fam = freshAirModeLabel(last?.fresh_air_ex_mode);
+    const avlLbl = pruebaCaMonitoring
+      ? { closed: true, label: '' }
+      : ventilationLabelFromAvlRaw(last?.avl);
+    const fam = pruebaCaMonitoring ? -1 : freshAirModeLabel(last?.fresh_air_ex_mode);
     return { ft3, m3, kwh, avlLbl, fam, last };
-  }, [rangoData]);
+  }, [rangoData, pruebaCaMonitoring]);
+
+  const lastEthylenePpm = useMemo(() => {
+    if (!pruebaCaMonitoring) return null;
+    for (let i = chartRows.length - 1; i >= 0; i--) {
+      const v = chartRows[i]?.ethylene;
+      if (v != null && Number.isFinite(Number(v))) return clampPruebaCaEthylenePpm(Number(v));
+    }
+    return null;
+  }, [chartRows, pruebaCaMonitoring]);
 
   /** Último muestreo por marca de tiempo (timeline puede venir reciente primero o no). */
   const lastSample = useMemo(() => {
@@ -330,7 +360,12 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
         />
         <MetricCard
           title={t('detail_monitoring_ethylene_title')}
-          primary={t('detail_monitoring_ethylene_na')}
+          primary={
+            pruebaCaMonitoring && lastEthylenePpm != null
+              ? `${formatUiDecimal(lastEthylenePpm)} ppm`
+              : t('detail_monitoring_ethylene_na')
+          }
+          secondary={pruebaCaMonitoring ? t('detail_monitoring_ethylene_prueba_hint') : undefined}
           icon={<FlaskConical className="w-5 h-5 text-purple-500" />}
         />
         <MetricCard
@@ -414,7 +449,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                   <LineChart data={chartRows}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="tick" fontSize={10} tickLine={false} axisLine={false} minTickGap={24} />
-                    <YAxis yAxisId="l" domain={['auto', 'auto']} fontSize={11} />
+                    <YAxis yAxisId="l" domain={pruebaCaMonitoring ? [0, 1] : ['auto', 'auto']} fontSize={11} />
                     <YAxis yAxisId="r" orientation="right" domain={['auto', 'auto']} fontSize={11} />
                     <Tooltip />
                     <Legend />

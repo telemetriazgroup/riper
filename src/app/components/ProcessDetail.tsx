@@ -12,6 +12,7 @@ import {
   FileText,
   Ban,
   FileBarChart2,
+  Atom,
   Pause,
   Play,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { ProcessTrackingReportDialog } from '@/app/components/ProcessTrackingReportDialog';
 import { ProcessRecipeDetailModal } from '@/app/components/ProcessRecipeDetailModal';
 import { ProcessIntegralReportDialog } from '@/app/components/ProcessIntegralReportDialog';
+import { ProcessCaReportDialog } from '@/app/components/ProcessCaReportDialog';
 import { ProcessDocumentsPanel } from '@/app/components/ProcessDocumentsPanel';
 import { toast } from 'sonner';
 import type { RipeningProcessDocument } from '@/app/lib/ripeningProcessesApi';
@@ -160,6 +162,7 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   const [reportOpen, setReportOpen] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [integralReportOpen, setIntegralReportOpen] = useState(false);
+  const [caReportOpen, setCaReportOpen] = useState(false);
   const [events, setEvents] = useState((processData || FALLBACK_DATA).timeline || []);
   type TrackingConfirmKind = 'pause' | 'resume' | 'cancel';
   const [confirmKind, setConfirmKind] = useState<TrackingConfirmKind | null>(null);
@@ -469,6 +472,17 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
             >
               <FileText className="w-4 h-4" />
               {isActiveProcess ? t('report_open_interim') : t('report_open_final')}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2 border-teal-200 text-teal-900 hover:bg-teal-50 disabled:opacity-60"
+              disabled={!linkedDeviceId}
+              title={!linkedDeviceId ? t('integral_report_no_device') : t('ca_report_title')}
+              onClick={() => setCaReportOpen(true)}
+            >
+              <Atom className="w-4 h-4" />
+              {t('ca_report_open')}
             </Button>
             <Button
               type="button"
@@ -865,6 +879,8 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
         onOpenChange={setIntegralReportOpen}
         view={reportView}
       />
+
+      <ProcessCaReportDialog open={caReportOpen} onOpenChange={setCaReportOpen} view={reportView} />
 
       <ProcessTrackingReportDialog
         open={reportOpen}
