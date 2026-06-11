@@ -545,7 +545,7 @@ function GasDualChart({
   rows,
   t,
   co2Domain = [0, 5],
-  ethDomain = [0, 160],
+  ethDomain = [0, CHART_ETHYLENE_MAX_PPM],
 }: {
   rows: { tick: string; co2: number; eth: number | null }[];
   t: (k: string) => string;

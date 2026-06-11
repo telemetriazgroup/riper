@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import {
   chartNullIfZero,
+  CHART_ETHYLENE_MAX_PPM,
   sanitizeCo2PercentSeries,
   sanitizeEthylenePpmSeries,
 } from '@/app/lib/historySeriesSanitize';
@@ -449,7 +450,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                   <LineChart data={chartRows}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="tick" fontSize={10} tickLine={false} axisLine={false} minTickGap={24} />
-                    <YAxis yAxisId="l" domain={pruebaCaMonitoring ? [0, 1] : ['auto', 'auto']} fontSize={11} />
+                    <YAxis yAxisId="l" domain={pruebaCaMonitoring ? [0, 1] : [0, CHART_ETHYLENE_MAX_PPM]} fontSize={11} />
                     <YAxis yAxisId="r" orientation="right" domain={['auto', 'auto']} fontSize={11} />
                     <Tooltip />
                     <Legend />
