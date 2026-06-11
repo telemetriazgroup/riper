@@ -27,8 +27,17 @@ async function handle<T>(res: Response): Promise<T> {
     }
   }
   if (!res.ok) {
+    if (res.status === 413) {
+      throw new Error('El archivo supera el tamaño máximo permitido (15 MB).');
+    }
     const o = body as { message?: string; error?: string; raw?: string } | null;
-    const msg = o?.message || o?.error || (o && 'raw' in o ? String(o.raw) : null) || res.statusText;
+    const raw = o && 'raw' in o ? String(o.raw) : '';
+    if (raw.includes('413') && raw.includes('Entity Too Large')) {
+      throw new Error(
+        'El archivo supera el límite del proxy (nginx). Reconstruya el contenedor app o reduzca el tamaño (máx. 15 MB).'
+      );
+    }
+    const msg = o?.message || o?.error || raw || res.statusText;
     throw new Error(msg || `HTTP ${res.status}`);
   }
   return body as T;
