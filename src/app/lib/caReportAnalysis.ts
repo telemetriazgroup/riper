@@ -196,6 +196,7 @@ export type CaMetricDayStats = {
   max: number | null;
   avg: number | null;
   target: number | null;
+  tolerance: number | null;
   inRangePct: number | null;
   inRange: boolean;
   readings: number;
@@ -212,38 +213,41 @@ export type DailyCaAnalysis = {
   allInRange: boolean;
 };
 
-function inRangeCount(
-  values: number[],
-  target: number | null,
-  tolerance: number
-): { inRange: number; total: number } {
-  if (!values.length || target == null || !Number.isFinite(target)) {
-    return { inRange: 0, total: values.length };
-  }
-  let ok = 0;
-  for (const v of values) {
-    if (Math.abs(v - target) <= tolerance) ok++;
-  }
-  return { inRange: ok, total: values.length };
-}
-
-function buildMetricDayStats(
-  values: number[],
-  targets: number[],
+function buildMetricDayStatsFromPairs(
+  pairs: { value: number; target: number | null }[],
   tolerance: number
 ): CaMetricDayStats {
-  const target = median(targets.filter(Number.isFinite));
-  const { inRange, total } = inRangeCount(values, target, tolerance);
-  const pct = total > 0 ? Math.round((inRange / total) * 100) : null;
+  const values = pairs.map((p) => p.value);
+  let ok = 0;
+  let evaluated = 0;
+  const targets: number[] = [];
+  for (const { value, target } of pairs) {
+    if (target == null || !Number.isFinite(target)) continue;
+    targets.push(target);
+    evaluated++;
+    if (Math.abs(value - target) <= tolerance) ok++;
+  }
+  const target = median(targets);
+  const pct = evaluated > 0 ? Math.round((ok / evaluated) * 100) : null;
   return {
     min: values.length ? Math.min(...values) : null,
     max: values.length ? Math.max(...values) : null,
     avg: values.length ? values.reduce((a, b) => a + b, 0) / values.length : null,
     target,
+    tolerance,
     inRangePct: pct,
     inRange: pct != null && pct >= CA_DAY_IN_RANGE_MIN_PCT,
     readings: values.length,
   };
+}
+
+export function formatCaGasTargetLabel(
+  target: number | null,
+  tolerance: number,
+  unit = '%'
+): string | null {
+  if (target == null || !Number.isFinite(target)) return null;
+  return `${target}${unit} ±${tolerance}${unit}`;
 }
 
 function ethyleneTolerance(deviceId: string, target: number | null): number {
@@ -272,6 +276,7 @@ function ethyleneInRange(values: number[], deviceId: string, targets: number[]):
     max: values.length ? Math.max(...values) : null,
     avg: values.length ? values.reduce((a, b) => a + b, 0) / values.length : null,
     target: prueba ? 1 : target,
+    tolerance: prueba ? 1 : tol,
     inRangePct: pct,
     inRange: pct != null && pct >= CA_DAY_IN_RANGE_MIN_PCT,
     readings: values.length,
@@ -294,31 +299,25 @@ export function buildDailyCaAnalysis(
   return [...byDay.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([dayKey, rows]) => {
-      const co2Vals = rows.map((r) => r.co2).filter((v): v is number => v != null);
-      const o2Vals = rows.map((r) => r.o2).filter((v): v is number => v != null);
-      const ethVals = rows.map((r) => r.ethylene).filter((v): v is number => v != null);
-      const tempVals = rows.map((r) => r.return_air).filter((v): v is number => v != null);
+      const co2Pairs = rows
+        .filter((r) => r.co2 != null)
+        .map((r) => ({ value: r.co2!, target: r.set_point_co2 }));
+      const o2Pairs = rows
+        .filter((r) => r.o2 != null)
+        .map((r) => ({ value: r.o2!, target: r.set_point_o2 }));
+      const tempPairs = rows
+        .filter((r) => r.return_air != null)
+        .map((r) => ({ value: r.return_air!, target: r.set_point }));
 
-      const co2 = buildMetricDayStats(
-        co2Vals,
-        rows.map((r) => r.set_point_co2).filter((v): v is number => v != null),
-        CA_CO2_TOLERANCE_PCT
-      );
-      const o2 = buildMetricDayStats(
-        o2Vals,
-        rows.map((r) => r.set_point_o2).filter((v): v is number => v != null),
-        CA_O2_TOLERANCE_PCT
-      );
+      const co2 = buildMetricDayStatsFromPairs(co2Pairs, CA_CO2_TOLERANCE_PCT);
+      const o2 = buildMetricDayStatsFromPairs(o2Pairs, CA_O2_TOLERANCE_PCT);
+      const ethVals = rows.map((r) => r.ethylene).filter((v): v is number => v != null);
       const ethylene = ethyleneInRange(
         ethVals,
         deviceId,
         rows.map((r) => r.sp_ethyleno).filter((v): v is number => v != null)
       );
-      const returnAir = buildMetricDayStats(
-        tempVals,
-        rows.map((r) => r.set_point).filter((v): v is number => v != null),
-        CA_TEMP_TOLERANCE_C
-      );
+      const returnAir = buildMetricDayStatsFromPairs(tempPairs, CA_TEMP_TOLERANCE_C);
 
       return {
         dayKey,

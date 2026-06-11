@@ -465,7 +465,15 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_temp_hint': 'Temperatura de retorno frente al setpoint programado.',
     'ca_report_daily_title': 'Análisis diario de comportamiento',
     'ca_report_daily_hint':
-      'Por cada día se evalúa si CO₂, O₂, etileno y return_air se mantuvieron en rango respecto a los setpoints (≥85 % de lecturas conformes).',
+      'Por cada día se evalúa si CO₂ y O₂ están dentro de ±0,5 % del setpoint de cada lectura, etileno y return_air según sus criterios (≥85 % de lecturas conformes).',
+    'ca_report_co2_o2_criteria':
+      'Criterio CO₂ y O₂: lectura en rango si está a ±{{co2Tol}} % del objetivo (setpoint) de cada momento.',
+    'ca_report_prueba_note':
+      'Equipo PRUEBA_CA000001: ventilación forzada a 0; etileno acotado en telemetría. CO₂ y O₂ se evalúan con ±0,5 % del setpoint.',
+    'ca_report_download_pdf': 'Descargar PDF',
+    'ca_report_pdf_generating': 'Generando PDF del reporte CA…',
+    'ca_report_pdf_success': 'PDF del reporte CA descargado.',
+    'ca_report_pdf_error': 'No se pudo generar el PDF.',
     'ca_report_daily_summary': '{{ok}} de {{total}} días dentro de rango en todos los parámetros.',
     'ca_report_day': 'Día',
     'ca_report_return_air': 'Temp. return_air',
@@ -1795,7 +1803,15 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_temp_hint': 'Return temperature vs programmed setpoint.',
     'ca_report_daily_title': 'Daily behavior analysis',
     'ca_report_daily_hint':
-      'Each day checks whether CO₂, O₂, ethylene and return_air stayed in range vs setpoints (≥85% compliant readings).',
+      'Each day checks whether CO₂ and O₂ are within ±0.5% of the per-reading setpoint, plus ethylene and return_air per their rules (≥85% compliant readings).',
+    'ca_report_co2_o2_criteria':
+      'CO₂ and O₂ criterion: reading in range if within ±{{co2Tol}}% of the setpoint at that time.',
+    'ca_report_prueba_note':
+      'PRUEBA_CA000001 unit: ventilation forced to 0; ethylene capped in telemetry. CO₂ and O₂ evaluated at ±0.5% of setpoint.',
+    'ca_report_download_pdf': 'Download PDF',
+    'ca_report_pdf_generating': 'Generating CA report PDF…',
+    'ca_report_pdf_success': 'CA report PDF downloaded.',
+    'ca_report_pdf_error': 'Could not generate PDF.',
     'ca_report_daily_summary': '{{ok}} of {{total}} days in range for all parameters.',
     'ca_report_day': 'Day',
     'ca_report_return_air': 'return_air temp.',

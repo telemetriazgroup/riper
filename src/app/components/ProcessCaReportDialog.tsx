@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   CartesianGrid,
@@ -10,7 +10,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Loader2, Atom } from 'lucide-react';
+import { Loader2, Atom, Download } from 'lucide-react';
+import { Button } from '@/app/components/ui/Button';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -28,10 +30,14 @@ import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import {
   buildCaProcessSummary,
   buildDailyCaAnalysis,
+  CA_CO2_TOLERANCE_PCT,
+  CA_O2_TOLERANCE_PCT,
   downsampleCaPreparedPoints,
+  formatCaGasTargetLabel,
   prepareCaHistoryPoints,
   type DailyCaAnalysis,
 } from '@/app/lib/caReportAnalysis';
+import { downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
 import { clsx } from 'clsx';
 
@@ -90,18 +96,10 @@ function DailyTable({ rows }: { rows: DailyCaAnalysis[] }) {
                 <div className="text-[10px] text-gray-500">{d.samples} {t('ca_report_readings')}</div>
               </td>
               <td className="p-2 align-top">
-                <MetricCell
-                  stats={d.co2}
-                  fmt={(v) => `${formatUiDecimal(v)}%`}
-                  targetFmt={(v) => `${formatUiDecimal(v)}%`}
-                />
+                <MetricCell stats={d.co2} fmt={(v) => `${formatUiDecimal(v)}%`} gasPercent />
               </td>
               <td className="p-2 align-top">
-                <MetricCell
-                  stats={d.o2}
-                  fmt={(v) => `${formatUiDecimal(v)}%`}
-                  targetFmt={(v) => `${formatUiDecimal(v)}%`}
-                />
+                <MetricCell stats={d.o2} fmt={(v) => `${formatUiDecimal(v)}%`} gasPercent />
               </td>
               <td className="p-2 align-top">
                 <MetricCell
@@ -145,13 +143,23 @@ function MetricCell({
   stats,
   fmt,
   targetFmt,
+  gasPercent = false,
 }: {
   stats: DailyCaAnalysis['co2'];
   fmt: (v: number) => string;
-  targetFmt: (v: number) => string;
+  targetFmt?: (v: number) => string;
+  gasPercent?: boolean;
 }) {
   const { t } = useSettings();
   if (!stats.readings) return <span className="text-gray-400">—</span>;
+  const targetLabel =
+    stats.target != null
+      ? gasPercent && stats.tolerance != null
+        ? formatCaGasTargetLabel(stats.target, stats.tolerance, '%')
+        : targetFmt
+          ? targetFmt(stats.target)
+          : fmt(stats.target)
+      : null;
   return (
     <div className="space-y-1">
       <div className="text-gray-800">
@@ -161,9 +169,9 @@ function MetricCell({
             ? fmt(stats.avg)
             : '—'}
       </div>
-      {stats.target != null && (
+      {targetLabel && (
         <div className="text-[10px] text-gray-500">
-          {t('ca_report_target')} {targetFmt(stats.target)}
+          {t('ca_report_target')} {targetLabel}
         </div>
       )}
       <RangeBadge ok={stats.inRange} pct={stats.inRangePct} />
@@ -172,7 +180,9 @@ function MetricCell({
 }
 
 export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
-  const { t, formatDateTime, language, tempUnit, convertTemp, formatTemp } = useSettings();
+  const { t, formatDateTime, formatFileTimestamp, language, tempUnit, convertTemp, formatTemp } = useSettings();
+  const printRef = useRef<HTMLDivElement>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const deviceId = useMemo(() => {
     const p = (view._row as RipeningProcessRow | undefined)?.payload as { deviceId?: string } | undefined;
@@ -231,15 +241,52 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
+  const handleDownloadPdf = useCallback(async () => {
+    const root = printRef.current;
+    if (!root || !analysis) return;
+    setPdfBusy(true);
+    toast.info(t('ca_report_pdf_generating'));
+    await new Promise((r) => setTimeout(r, 450));
+    try {
+      const idShort = view.id ? String(view.id).replace(/-/g, '').slice(0, 8) : 'ca';
+      await downloadDomSectionsAsPdf({
+        root,
+        sectionAttr: 'data-ca-pdf-section',
+        filename: `ca_report_${idShort}_${formatFileTimestamp()}.pdf`,
+      });
+      toast.success(t('ca_report_pdf_success'));
+    } catch (e) {
+      console.error(e);
+      toast.error(t('ca_report_pdf_error'));
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [analysis, formatFileTimestamp, t, view.id]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[96vw] max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Atom className="w-5 h-5 text-teal-700" />
-            {t('ca_report_title')}
-          </DialogTitle>
-          <DialogDescription>{t('ca_report_desc')}</DialogDescription>
+        <DialogHeader className="flex flex-row items-start justify-between gap-3 pr-8">
+          <div>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Atom className="w-5 h-5 text-teal-700" />
+              {t('ca_report_title')}
+            </DialogTitle>
+            <DialogDescription>{t('ca_report_desc')}</DialogDescription>
+          </div>
+          {analysis && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="shrink-0 gap-2"
+              disabled={pdfBusy}
+              onClick={() => void handleDownloadPdf()}
+            >
+              {pdfBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {t('ca_report_download_pdf')}
+            </Button>
+          )}
         </DialogHeader>
 
         {!deviceId && (
@@ -267,28 +314,42 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         )}
 
         {analysis && (
-          <div className="space-y-6 pt-2">
-            <div className="rounded-lg border border-teal-100 bg-teal-50/60 p-4 text-sm space-y-2">
+          <div ref={printRef} className="space-y-6 pt-2">
+            <div
+              data-ca-pdf-section="cover"
+              className="rounded-lg border border-teal-100 bg-teal-50/60 p-4 text-sm space-y-2"
+            >
               <p className="font-semibold text-teal-950">{view.batch?.product ?? '—'} · {view.client?.name ?? '—'}</p>
               <p className="text-teal-900 text-xs">
                 {t('integral_report_field_imei')}: <span className="font-mono">{deviceId}</span>
                 {' · '}
                 {formatDateTime(startedAtIso!)} → {formatDateTime(rangeEndIso)}
               </p>
-              <p className="text-teal-800 text-xs leading-relaxed">{t('ca_report_sampling_note', {
-                total: String(analysis.summary.totalPoints),
-                shown: String(analysis.chartPrepared.length),
-              })}</p>
+              <p className="text-teal-800 text-xs leading-relaxed">
+                {t('ca_report_sampling_note', {
+                  total: String(analysis.summary.totalPoints),
+                  shown: String(analysis.chartPrepared.length),
+                })}
+              </p>
+              <p className="text-teal-900 text-xs font-medium border-t border-teal-200/80 pt-2 mt-2">
+                {t('ca_report_co2_o2_criteria', {
+                  co2Tol: String(CA_CO2_TOLERANCE_PCT),
+                  o2Tol: String(CA_O2_TOLERANCE_PCT),
+                })}
+              </p>
+              {analysis.prueba && (
+                <p className="text-teal-800 text-xs">{t('ca_report_prueba_note')}</p>
+              )}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div data-ca-pdf-section="summary" className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
               <SummaryTile label="CO₂" pct={analysis.summary.co2GlobalInRangePct} />
               <SummaryTile label="O₂" pct={analysis.summary.o2GlobalInRangePct} />
               <SummaryTile label={t('ethylene')} pct={analysis.summary.ethyleneGlobalInRangePct} />
               <SummaryTile label={t('ca_report_return_air')} pct={analysis.summary.tempGlobalInRangePct} />
             </div>
 
-            <section className="space-y-2">
+            <section data-ca-pdf-section="gases" className="space-y-2">
               <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_gases_chart')}</h3>
               <p className="text-xs text-gray-500">{t('ca_report_gases_hint')}</p>
               <div className="h-72 w-full">
@@ -308,7 +369,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </div>
             </section>
 
-            <section className="space-y-2">
+            <section data-ca-pdf-section="temperature" className="space-y-2">
               <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_temp_chart')}</h3>
               <p className="text-xs text-gray-500">{t('ca_report_temp_hint')}</p>
               <div className="h-72 w-full">
@@ -326,7 +387,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </div>
             </section>
 
-            <section className="space-y-2">
+            <section data-ca-pdf-section="daily" className="space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-bold text-gray-900">{t('ca_report_daily_title')}</h3>
                 <p className="text-xs text-gray-500">
