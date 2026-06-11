@@ -21,6 +21,14 @@ export function canCancelRipeningTracking(): boolean {
   return r === 'operator' || r === 'admin' || r === 'superadmin';
 }
 
+export function canPauseRipeningTracking(): boolean {
+  return canCancelRipeningTracking();
+}
+
+export function canReactivateRipeningTracking(): boolean {
+  return getAppRole() === 'superadmin';
+}
+
 export function canRegisterRipeningSampling(): boolean {
   return canCancelRipeningTracking();
 }

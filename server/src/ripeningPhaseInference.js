@@ -1,5 +1,7 @@
 /** Inferencia de etapa actual del seguimiento (receta multi-fase). Espejo de ripeningProcessMappers. */
 
+import { getTotalPausedMs, progressFromTrackingPayload as progressFromSchedule } from './ripeningSchedule.js';
+
 function phaseDurationHours(p) {
   if (!p || p.enabled === false) return 0;
   const d = Number(p.duration);
@@ -7,26 +9,8 @@ function phaseDurationHours(p) {
   return String(p.type || '') === 'venting' ? d / 60 : d;
 }
 
-export function progressFromTrackingPayload(payload) {
-  if (!payload || typeof payload !== 'object') return 0;
-  const schedule = payload.scheduleSummary || {};
-  const s = schedule.startedAt;
-  if (!s) return 0;
-  const start = new Date(s).getTime();
-  const now = Date.now();
-  const totalHours = Number(schedule.totalDurationHours) || 0;
-  const est = schedule.estimatedEndAt;
-  let end;
-  if (est) {
-    end = new Date(est).getTime();
-  } else if (totalHours > 0) {
-    end = start + totalHours * 3600 * 1000;
-  } else {
-    return 0;
-  }
-  if (now <= start) return 0;
-  if (now >= end) return 100;
-  return Math.min(100, Math.round(((now - start) / (end - start)) * 100));
+export function progressFromTrackingPayload(payload, status = 'active', nowMs = Date.now()) {
+  return progressFromSchedule(payload, status, nowMs);
 }
 
 export function enabledRecipePhases(payload) {
@@ -82,11 +66,12 @@ export function inferCurrentTrackingPhase(payload, progressPct) {
   const cur = phasesMeta[currentIndex] ?? phasesMeta[0];
   let phaseEndAt = null;
   if (Number.isFinite(startMs) && phasesMeta.length) {
+    const totalPaused = getTotalPausedMs(payload, Date.now(), 'active');
     let accH = 0;
     for (let i = 0; i <= currentIndex; i++) {
       accH += phasesMeta[i]?.hours ?? 0;
     }
-    phaseEndAt = new Date(startMs + accH * 3600 * 1000).toISOString();
+    phaseEndAt = new Date(startMs + totalPaused + accH * 3600 * 1000).toISOString();
   }
 
   return {

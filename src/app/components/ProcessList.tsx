@@ -247,6 +247,8 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                             ? 'bg-green-500/90 text-white'
                             : proc.status === 'completed'
                               ? 'bg-emerald-800/90 text-white'
+                              : proc.status === 'paused'
+                                ? 'bg-amber-600/90 text-white'
                               : proc.status === 'cancelled'
                                 ? 'bg-slate-600/90 text-white'
                                 : 'bg-orange-500/90 text-white'
@@ -254,6 +256,8 @@ export const ProcessList: React.FC<ProcessListProps> = ({ onSelectProcess }) => 
                       >
                         {proc.status === 'active'
                           ? t('in_process')
+                          : proc.status === 'paused'
+                            ? t('status_ripening_paused')
                           : proc.status === 'completed'
                             ? t('status_ripening_completed')
                             : proc.status === 'cancelled'

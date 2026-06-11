@@ -87,11 +87,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
     }
   }, [lockedMode, mode, onChangeMode]);
 
-  /** Proceso activo creado desde la pestaña Seguimiento y enlazado a este equipo. */
-  const followBlocksPanelProcesses = useMemo(() => {
+  /** Seguimiento activo o pausado en este equipo bloquea procesos automatizados del panel. */
+  const hasTrackingOnDevice = useMemo(() => {
     if (trackingLoading) return false;
     return Boolean(activeTracking?.process && activeTracking.summary);
   }, [activeTracking, trackingLoading]);
+
+  const trackingStatus = activeTracking?.process?.status;
+  const trackingPaused = trackingStatus === 'paused';
+
+  /** Manual permitido cuando el seguimiento está pausado. */
+  const followBlocksManual = hasTrackingOnDevice && !trackingPaused;
+  const followBlocksAutomatedPanel = hasTrackingOnDevice;
 
   const openStartFlow = (partial: ControlStartDraft) => {
     if (!deviceId) return;
@@ -103,7 +110,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
       toast.error(t('control_process_tab_locked'));
       return;
     }
-    if (followBlocksPanelProcesses) {
+    if (followBlocksAutomatedPanel) {
       toast.error(t('control_follow_blocked_toast'));
       return;
     }
@@ -128,7 +135,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   
   // Processes require device to be ONLINE and POWERED ON
   const areProcessesDisabled = isOffline || isStandby || isPoweredOff;
-  const processModesBlockedByFollow = followBlocksPanelProcesses;
+  const processModesBlockedByFollow = followBlocksAutomatedPanel;
   const processModesDisabled =
     areProcessesDisabled || processModesBlockedByFollow || !canOperateDeviceControl();
 
@@ -166,6 +173,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
         </div>
       </div>
       <CardContent className="p-6">
+        {trackingPaused && (
+          <div
+            className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:border-amber-700 dark:text-amber-100"
+            role="status"
+          >
+            {t('control_follow_paused_hint')}
+          </div>
+        )}
         {activePanelProcess && lockedMode === mode ? (
           <ActiveProcessProgrammedPanel session={activePanelProcess} />
         ) : (
@@ -174,7 +189,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
           <ManualControl
             deviceId={deviceId}
             device={device}
-            followBlocksPanelProcesses={processModesBlockedByFollow}
+            followBlocksPanelProcesses={followBlocksManual}
             readOnly={!canOperateDeviceControl()}
           />
         )}

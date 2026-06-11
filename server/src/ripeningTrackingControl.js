@@ -43,11 +43,13 @@ function buildControlParams(payload, phaseInfo, processType) {
 }
 
 async function tickTrackingRow(row) {
+  if (String(row.status || '').toLowerCase() === 'paused') return;
+
   const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
   const deviceId = String(payload.deviceId || '').trim();
   if (!deviceId || !isAutomatedControlDeviceId(deviceId)) return;
 
-  const progress = progressFromTrackingPayload(payload);
+  const progress = progressFromTrackingPayload(payload, row.status);
   const phaseInfo = inferCurrentTrackingPhase(payload, progress);
   const processType = trackingPhaseToProcessType(phaseInfo.currentType);
 

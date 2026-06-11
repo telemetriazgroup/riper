@@ -1,4 +1,5 @@
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { progressFromTrackingPayload } from '@/app/lib/ripeningSchedule';
 import { formatStoredCelsius, type TempDisplayOpts } from '@/app/lib/temperatureUnits';
 
 function inferPhase(payload: RipeningProcessRow['payload']): string {
@@ -11,21 +12,11 @@ function inferPhase(payload: RipeningProcessRow['payload']): string {
   return 'En curso';
 }
 
-function computeProgress(startedAt: string | undefined, estimatedEndAt: string | null | undefined, totalHours: number) {
-  if (!startedAt) return 0;
-  const s = new Date(startedAt).getTime();
-  const now = Date.now();
-  let e: number;
-  if (estimatedEndAt) {
-    e = new Date(estimatedEndAt).getTime();
-  } else if (totalHours > 0) {
-    e = s + totalHours * 3600 * 1000;
-  } else {
-    return 0;
-  }
-  if (now <= s) return 0;
-  if (now >= e) return 100;
-  return Math.min(100, Math.round(((now - s) / (e - s)) * 100));
+function computeProgress(
+  payload: RipeningProcessRow['payload'],
+  status: string
+) {
+  return progressFromTrackingPayload(payload, status);
 }
 
 function targetsFromPayload(p: RipeningProcessRow['payload']) {
@@ -90,11 +81,7 @@ export function mapRowToProcessView(row: RipeningProcessRow) {
     start_date: schedule.startedAt
       ? new Date(schedule.startedAt).toISOString().slice(0, 10)
       : new Date(row.created_at).toISOString().slice(0, 10),
-    progress: computeProgress(
-      schedule.startedAt,
-      schedule.estimatedEndAt,
-      Number(schedule.totalDurationHours) || 0
-    ),
+    progress: computeProgress(p, row.status || 'active'),
     recipe: {
       name: p.recipe?.name || '—',
       duration_hours: schedule.totalDurationHours ?? 0,
@@ -153,8 +140,41 @@ export function latestSamplingEvent(timeline: unknown[]) {
   return null;
 }
 
+export type PlanningMetricBarKind = 'brix' | 'firm' | 'color' | 'generic';
+
+export type PlanningMetric = {
+  id: string;
+  label: string;
+  current: string;
+  target: string;
+  barKind: PlanningMetricBarKind;
+};
+
+type SamplingParamRow = { name: string; value: string; unit: string; target?: string };
+
+const DEFAULT_PLANNING_METRICS: {
+  id: string;
+  label: string;
+  match: (name: string) => boolean;
+  targetKey: 'brix' | 'firmness' | 'color';
+  barKind: PlanningMetricBarKind;
+}[] = [
+  { id: 'brix', label: 'Grados Brix', match: (s) => /brix|°/i.test(s), targetKey: 'brix', barKind: 'brix' },
+  { id: 'firmness', label: 'Firmeza', match: (s) => /firme/i.test(s), targetKey: 'firmness', barKind: 'firm' },
+  { id: 'color', label: 'Color (escala)', match: (s) => /color/i.test(s), targetKey: 'color', barKind: 'color' },
+];
+
+function normParamName(s: string): string {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function findParam(
-  data: { name: string; value: string; unit: string }[] | undefined,
+  data: SamplingParamRow[] | undefined,
   key: 'brix' | 'firm' | 'color'
 ) {
   if (!data) return { value: '—' as string, name: '' };
@@ -168,18 +188,89 @@ function findParam(
   return { value: row?.value != null && row.value !== '' ? row.value : '—', name: row?.name || '' };
 }
 
-export function buildPlanningSnapshot(view: ReturnType<typeof mapRowToProcessView>) {
+function inferBarKind(name: string): PlanningMetricBarKind {
+  const n = normParamName(name);
+  if (/brix/.test(n) || n.includes('bx')) return 'brix';
+  if (/firme/.test(n)) return 'firm';
+  if (/color/.test(n)) return 'color';
+  return 'generic';
+}
+
+function formatMetricLabel(name: string, unit?: string): string {
+  const n = String(name || '').trim() || 'Parámetro';
+  const u = String(unit || '').trim();
+  if (!u || n.toLowerCase().includes(u.toLowerCase())) return n;
+  return `${n}${u ? ` (${u})` : ''}`;
+}
+
+function firstPlanningNumber(s: string): number {
+  const m = String(s).match(/[\d.,]+/);
+  if (!m) return NaN;
+  return parseFloat(m[0].replace(',', '.'));
+}
+
+/** Barra aproximada respecto a meta o escala típica (solo visual). */
+export function planningMetricBarPct(metric: PlanningMetric): number {
+  const n = firstPlanningNumber(metric.current);
+  if (!Number.isFinite(n)) return 0;
+  const targetN = firstPlanningNumber(metric.target);
+  if (Number.isFinite(targetN) && targetN > 0) {
+    return Math.min(100, Math.round((n / targetN) * 100));
+  }
+  if (metric.barKind === 'brix') return Math.min(100, Math.round((n / 25) * 100));
+  if (metric.barKind === 'color') return Math.min(100, Math.round((n / 7) * 100));
+  if (metric.barKind === 'firm') return Math.min(100, Math.round((n / 30) * 100));
+  return Math.min(100, Math.round((n / 100) * 100));
+}
+
+export function buildPlanningSnapshot(view: ReturnType<typeof mapRowToProcessView>): PlanningMetric[] {
   const targets = view.recipe.targets;
-  const last = latestSamplingEvent(view.timeline);
-  const data = (last as { data?: { name: string; value: string; unit: string; target?: string }[] } | null)?.data;
-  const b = findParam(data, 'brix');
-  const f = findParam(data, 'firm');
-  const c = findParam(data, 'color');
-  return {
-    brix: { current: b.value, target: targets.brix },
-    firmness: { current: f.value, target: targets.firmness },
-    color: { current: c.value, target: targets.color },
+  const payload = view._row?.payload;
+  const objectives = Array.isArray(payload?.objectives)
+    ? (payload.objectives as { name?: string; value?: string; unit?: string }[])
+    : [];
+
+  const resolveTarget = (paramName: string, paramTarget?: string): string => {
+    const pt = String(paramTarget ?? '').trim();
+    if (pt) return pt;
+    for (const d of DEFAULT_PLANNING_METRICS) {
+      if (d.match(paramName)) return targets[d.targetKey];
+    }
+    const norm = normParamName(paramName);
+    const obj = objectives.find((o) => {
+      const on = normParamName(String(o?.name ?? ''));
+      return on && (on === norm || on.includes(norm) || norm.includes(on));
+    });
+    if (obj?.value != null && String(obj.value).trim() !== '') {
+      const u = String(obj.unit ?? '').trim();
+      return u ? `${obj.value} ${u}` : String(obj.value);
+    }
+    return '—';
   };
+
+  const last = latestSamplingEvent(view.timeline);
+  const data = (last as { data?: SamplingParamRow[] } | null)?.data;
+  const filledParams = Array.isArray(data)
+    ? data.filter((d) => d && d.value != null && String(d.value).trim() !== '')
+    : [];
+
+  if (!filledParams.length) {
+    return DEFAULT_PLANNING_METRICS.map((d) => ({
+      id: d.id,
+      label: d.label,
+      current: findParam(data, d.id === 'firmness' ? 'firm' : (d.id as 'brix' | 'color')).value,
+      target: targets[d.targetKey],
+      barKind: d.barKind,
+    }));
+  }
+
+  return filledParams.map((p, i) => ({
+    id: `${i}-${p.name}`,
+    label: formatMetricLabel(p.name, p.unit),
+    current: String(p.value),
+    target: resolveTarget(p.name, p.target),
+    barKind: inferBarKind(p.name),
+  }));
 }
 
 export function remainingDays(estimatedEndAt: string | null | undefined) {

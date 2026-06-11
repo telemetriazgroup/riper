@@ -136,7 +136,7 @@ deviceControlRouter.post('/start', async (req, res) => {
     if (!skipRipeningGuard) {
       const { rows: ripeningBusy } = await client.query(
         `SELECT 1 FROM app_ripening_processes
-         WHERE deleted_at IS NULL AND status = 'active'
+         WHERE deleted_at IS NULL AND status IN ('active', 'paused')
            AND (payload->>'deviceId') = $1
          LIMIT 1`,
         [deviceId]
@@ -145,7 +145,22 @@ deviceControlRouter.post('/start', async (req, res) => {
         await client.query('ROLLBACK');
         return res.status(409).json({
           error: 'device_ripening_active',
-          message: 'an active ripening tracking exists for this device; cancel or finish it first',
+          message: 'an active or paused ripening tracking exists for this device; cancel or finish it first',
+        });
+      }
+    } else if (auditLog) {
+      const { rows: ripeningActiveOnly } = await client.query(
+        `SELECT 1 FROM app_ripening_processes
+         WHERE deleted_at IS NULL AND status = 'active'
+           AND (payload->>'deviceId') = $1
+         LIMIT 1`,
+        [deviceId]
+      );
+      if (ripeningActiveOnly.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'device_ripening_active',
+          message: 'pause the active tracking before manual control',
         });
       }
     }

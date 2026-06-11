@@ -69,6 +69,7 @@ function trackingStatusLabel(status: string, t: (k: string) => string) {
   const s = String(status || '').toLowerCase();
   if (s === 'cancelled') return t('status_ripening_cancelled');
   if (s === 'completed') return t('status_ripening_completed');
+  if (s === 'paused') return t('status_ripening_paused');
   if (s === 'active') return t('in_process');
   return status || '—';
 }

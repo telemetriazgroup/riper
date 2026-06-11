@@ -9,13 +9,13 @@ import {
   AlertDialogTitle,
 } from '@/app/components/ui/alert-dialog';
 import { Button } from '@/app/components/ui/Button';
-import { Loader2, ClipboardList, Timer, User, Package, ChefHat, Layers, AlertTriangle } from 'lucide-react';
+import { Loader2, ClipboardList, Timer, User, Package, ChefHat, Layers, AlertTriangle, Pause, Play } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es, enUS } from 'date-fns/locale';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
-import { patchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
-import { canCancelRipeningTracking } from '@/app/lib/permissions';
+import { patchRipeningProcess, pauseRipeningProcess, resumeRipeningProcess } from '@/app/lib/ripeningProcessesApi';
+import { canCancelRipeningTracking, canPauseRipeningTracking } from '@/app/lib/permissions';
 import {
   inferCurrentNextPhase,
   mapRowToProcessView,
@@ -34,7 +34,7 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
 }) => {
   const { t, language, formatDateTime, convertTemp, tempUnit } = useSettings();
   const { activeTracking, isLoading, mutate } = useRipeningActiveForDevice(deviceId);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmKind, setConfirmKind] = useState<'cancel' | 'pause' | 'resume' | null>(null);
   const [busy, setBusy] = useState(false);
   const locale = language === 'es' ? es : enUS;
 
@@ -118,7 +118,39 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
       await patchRipeningProcess(pid, { status: 'cancelled' });
       await mutate(undefined, { revalidate: true });
       toast.success(t('control_follow_cancelled'));
-      setConfirmOpen(false);
+      setConfirmKind(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmPause = async () => {
+    const pid = activeTracking?.process?.id;
+    if (!pid) return;
+    setBusy(true);
+    try {
+      await pauseRipeningProcess(pid);
+      await mutate(undefined, { revalidate: true });
+      toast.success(t('control_follow_paused_toast'));
+      setConfirmKind(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onConfirmResume = async () => {
+    const pid = activeTracking?.process?.id;
+    if (!pid) return;
+    setBusy(true);
+    try {
+      await resumeRipeningProcess(pid);
+      await mutate(undefined, { revalidate: true });
+      toast.success(t('control_follow_resumed_toast'));
+      setConfirmKind(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error');
     } finally {
@@ -142,6 +174,8 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
   const sum = activeTracking.summary;
   const proc = activeTracking.process;
   const pct = Math.min(100, Math.max(0, sum.progress));
+  const procStatus = proc.status || 'active';
+  const isPaused = procStatus === 'paused';
 
   return (
     <>
@@ -157,20 +191,54 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
               <p className="text-lg font-semibold text-teal-950 mt-0.5 truncate">{sum.display_name}</p>
             </div>
           </div>
-          {canCancelRipeningTracking() && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
-              disabled={busy}
-              onClick={() => setConfirmOpen(true)}
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-              <span className={busy ? 'ml-1' : 'ml-1.5'}>{t('control_follow_cancel_tracking')}</span>
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2 shrink-0">
+            {canPauseRipeningTracking() && procStatus === 'active' && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                disabled={busy}
+                onClick={() => setConfirmKind('pause')}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pause className="h-4 w-4" />}
+                <span className="ml-1.5">{t('control_follow_pause_tracking')}</span>
+              </Button>
+            )}
+            {canPauseRipeningTracking() && isPaused && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="border-teal-500 bg-teal-50 text-teal-950 hover:bg-teal-100"
+                disabled={busy}
+                onClick={() => setConfirmKind('resume')}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                <span className="ml-1.5">{t('control_follow_resume_tracking')}</span>
+              </Button>
+            )}
+            {canCancelRipeningTracking() && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-amber-400 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                disabled={busy}
+                onClick={() => setConfirmKind('cancel')}
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                <span className={busy ? 'ml-1' : 'ml-1.5'}>{t('control_follow_cancel_tracking')}</span>
+              </Button>
+            )}
+          </div>
         </div>
+
+        {isPaused && (
+          <p className="px-4 pt-3 text-xs text-amber-900 bg-amber-50/80 border-b border-teal-200/80">
+            {t('detail_tracking_paused_note')}
+          </p>
+        )}
 
         <div className="p-4 space-y-4 text-sm text-teal-950">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -290,21 +358,47 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
         </div>
       </section>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog open={confirmKind != null} onOpenChange={(open) => !open && !busy && setConfirmKind(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t('control_follow_cancel_tracking')}</AlertDialogTitle>
-            <AlertDialogDescription>{t('control_follow_cancel_confirm')}</AlertDialogDescription>
+            <AlertDialogTitle>
+              {confirmKind === 'pause' && t('control_follow_pause_tracking')}
+              {confirmKind === 'resume' && t('control_follow_resume_tracking')}
+              {confirmKind === 'cancel' && t('control_follow_cancel_tracking')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmKind === 'pause' && t('control_follow_pause_confirm')}
+              {confirmKind === 'resume' && t('control_follow_resume_confirm')}
+              {confirmKind === 'cancel' && t('control_follow_cancel_confirm')}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy}>{t('cancel')}</AlertDialogCancel>
             <Button
               type="button"
               disabled={busy}
-              onClick={() => void onConfirmCancel()}
-              className="bg-amber-700 hover:bg-amber-800 text-white"
+              className={
+                confirmKind === 'pause'
+                  ? 'bg-amber-700 hover:bg-amber-800 text-white'
+                  : confirmKind === 'resume'
+                    ? 'bg-teal-700 hover:bg-teal-800 text-white'
+                    : 'bg-amber-700 hover:bg-amber-800 text-white'
+              }
+              onClick={() => {
+                if (confirmKind === 'pause') void onConfirmPause();
+                else if (confirmKind === 'resume') void onConfirmResume();
+                else if (confirmKind === 'cancel') void onConfirmCancel();
+              }}
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : t('control_follow_cancel_tracking')}
+              {busy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : confirmKind === 'pause' ? (
+                t('control_follow_pause_tracking')
+              ) : confirmKind === 'resume' ? (
+                t('control_follow_resume_tracking')
+              ) : (
+                t('control_follow_cancel_tracking')
+              )}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

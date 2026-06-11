@@ -229,8 +229,13 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
       <div className={wrap}>
         {hasTrackingProcess && trackingProcess && trackingView ? (
           <div className="rounded-md border border-teal-200 bg-teal-50/80 px-2 py-2">
-            <div className="text-[10px] font-bold uppercase tracking-wide text-teal-800">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-teal-800 flex items-center gap-2">
               {t('fleet_tracking_block_title')}
+              {trackingProcess.status === 'paused' && (
+                <span className="rounded px-1.5 py-0.5 bg-amber-200 text-amber-950 normal-case font-semibold">
+                  {t('fleet_tracking_paused_badge')}
+                </span>
+              )}
             </div>
             <p className="text-sm font-semibold text-teal-950 mt-0.5">
               {trackingProcess.display_name || trackingView.display_name || '—'}

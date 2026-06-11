@@ -105,6 +105,8 @@ export const ProcessDataAdmin: React.FC<Props> = ({ rows, loading, onRefresh, on
                     >
                       {row.status === 'active'
                         ? t('in_process')
+                        : row.status === 'paused'
+                          ? t('status_ripening_paused')
                         : row.status === 'completed'
                           ? t('status_ripening_completed')
                           : row.status === 'cancelled'

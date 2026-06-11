@@ -16,7 +16,7 @@ export function useFleetRipeningTrackingMap() {
 
   const byDeviceId = useMemo(() => {
     const m = new Map<string, RipeningProcessRow>();
-    const actives = (data ?? []).filter((r) => r.status === 'active');
+    const actives = (data ?? []).filter((r) => r.status === 'active' || r.status === 'paused');
     const sorted = [...actives].sort(
       (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );

@@ -37,7 +37,7 @@ async function handle<T>(res: Response): Promise<T> {
 export type RipeningProcessRow = {
   id: string;
   user_id: string;
-  /** Seguimiento: active | cancelled | completed (completed = automatizado al vencer tiempo planificado). */
+  /** Seguimiento: active | paused | cancelled | completed */
   status: string;
   display_name: string;
   payload: Record<string, unknown> & {
@@ -47,7 +47,11 @@ export type RipeningProcessRow = {
       totalDurationHours?: number;
       startedAt?: string;
       estimatedEndAt?: string | null;
+      plannedDurationMs?: number;
+      totalPausedMs?: number;
     };
+    pauseState?: { pausedAt?: string; progressAtPause?: number };
+    pauseIntervals?: { from: string; to?: string; byUserId?: string | null }[];
     initialSample?: unknown;
     recipe?: { name?: string; phases?: unknown; targets?: { brix?: string; firmness?: string; color?: string } };
     objectives?: { name: string; value: string; unit: string }[];
@@ -57,11 +61,51 @@ export type RipeningProcessRow = {
       byEmail?: string | null;
       byName?: string | null;
     };
+    _completedMeta?: { at?: string; progress?: number; source?: string };
+    _reactivatedMeta?: {
+      at?: string;
+      byUserId?: string;
+      byEmail?: string | null;
+      byName?: string | null;
+    };
+    _closureSnapshot?: {
+      at?: string;
+      closureReason?: string;
+      progress?: number;
+      phaseIndex?: number;
+      phaseType?: string;
+      phaseLabel?: string;
+      activeElapsedMs?: number;
+    };
+    reactivationHistory?: {
+      at?: string;
+      extensionHours?: number;
+      closureAt?: string;
+      phaseLabel?: string;
+      progressAtClosure?: number;
+      note?: string | null;
+    }[];
+    processDocuments?: RipeningProcessDocument[];
   };
   timeline: unknown;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type RipeningProcessDocument = {
+  id: string;
+  name: string;
+  storedName: string;
+  mime: string;
+  size: number;
+  apiPath: string;
+  description?: string | null;
+  observations?: string | null;
+  uploadedAt: string;
+  uploadedByUserId?: string | null;
+  uploadedByEmail?: string | null;
+  uploadedByName?: string | null;
 };
 
 export function apiFileUrl(path: string | undefined | null): string {
@@ -131,6 +175,8 @@ export type ActiveDeviceSummary = {
   progress: number;
   startedAt: string | null;
   estimatedEndAt: string | null;
+  status?: string;
+  paused?: boolean;
 };
 
 /**
@@ -221,6 +267,77 @@ export async function patchRipeningProcess(
 export async function deleteRipeningProcess(id: string): Promise<void> {
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
   await handle<{ ok: boolean }>(res);
+}
+
+export async function pauseRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}/pause`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function resumeRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}/resume`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function reactivateRipeningProcess(
+  id: string,
+  body: { extensionHours: number; note?: string }
+): Promise<RipeningProcessRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(id)}/reactivate`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function uploadRipeningProcessDocument(
+  processId: string,
+  file: File,
+  description: string,
+  observations?: string
+): Promise<RipeningProcessRow> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  form.append('description', description.trim());
+  const obs = observations?.trim();
+  if (obs) form.append('observations', obs);
+  const t = getToken();
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (t) headers.Authorization = `Bearer ${t}`;
+  const res = await fetch(`${base()}/${encodeURIComponent(processId)}/documents`, {
+    method: 'POST',
+    body: form,
+    headers,
+  });
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
+}
+
+export async function deleteRipeningProcessDocument(
+  processId: string,
+  documentId: string
+): Promise<RipeningProcessRow> {
+  const res = await fetch(
+    `${base()}/${encodeURIComponent(processId)}/documents/${encodeURIComponent(documentId)}`,
+    { method: 'DELETE', headers: authHeaders() }
+  );
+  const json = await handle<{ data: RipeningProcessRow }>(res);
+  if (!json.data) throw new Error('sin datos');
+  return json.data;
 }
 
 export async function fetchRipeningFileBlob(absoluteOrRelativePath: string): Promise<Blob> {

@@ -11,17 +11,7 @@ import {
   type SimInkapackingDeviceId,
 } from '@/app/lib/simulatedInkapackingFleet';
 
-function progressFromSchedule(startedAt: string, estimatedEndAt: string | null | undefined): number {
-  if (!estimatedEndAt) return 0;
-  const a = new Date(startedAt).getTime();
-  const b = new Date(estimatedEndAt).getTime();
-  const now = Date.now();
-  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
-  const p = (now - a) / (b - a);
-  return Math.min(100, Math.max(0, Math.round(p * 100)));
-}
-
-/** Proceso activo de la pestaña Seguimiento vinculado a este `deviceId` en el payload. */
+import { progressFromTrackingPayload } from '@/app/lib/ripeningSchedule';
 export function useRipeningActiveForDevice(deviceId: string | undefined) {
   const key = deviceId ? `ripening-active-for-device:${deviceId}` : null;
   const { data, error, isLoading, mutate } = useSWR(
@@ -44,9 +34,11 @@ export function useRipeningActiveForDevice(deviceId: string | undefined) {
             client: String((p.client as { name?: string })?.name ?? ''),
             product,
             deviceId,
-            progress: progressFromSchedule(startedAt, estimatedEndAt),
+            progress: progressFromTrackingPayload(p, row.status),
             startedAt,
             estimatedEndAt: estimatedEndAt != null ? String(estimatedEndAt) : null,
+            status: row.status,
+            paused: row.status === 'paused',
           },
         };
       }

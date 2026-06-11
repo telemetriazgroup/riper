@@ -1,26 +1,11 @@
 import { pool } from './db.js';
 import { fireEmailNotification } from './emailNotifications.js';
+import { getEffectiveEstimatedEndMs, progressFromTrackingPayload } from './ripeningSchedule.js';
+import { buildClosureSnapshot } from './ripeningReactivation.js';
 
 /** Fin programado UTC (ms) desde scheduleSummary del seguimiento, o null si no se puede inferir fin. */
-export function getRipeningEstimatedEndMs(payload) {
-  if (!payload || typeof payload !== 'object') return null;
-  const schedule = payload.scheduleSummary || {};
-  const s = schedule.startedAt;
-  if (!s) return null;
-  const start = new Date(String(s)).getTime();
-  if (!Number.isFinite(start)) return null;
-  const totalHours = Number(schedule.totalDurationHours) || 0;
-  const est = schedule.estimatedEndAt;
-  let endMs;
-  if (est) {
-    const e = new Date(String(est)).getTime();
-    endMs = Number.isFinite(e) ? e : null;
-  } else   if (totalHours > 0) {
-    endMs = start + totalHours * 3600 * 1000;
-  } else {
-    return null;
-  }
-  return endMs;
+export function getRipeningEstimatedEndMs(payload, status = 'active') {
+  return getEffectiveEstimatedEndMs(payload, Date.now(), status);
 }
 
 let lastRipeningFinalize = 0;
@@ -39,19 +24,34 @@ export async function finalizeDueRipeningProcesses() {
   const now = Date.now();
   const toFinalize = [];
   for (const row of rows) {
-    const end = getRipeningEstimatedEndMs(row.payload);
+    const end = getRipeningEstimatedEndMs(row.payload, row.status);
     if (end != null && now >= end) toFinalize.push(row);
   }
   if (!toFinalize.length) return 0;
-  const ids = toFinalize.map((r) => r.id);
-  const result = await pool.query(
-    `UPDATE app_ripening_processes
-        SET status = 'completed',
-            updated_at = now()
-      WHERE id = ANY($1::uuid[])
-        AND status = 'active'`,
-    [ids]
-  );
+  let count = 0;
+  for (const row of toFinalize) {
+    const prog = progressFromTrackingPayload(row.payload, 'active');
+    const closure = buildClosureSnapshot(row.payload, 'active', 'completed', Date.now());
+    const meta = {
+      at: closure.at,
+      progress: prog,
+      source: 'auto_finalize',
+    };
+    const payload =
+      row.payload && typeof row.payload === 'object'
+        ? { ...row.payload, _completedMeta: meta, _closureSnapshot: closure }
+        : { _completedMeta: meta, _closureSnapshot: closure };
+    const result = await pool.query(
+      `UPDATE app_ripening_processes
+          SET status = 'completed',
+              updated_at = now(),
+              payload = $2::jsonb
+        WHERE id = $1::uuid
+          AND status = 'active'`,
+      [row.id, JSON.stringify(payload)]
+    );
+    count += result.rowCount ?? 0;
+  }
   for (const row of toFinalize) {
     const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     const deviceId = payload.deviceId ? String(payload.deviceId).trim() : '';
@@ -67,7 +67,7 @@ export async function finalizeDueRipeningProcesses() {
       });
     }
   }
-  return result.rowCount ?? ids.length;
+  return count;
 }
 
 /** Sesiones de control de dispositivo vencidas → `completed`. */

@@ -12,6 +12,8 @@ import {
   FileText,
   Ban,
   FileBarChart2,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
@@ -22,16 +24,42 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from './ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
 import { clsx } from 'clsx';
 import { getStoredUser } from '@/app/lib/auth';
-import { canRegisterRipeningSampling, canCancelRipeningTracking } from '@/app/lib/permissions';
-import { postRipeningSampling, fetchRipeningProcess, patchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
-import { buildPlanningSnapshot, mapRowToProcessView, remainingDays } from '@/app/lib/ripeningProcessMappers';
+import { canRegisterRipeningSampling, canCancelRipeningTracking, canPauseRipeningTracking, canReactivateRipeningTracking } from '@/app/lib/permissions';
+import {
+  postRipeningSampling,
+  fetchRipeningProcess,
+  patchRipeningProcess,
+  pauseRipeningProcess,
+  resumeRipeningProcess,
+  reactivateRipeningProcess,
+} from '@/app/lib/ripeningProcessesApi';
+import {
+  buildPlanningSnapshot,
+  mapRowToProcessView,
+  planningMetricBarPct,
+  remainingDays,
+} from '@/app/lib/ripeningProcessMappers';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { ProcessTrackingReportDialog } from '@/app/components/ProcessTrackingReportDialog';
 import { ProcessRecipeDetailModal } from '@/app/components/ProcessRecipeDetailModal';
 import { ProcessIntegralReportDialog } from '@/app/components/ProcessIntegralReportDialog';
+import { ProcessDocumentsPanel } from '@/app/components/ProcessDocumentsPanel';
+import { toast } from 'sonner';
+import type { RipeningProcessDocument } from '@/app/lib/ripeningProcessesApi';
 import {
   RipeningSamplingModal,
   type SamplingType,
@@ -62,20 +90,12 @@ const FALLBACK_DATA = {
   timeline: [],
 };
 
-function firstNumber(s: string) {
-  const m = String(s).match(/[\d.,]+/);
-  if (!m) return NaN;
-  return parseFloat(m[0].replace(',', '.'));
-}
-
-/** Barra aproximada respecto a una escala típica (solo visual) */
-function barPct(kind: 'brix' | 'firm' | 'color', value: string) {
-  const n = firstNumber(value);
-  if (!Number.isFinite(n)) return 0;
-  if (kind === 'brix') return Math.min(100, Math.round((n / 25) * 100));
-  if (kind === 'color') return Math.min(100, Math.round((n / 7) * 100));
-  return Math.min(100, Math.round((n / 30) * 100));
-}
+const PLANNING_BAR_COLORS: Record<string, string> = {
+  brix: 'bg-orange-400',
+  firm: 'bg-blue-500',
+  color: 'bg-green-500',
+  generic: 'bg-violet-500',
+};
 
 /** Evidencia en bitácora: ruta API con token o URL pública. */
 function resolveEvidencePhoto(img: { url?: string; desc?: string }): {
@@ -109,27 +129,43 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   onBack,
   onProcessUpdated,
 }) => {
-  const { t } = useSettings();
+  const { t, formatDateTime } = useSettings();
   const data = processData || FALLBACK_DATA;
   const processStatus = (data as { status?: string }).status || 'active';
   const isArchived = (data as ReturnType<typeof mapRowToProcessView>).archived === true;
   const isActiveProcess = processStatus === 'active';
+  const isPausedProcess = processStatus === 'paused';
+  const isRunningOrPaused = isActiveProcess || isPausedProcess;
   const allowSamplingWhenClosed =
     processStatus === 'cancelled' || processStatus === 'completed';
   const canRegister =
     !isArchived &&
     canRegisterRipeningSampling() &&
-    (isActiveProcess || allowSamplingWhenClosed);
-  const closedSamplingModal = !isActiveProcess && allowSamplingWhenClosed;
-  const canCancelHere = isActiveProcess && canCancelRipeningTracking() && !isArchived;
+    (isRunningOrPaused || allowSamplingWhenClosed);
+  const closedSamplingModal = !isRunningOrPaused && allowSamplingWhenClosed;
+  const canCancelHere = isRunningOrPaused && canCancelRipeningTracking() && !isArchived;
+  const canPauseHere = isActiveProcess && canPauseRipeningTracking() && !isArchived;
+  const canResumeHere = isPausedProcess && canPauseRipeningTracking() && !isArchived;
+  const canReactivateHere =
+    (processStatus === 'completed' || processStatus === 'cancelled') &&
+    canReactivateRipeningTracking() &&
+    !isArchived;
   const [photoViewer, setPhotoViewer] = useState<PhotoViewerState | null>(null);
   const [isSamplingModalOpen, setIsSamplingModalOpen] = useState(false);
   const [cancellingTracking, setCancellingTracking] = useState(false);
+  const [pauseBusy, setPauseBusy] = useState(false);
+  const [resumeBusy, setResumeBusy] = useState(false);
+  const [reactivateBusy, setReactivateBusy] = useState(false);
   const [samplingSaving, setSamplingSaving] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [recipeModalOpen, setRecipeModalOpen] = useState(false);
   const [integralReportOpen, setIntegralReportOpen] = useState(false);
   const [events, setEvents] = useState((processData || FALLBACK_DATA).timeline || []);
+  type TrackingConfirmKind = 'pause' | 'resume' | 'cancel';
+  const [confirmKind, setConfirmKind] = useState<TrackingConfirmKind | null>(null);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
+  const [extensionHours, setExtensionHours] = useState('4');
+  const [reactivateNote, setReactivateNote] = useState('');
 
   useEffect(() => {
     setEvents((processData || FALLBACK_DATA).timeline || []);
@@ -157,6 +193,43 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
     const p = reportView._row?.payload as { deviceId?: string } | undefined;
     return String(p?.deviceId ?? '').trim();
   }, [reportView]);
+
+  const closureInfo = useMemo(() => {
+    const p = reportView._row?.payload as
+      | {
+          _closureSnapshot?: {
+            at?: string;
+            progress?: number;
+            phaseLabel?: string;
+            phaseType?: string;
+            closureReason?: string;
+          };
+          _completedMeta?: { at?: string; progress?: number };
+          _cancelledMeta?: { at?: string };
+        }
+      | undefined;
+    if (!p) return null;
+    const snap = p._closureSnapshot;
+    const at = snap?.at || p._completedMeta?.at || p._cancelledMeta?.at;
+    if (!at) return null;
+    return {
+      at,
+      progress: snap?.progress ?? p._completedMeta?.progress,
+      phaseLabel: snap?.phaseLabel || snap?.phaseType || '—',
+      closureReason: snap?.closureReason || processStatus,
+    };
+  }, [reportView, processStatus]);
+
+  const processDocuments = useMemo((): RipeningProcessDocument[] => {
+    const raw = reportView._row?.payload as { processDocuments?: RipeningProcessDocument[] } | undefined;
+    return Array.isArray(raw?.processDocuments) ? raw.processDocuments : [];
+  }, [reportView]);
+
+  const refreshProcessFromServer = async () => {
+    const pid = (data as { id?: string }).id;
+    if (!pid) return;
+    await refreshFromRow(pid);
+  };
 
   const extLabel = t('client_type_external');
   const inLabel = t('client_type_internal');
@@ -199,7 +272,6 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
   const handleCancelTracking = async () => {
     const pid = (data as { id?: string }).id;
     if (!pid || !canCancelHere) return;
-    if (!window.confirm(t('process_cancel_tracking_confirm'))) return;
     setCancellingTracking(true);
     try {
       await patchRipeningProcess(pid, { status: 'cancelled' });
@@ -207,12 +279,85 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
       const view = mapRowToProcessView(row);
       onProcessUpdated?.(view);
       setEvents(view.timeline ?? []);
+      setConfirmKind(null);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Error');
+      toast.error(e instanceof Error ? e.message : 'Error');
     } finally {
       setCancellingTracking(false);
     }
   };
+
+  const refreshFromRow = async (pid: string) => {
+    const row = await fetchRipeningProcess(pid);
+    const view = mapRowToProcessView(row);
+    onProcessUpdated?.(view);
+    setEvents(view.timeline ?? []);
+  };
+
+  const handlePauseTracking = async () => {
+    const pid = (data as { id?: string }).id;
+    if (!pid || !canPauseHere) return;
+    setPauseBusy(true);
+    try {
+      await pauseRipeningProcess(pid);
+      await refreshFromRow(pid);
+      setConfirmKind(null);
+      toast.success(t('control_follow_paused_toast'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setPauseBusy(false);
+    }
+  };
+
+  const handleResumeTracking = async () => {
+    const pid = (data as { id?: string }).id;
+    if (!pid || !canResumeHere) return;
+    setResumeBusy(true);
+    try {
+      await resumeRipeningProcess(pid);
+      await refreshFromRow(pid);
+      setConfirmKind(null);
+      toast.success(t('control_follow_resumed_toast'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setResumeBusy(false);
+    }
+  };
+
+  const handleReactivateTracking = async () => {
+    const pid = (data as { id?: string }).id;
+    if (!pid || !canReactivateHere) return;
+    const hours = Number(extensionHours);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      toast.error(t('process_reactivate_hours_invalid'));
+      return;
+    }
+    setReactivateBusy(true);
+    try {
+      await reactivateRipeningProcess(pid, {
+        extensionHours: hours,
+        note: reactivateNote.trim() || undefined,
+      });
+      await refreshFromRow(pid);
+      setReactivateOpen(false);
+      toast.success(t('process_reactivated_toast'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setReactivateBusy(false);
+    }
+  };
+
+  const confirmBusy =
+    confirmKind === 'pause'
+      ? pauseBusy
+      : confirmKind === 'resume'
+        ? resumeBusy
+        : confirmKind === 'cancel'
+          ? cancellingTracking
+          : false;
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300 pb-10">
@@ -224,7 +369,15 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
           {t('tracking_archived_readonly')}
         </div>
       )}
-      {!isActiveProcess && (
+      {isPausedProcess && (
+        <div
+          className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          {t('process_paused_info')}
+        </div>
+      )}
+      {!isRunningOrPaused && (
         <div
           className="rounded-xl border border-slate-300 bg-slate-100 px-4 py-3 text-sm text-slate-800 space-y-2"
           role="status"
@@ -338,13 +491,49 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
                 {t('sampling_register')}
               </Button>
             )}
+            {canPauseHere && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pauseBusy}
+                className="gap-2 border-amber-300 text-amber-900 hover:bg-amber-50"
+                onClick={() => setConfirmKind('pause')}
+              >
+                <Pause className="w-4 h-4" />
+                {pauseBusy ? t('loading') : t('process_pause_tracking')}
+              </Button>
+            )}
+            {canResumeHere && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resumeBusy}
+                className="gap-2 border-teal-300 text-teal-900 hover:bg-teal-50"
+                onClick={() => setConfirmKind('resume')}
+              >
+                <Play className="w-4 h-4" />
+                {resumeBusy ? t('loading') : t('process_resume_tracking')}
+              </Button>
+            )}
+            {canReactivateHere && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={reactivateBusy}
+                className="gap-2 border-violet-300 text-violet-900 hover:bg-violet-50"
+                onClick={() => setReactivateOpen(true)}
+              >
+                <Play className="w-4 h-4" />
+                {reactivateBusy ? t('loading') : t('process_reactivate_tracking')}
+              </Button>
+            )}
             {canCancelHere && (
               <Button
                 type="button"
                 variant="outline"
                 disabled={cancellingTracking}
                 className="gap-2 border-red-300 text-red-700 hover:bg-red-50"
-                onClick={() => void handleCancelTracking()}
+                onClick={() => setConfirmKind('cancel')}
               >
                 <Ban className="w-4 h-4" />
                 {cancellingTracking ? t('loading') : t('process_cancel_tracking')}
@@ -444,6 +633,12 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Timeline & Activity */}
         <div className="lg:col-span-2 space-y-6">
+          <ProcessDocumentsPanel
+            processId={idDisplay}
+            documents={processDocuments}
+            isArchived={isArchived}
+            onDocumentsUpdated={refreshProcessFromServer}
+          />
            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
              <div className="border-b border-gray-100 p-4">
                <h3 className="font-bold text-gray-800">Bitácora de Eventos y Muestreos</h3>
@@ -455,9 +650,11 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
                      <div className={clsx(
                        "absolute -left-[33px] w-8 h-8 rounded-full border-4 border-white shadow-sm flex items-center justify-center",
                        event.type === 'sampling' ? "bg-blue-500 text-white" :
+                       event.type === 'document' ? "bg-violet-500 text-white" :
                        event.type === 'alert' ? "bg-red-500 text-white" : "bg-gray-200 text-gray-500"
                      )}>
-                       {event.type === 'sampling' ? <ClipboardCheck className="w-4 h-4" /> : 
+                       {event.type === 'sampling' ? <ClipboardCheck className="w-4 h-4" /> :
+                        event.type === 'document' ? <FileText className="w-4 h-4" /> :
                         event.type === 'alert' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                      </div>
                      
@@ -552,58 +749,35 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
         <div className="space-y-6">
            <Card className="border-gray-200 shadow-sm">
              <CardHeader className="pb-2">
-               <CardTitle className="text-base">Cumplimiento vs planificación</CardTitle>
+               <CardTitle className="text-base">{t('tracking_compliance_title')}</CardTitle>
              </CardHeader>
              <CardContent>
                <div className="space-y-4">
-                 <div className="space-y-1">
-                   <div className="flex justify-between text-sm">
-                     <span className="text-gray-600">Grados Brix</span>
-                     <span className="font-bold text-gray-900">
-                       {snap.brix.current}
-                       <span className="text-gray-400 font-normal"> / {snap.brix.target}</span>
-                     </span>
-                   </div>
-                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                     <div
-                       className="h-full bg-orange-400"
-                       style={{ width: `${barPct('brix', snap.brix.current)}%` }}
-                     />
-                   </div>
-                 </div>
-
-                 <div className="space-y-1">
-                   <div className="flex justify-between text-sm">
-                     <span className="text-gray-600">Firmeza</span>
-                     <span className="font-bold text-gray-900">
-                       {snap.firmness.current}
-                       <span className="text-gray-400 font-normal"> / {snap.firmness.target}</span>
-                     </span>
-                   </div>
-                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                     <div
-                       className="h-full bg-blue-500"
-                       style={{ width: `${barPct('firm', snap.firmness.current)}%` }}
-                     />
-                   </div>
-                 </div>
-
-                 <div className="space-y-1">
-                   <div className="flex justify-between text-sm">
-                     <span className="text-gray-600">Color (escala)</span>
-                     <span className="font-bold text-gray-900">
-                       {snap.color.current}
-                       <span className="text-gray-400 font-normal"> / {snap.color.target}</span>
-                     </span>
-                   </div>
-                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                     <div
-                       className="h-full bg-green-500"
-                       style={{ width: `${barPct('color', snap.color.current)}%` }}
-                     />
-                   </div>
-                 </div>
-                 <p className="text-xs text-gray-500">Valores = último muestreo registrado en la bitácora; meta = receta / objetivos.</p>
+                 {snap.map((metric) => {
+                   const barColor =
+                     PLANNING_BAR_COLORS[metric.barKind === 'firm' ? 'firm' : metric.barKind] ||
+                     PLANNING_BAR_COLORS.generic;
+                   const pct = planningMetricBarPct(metric);
+                   const hasCurrent = metric.current !== '—';
+                   return (
+                     <div key={metric.id} className="space-y-1">
+                       <div className="flex justify-between text-sm gap-2">
+                         <span className="text-gray-600">{metric.label}</span>
+                         <span className="font-bold text-gray-900 text-right">
+                           {metric.current}
+                           <span className="text-gray-400 font-normal"> / {metric.target}</span>
+                         </span>
+                       </div>
+                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                         <div
+                           className={`h-full ${barColor}`}
+                           style={{ width: hasCurrent ? `${pct}%` : '0%' }}
+                         />
+                       </div>
+                     </div>
+                   );
+                 })}
+                 <p className="text-xs text-gray-500">{t('tracking_compliance_hint')}</p>
                </div>
              </CardContent>
            </Card>
@@ -699,6 +873,121 @@ export const ProcessDetail: React.FC<ProcessDetailProps> = ({
         isFinal={!isActiveProcess}
         processStatus={processStatus}
       />
+
+      <AlertDialog open={confirmKind != null} onOpenChange={(open) => !open && !confirmBusy && setConfirmKind(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmKind === 'pause' && t('process_pause_tracking')}
+              {confirmKind === 'resume' && t('process_resume_tracking')}
+              {confirmKind === 'cancel' && t('process_cancel_tracking')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmKind === 'pause' && t('control_follow_pause_confirm')}
+              {confirmKind === 'resume' && t('control_follow_resume_confirm')}
+              {confirmKind === 'cancel' && t('process_cancel_tracking_confirm')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={confirmBusy}>{t('cancel')}</AlertDialogCancel>
+            <Button
+              type="button"
+              disabled={confirmBusy}
+              className={
+                confirmKind === 'pause'
+                  ? 'bg-amber-700 hover:bg-amber-800 text-white'
+                  : confirmKind === 'resume'
+                    ? 'bg-teal-700 hover:bg-teal-800 text-white'
+                    : 'bg-red-700 hover:bg-red-800 text-white'
+              }
+              onClick={() => {
+                if (confirmKind === 'pause') void handlePauseTracking();
+                else if (confirmKind === 'resume') void handleResumeTracking();
+                else if (confirmKind === 'cancel') void handleCancelTracking();
+              }}
+            >
+              {confirmBusy
+                ? t('loading')
+                : confirmKind === 'pause'
+                  ? t('process_pause_tracking')
+                  : confirmKind === 'resume'
+                    ? t('process_resume_tracking')
+                    : t('process_cancel_tracking')}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={reactivateOpen} onOpenChange={(open) => !reactivateBusy && setReactivateOpen(open)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('process_reactivate_tracking')}</DialogTitle>
+            <DialogDescription>{t('process_reactivate_dialog_desc')}</DialogDescription>
+          </DialogHeader>
+          {closureInfo && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm space-y-1.5">
+              <p>
+                <span className="font-medium text-slate-600">{t('process_reactivate_closed_at')}: </span>
+                {formatDateTime(closureInfo.at)}
+              </p>
+              <p>
+                <span className="font-medium text-slate-600">{t('process_reactivate_phase_at_close')}: </span>
+                {closureInfo.phaseLabel}
+              </p>
+              {closureInfo.progress != null && (
+                <p>
+                  <span className="font-medium text-slate-600">{t('estimated_progress')}: </span>
+                  {closureInfo.progress}%
+                </p>
+              )}
+            </div>
+          )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="reactivate-hours">
+              {t('process_reactivate_hours_label')}
+            </label>
+            <input
+              id="reactivate-hours"
+              type="number"
+              min={0.25}
+              step={0.25}
+              max={720}
+              value={extensionHours}
+              onChange={(e) => setExtensionHours(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={reactivateBusy}
+            />
+            <p className="text-xs text-slate-500">{t('process_reactivate_hours_hint')}</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="reactivate-note">
+              {t('process_reactivate_note_label')}
+            </label>
+            <textarea
+              id="reactivate-note"
+              rows={2}
+              value={reactivateNote}
+              onChange={(e) => setReactivateNote(e.target.value)}
+              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm resize-none"
+              placeholder={t('process_reactivate_note_placeholder')}
+              disabled={reactivateBusy}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" disabled={reactivateBusy} onClick={() => setReactivateOpen(false)}>
+              {t('cancel')}
+            </Button>
+            <Button
+              type="button"
+              disabled={reactivateBusy}
+              className="bg-violet-700 hover:bg-violet-800 text-white"
+              onClick={() => void handleReactivateTracking()}
+            >
+              {reactivateBusy ? t('loading') : t('process_reactivate_confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

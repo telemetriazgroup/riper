@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
-import { requireAdmin, requireOperatorPlus } from '../authMiddleware.js';
+import { requireAdmin, requireOperatorPlus, requireSuperAdmin } from '../authMiddleware.js';
 import { writeAudit } from '../auditLog.js';
 import { fireEmailNotification } from '../emailNotifications.js';
 import { maybeFinalizeRipeningDebounced } from '../autoFinalizeDueProcesses.js';
@@ -16,6 +16,15 @@ import {
 } from '../demoFleetFilter.js';
 import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { cancelActiveControlSessionsForDevice, kickTrackingControlForProcess } from '../ripeningTrackingControl.js';
+import {
+  applyPauseToPayload,
+  applyResumeToPayload,
+  buildTimelineControlEvent,
+  ensurePlannedDurationOnCreate,
+  progressFromTrackingPayload,
+  recalcScheduleAfterPayloadEdit,
+} from '../ripeningSchedule.js';
+import { applyReactivationToPayload, buildClosureSnapshot } from '../ripeningReactivation.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const UPLOAD_ROOT = path.join(__dirname, '..', '..', process.env.UPLOAD_DIR || 'uploads');
@@ -55,6 +64,43 @@ const upload = multer({
     },
   }),
   limits: { files: 24, fileSize: 6 * 1024 * 1024 },
+});
+
+const ALLOWED_DOC_MIMES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+const ALLOWED_DOC_EXT = /\.(pdf|doc|docx|xls|xlsx|jpe?g|png|webp)$/i;
+
+function isAllowedProcessDocument(file) {
+  const mime = String(file.mimetype || '').toLowerCase();
+  if (ALLOWED_DOC_MIMES.has(mime)) return true;
+  return ALLOWED_DOC_EXT.test(String(file.originalname || ''));
+}
+
+const documentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      cb(null, req._ripenerStaging || STAGING_ROOT);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname) || '.bin';
+      const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
+      cb(null, `doc-${Date.now()}-${randomBytes(4).toString('hex')}-${base}${ext}`);
+    },
+  }),
+  limits: { files: 1, fileSize: 15 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (isAllowedProcessDocument(file)) cb(null, true);
+    else cb(new Error('unsupported document type'));
+  },
 });
 
 function safeRelName(name) {
@@ -107,6 +153,7 @@ function toParamRows(arr) {
     name: p.name,
     value: p.value,
     unit: p.unit,
+    ...(p.target != null && String(p.target).trim() !== '' ? { target: String(p.target).trim() } : {}),
   }));
 }
 
@@ -137,26 +184,65 @@ function buildInitialTimelineEvent(
   };
 }
 
-function progressFromRowPayload(payload) {
-  if (!payload || typeof payload !== 'object') return 0;
-  const schedule = payload.scheduleSummary || {};
-  const s = schedule.startedAt;
-  if (!s) return 0;
-  const start = new Date(s).getTime();
-  const now = Date.now();
-  const totalHours = Number(schedule.totalDurationHours) || 0;
-  const est = schedule.estimatedEndAt;
-  let end;
-  if (est) {
-    end = new Date(est).getTime();
-  } else if (totalHours > 0) {
-    end = start + totalHours * 3600 * 1000;
-  } else {
-    return 0;
+function progressFromRowPayload(payload, status = 'active') {
+  return progressFromTrackingPayload(payload, status);
+}
+
+async function userMetaFromReq(req) {
+  const uid = req.user.id;
+  const { rows } = await pool.query(
+    `SELECT name, email FROM app_users WHERE id = $1::uuid AND deleted_at IS NULL`,
+    [uid]
+  );
+  const u = rows[0];
+  return {
+    userId: uid,
+    email: u?.email ?? req.user.email ?? null,
+    name: u?.name ?? null,
+  };
+}
+
+function linkedDeviceIdsForProcess(deviceId) {
+  const dev = String(deviceId || '').trim();
+  if (!dev) return [];
+  const linked = gourmetLinkedDeviceIds(dev);
+  return linked.length ? linked : [dev];
+}
+
+/** Último seguimiento registrado en el equipo (cualquier estado terminal o activo). */
+async function fetchLatestProcessForDevice(deviceId) {
+  const ids = linkedDeviceIdsForProcess(deviceId);
+  const { rows } = await pool.query(
+    `SELECT id, status, updated_at, created_at FROM app_ripening_processes
+     WHERE deleted_at IS NULL
+       AND (payload->>'deviceId') = ANY($1::text[])
+     ORDER BY COALESCE(updated_at, created_at) DESC, created_at DESC
+     LIMIT 1`,
+    [ids]
+  );
+  return rows[0] ?? null;
+}
+
+async function assertNoActiveTrackingOnDevice(res, deviceId, excludeId = null) {
+  const ids = linkedDeviceIdsForProcess(deviceId);
+  const { rows } = await pool.query(
+    `SELECT id, display_name, status FROM app_ripening_processes
+     WHERE deleted_at IS NULL
+       AND status IN ('active', 'paused')
+       AND (payload->>'deviceId') = ANY($1::text[])
+       AND ($2::uuid IS NULL OR id <> $2::uuid)
+     LIMIT 1`,
+    [ids, excludeId]
+  );
+  if (rows.length) {
+    res.status(409).json({
+      error: 'device_active_process',
+      message: 'device already has an active or paused tracking',
+      existing: rows[0],
+    });
+    return false;
   }
-  if (now <= start) return 0;
-  if (now >= end) return 100;
-  return Math.min(100, Math.round(((now - start) / (end - start)) * 100));
+  return true;
 }
 
 function mapRecipeTargets(payload) {
@@ -209,7 +295,7 @@ ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
     const { rows } = await pool.query(
       `SELECT * FROM app_ripening_processes
        WHERE deleted_at IS NULL
-         AND status = 'active'
+         AND status IN ('active', 'paused')
          AND (payload->>'deviceId') = ANY($1::text[])
        ORDER BY created_at DESC
        LIMIT 1`,
@@ -232,9 +318,11 @@ ripeningProcessesRouter.get('/active-for-device', async (req, res) => {
           client: clientName,
           product,
           deviceId: p.deviceId || deviceId,
-          progress: progressFromRowPayload(p),
+          progress: progressFromRowPayload(p, row.status),
           startedAt: schedule.startedAt || null,
           estimatedEndAt: schedule.estimatedEndAt ?? null,
+          status: row.status,
+          paused: String(row.status).toLowerCase() === 'paused',
         },
       },
     });
@@ -376,7 +464,7 @@ ripeningProcessesRouter.post(
         const { rows: actives } = await client.query(
           `SELECT id, display_name, payload FROM app_ripening_processes
            WHERE user_id = $1::uuid AND deleted_at IS NULL
-             AND status = 'active'
+             AND status IN ('active', 'paused')
              AND (payload->>'deviceId') = $2
            FOR UPDATE`,
           [req.user.id, deviceId]
@@ -411,7 +499,7 @@ ripeningProcessesRouter.post(
                    true
                  )
              WHERE user_id = $1::uuid AND deleted_at IS NULL
-               AND status = 'active'
+               AND status IN ('active', 'paused')
                AND (payload->>'deviceId') = $3`,
             [
               req.user.id,
@@ -435,7 +523,11 @@ ripeningProcessesRouter.post(
         [
           req.user.id,
           displayName,
-          JSON.stringify({ ...dataToStore, _createdBy: { at: new Date().toISOString() } }),
+          JSON.stringify({
+            ...dataToStore,
+            scheduleSummary: ensurePlannedDurationOnCreate(dataToStore),
+            _createdBy: { at: new Date().toISOString() },
+          }),
         ]
       );
       const row = ins[0];
@@ -663,6 +755,166 @@ ripeningProcessesRouter.post(
   }
 );
 
+/** Documentos del proceso (PDF, Office, imágenes). */
+ripeningProcessesRouter.post(
+  '/:id/documents',
+  requireOperatorPlus,
+  stagingDirMiddleware,
+  documentUpload.single('file'),
+  async (req, res) => {
+    const row = await getProcessRowFromReq(req, res);
+    if (!row) return;
+    if (row.deleted_at) {
+      const st = req._ripenerStaging;
+      if (st) {
+        try {
+          fs.rmSync(st, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
+      }
+      return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+    }
+    const staging = req._ripenerStaging;
+    const cleanupStaging = () => {
+      if (!staging) return;
+      try {
+        fs.rmSync(staging, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    };
+    const file = req.file;
+    if (!file) {
+      cleanupStaging();
+      return res.status(400).json({ error: 'validation', message: 'file required' });
+    }
+    const description = String(req.body?.description || '').trim().slice(0, 300);
+    if (!description) {
+      cleanupStaging();
+      try {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      } catch {
+        /* ignore */
+      }
+      return res.status(400).json({ error: 'validation', message: 'description required' });
+    }
+    const observations = String(req.body?.observations || '').trim().slice(0, 2000) || null;
+    const destDir = path.join(RIPENING_DIR, row.id);
+    fs.mkdirSync(destDir, { recursive: true });
+    const storedName = path.basename(file.path);
+    const to = path.join(destDir, storedName);
+    if (!to.startsWith(destDir)) {
+      cleanupStaging();
+      return res.status(400).json({ error: 'validation' });
+    }
+    try {
+      fs.renameSync(file.path, to);
+    } catch (e) {
+      cleanupStaging();
+      return res.status(500).json({ error: 'server_error', message: String(e.message) });
+    }
+    cleanupStaging();
+    const userMeta = await userMetaFromReq(req);
+    const docId = `doc-${Date.now()}-${randomBytes(3).toString('hex')}`;
+    const apiPath = `/api/v1/ripening-processes/${row.id}/files/${encodeURIComponent(storedName)}`;
+    const docEntry = {
+      id: docId,
+      name: file.originalname || storedName,
+      storedName,
+      mime: file.mimetype || 'application/octet-stream',
+      size: file.size,
+      apiPath,
+      description,
+      observations,
+      uploadedAt: new Date().toISOString(),
+      uploadedByUserId: userMeta.userId,
+      uploadedByEmail: userMeta.email,
+      uploadedByName: userMeta.name,
+    };
+    const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+    const docs = Array.isArray(payload.processDocuments) ? payload.processDocuments : [];
+    payload.processDocuments = [docEntry, ...docs];
+    const timelineEvent = {
+      id: `ev-doc-${Date.now()}`,
+      type: 'document',
+      title: 'Documento adjunto',
+      timestamp: docEntry.uploadedAt,
+      user: userMeta.name || userMeta.email || 'Usuario',
+      persona_escrita: userMeta.name || userMeta.email || 'Usuario',
+      registered_by_user_id: userMeta.userId,
+      registered_by_email: userMeta.email,
+      description,
+      data: [
+        { name: 'Archivo', value: docEntry.name, unit: '' },
+        ...(observations ? [{ name: 'Observaciones', value: observations, unit: '' }] : []),
+      ],
+      documentId: docId,
+      documentApiPath: apiPath,
+    };
+    const timeline = [timelineEvent, ...(Array.isArray(row.timeline) ? row.timeline : [])];
+    const { rows } = await pool.query(
+      `UPDATE app_ripening_processes
+          SET payload = $2::jsonb, timeline = $3::jsonb, updated_at = now()
+        WHERE id = $1::uuid AND deleted_at IS NULL
+        RETURNING *`,
+      [row.id, JSON.stringify(payload), JSON.stringify(timeline)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'not_found' });
+    await writeAudit(req, {
+      action: 'ripening.document.upload',
+      entityType: 'ripening_process',
+      entityId: String(row.id),
+      meta: { documentId: docId, name: docEntry.name },
+    });
+    res.status(201).json({ data: rows[0] });
+  }
+);
+
+ripeningProcessesRouter.delete('/:id/documents/:documentId', requireOperatorPlus, async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
+  if (!row) return;
+  if (row.deleted_at) {
+    return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+  }
+  const documentId = String(req.params.documentId || '').trim();
+  if (!documentId) {
+    return res.status(400).json({ error: 'validation', message: 'documentId required' });
+  }
+  const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+  const docs = Array.isArray(payload.processDocuments) ? payload.processDocuments : [];
+  const idx = docs.findIndex((d) => String(d?.id) === documentId);
+  if (idx < 0) {
+    return res.status(404).json({ error: 'not_found', message: 'document not found' });
+  }
+  const doc = docs[idx];
+  const storedName = safeRelName(doc.storedName);
+  if (storedName) {
+    const filePath = path.join(RIPENING_DIR, row.id, storedName);
+    if (filePath.startsWith(RIPENING_DIR)) {
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  payload.processDocuments = docs.filter((_, i) => i !== idx);
+  const { rows } = await pool.query(
+    `UPDATE app_ripening_processes SET payload = $2::jsonb, updated_at = now()
+     WHERE id = $1::uuid AND deleted_at IS NULL RETURNING *`,
+    [row.id, JSON.stringify(payload)]
+  );
+  if (!rows.length) return res.status(404).json({ error: 'not_found' });
+  await writeAudit(req, {
+    action: 'ripening.document.delete',
+    entityType: 'ripening_process',
+    entityId: String(row.id),
+    meta: { documentId, name: doc.name },
+  });
+  res.json({ data: rows[0] });
+});
+
 ripeningProcessesRouter.patch('/:id', async (req, res) => {
   const row = await getProcessRowFromReq(req, res);
   if (!row) return;
@@ -676,6 +928,10 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
   const { status, display_name, payload: bodyPayload } = req.body || {};
   if (String(row.status || '').toLowerCase() === 'completed') {
     return res.status(403).json({ error: 'process_completed', message: 'process is finalized; editing is disabled' });
+  }
+  const editableStatus = ['active', 'paused'].includes(String(row.status || '').toLowerCase());
+  if (bodyPayload != null && isAdminTier && !editableStatus) {
+    return res.status(403).json({ error: 'process_not_editable', message: 'process cannot be edited in this state' });
   }
   if (status !== undefined && String(status).trim().toLowerCase() === 'completed') {
     return res.status(400).json({
@@ -702,6 +958,28 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
 
   if (isAdminTier && bodyPayload != null && typeof bodyPayload === 'object') {
     mergedPayload = { ...mergedPayload, ...bodyPayload };
+    const st = String(status ?? row.status ?? 'active').toLowerCase();
+    if (st === 'active' || st === 'paused') {
+      mergedPayload.scheduleSummary = recalcScheduleAfterPayloadEdit(
+        mergedPayload,
+        basePayload,
+        st
+      );
+    }
+  }
+
+  const rowStatus = String(status ?? row.status ?? '').toLowerCase();
+  if (rowStatus === 'paused' && bodyPayload != null) {
+    return res.status(400).json({
+      error: 'validation',
+      message: 'use POST /pause and /resume endpoints to change pause state',
+    });
+  }
+  if (status !== undefined && String(status).trim().toLowerCase() === 'paused') {
+    return res.status(400).json({
+      error: 'validation',
+      message: 'use POST /pause endpoint to pause tracking',
+    });
   }
 
   if (status !== undefined && String(status).trim().toLowerCase() === 'cancelled') {
@@ -713,6 +991,12 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
     const unm = urows[0];
     mergedPayload = {
       ...mergedPayload,
+      _closureSnapshot: buildClosureSnapshot(
+        basePayload,
+        String(row.status || 'active'),
+        'cancelled',
+        Date.now()
+      ),
       _cancelledMeta: {
         at: new Date().toISOString(),
         byUserId: uid,
@@ -769,6 +1053,177 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
       },
     });
     res.json({ data: updated });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/** Pausar seguimiento: detiene automatización y permite control manual. */
+ripeningProcessesRouter.post('/:id/pause', requireOperatorPlus, async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
+  if (!row) return;
+  if (row.deleted_at) {
+    return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+  }
+  if (String(row.status).toLowerCase() !== 'active') {
+    return res.status(400).json({ error: 'validation', message: 'only active tracking can be paused' });
+  }
+  try {
+    const userMeta = await userMetaFromReq(req);
+    const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+    const nextPayload = applyPauseToPayload(payload, userMeta);
+    const ev = buildTimelineControlEvent('pause', 'Seguimiento pausado', userMeta, {
+      description: 'Automatización detenida; control manual habilitado.',
+    });
+    const timeline = [ev, ...(Array.isArray(row.timeline) ? row.timeline : [])];
+    const { rows } = await pool.query(
+      `UPDATE app_ripening_processes
+          SET status = 'paused', payload = $2::jsonb, timeline = $3::jsonb, updated_at = now()
+        WHERE id = $1::uuid AND deleted_at IS NULL AND status = 'active'
+        RETURNING *`,
+      [row.id, JSON.stringify(nextPayload), JSON.stringify(timeline)]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'conflict', message: 'state changed' });
+    const updated = rows[0];
+    await writeAudit(req, {
+      action: 'ripening.process.pause',
+      entityType: 'ripening_process',
+      entityId: String(updated.id),
+      meta: { display_name: updated.display_name },
+    });
+    res.json({ data: updated });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/** Reanudar seguimiento pausado; extiende fin por tiempo pausado. */
+ripeningProcessesRouter.post('/:id/resume', requireOperatorPlus, async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
+  if (!row) return;
+  if (row.deleted_at) {
+    return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+  }
+  if (String(row.status).toLowerCase() !== 'paused') {
+    return res.status(400).json({ error: 'validation', message: 'only paused tracking can be resumed' });
+  }
+  try {
+    const userMeta = await userMetaFromReq(req);
+    const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+    const nextPayload = applyResumeToPayload(payload);
+    const ev = buildTimelineControlEvent('resume', 'Seguimiento reanudado', userMeta, {
+      description: 'Automatización retomada; fin ajustado por tiempo pausado.',
+      data: [
+        {
+          name: 'Fin estimado',
+          value: nextPayload.scheduleSummary?.estimatedEndAt ?? '—',
+          unit: '',
+        },
+      ],
+    });
+    const timeline = [ev, ...(Array.isArray(row.timeline) ? row.timeline : [])];
+    const { rows } = await pool.query(
+      `UPDATE app_ripening_processes
+          SET status = 'active', payload = $2::jsonb, timeline = $3::jsonb, updated_at = now()
+        WHERE id = $1::uuid AND deleted_at IS NULL AND status = 'paused'
+        RETURNING *`,
+      [row.id, JSON.stringify(nextPayload), JSON.stringify(timeline)]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'conflict', message: 'state changed' });
+    const updated = rows[0];
+    await writeAudit(req, {
+      action: 'ripening.process.resume',
+      entityType: 'ripening_process',
+      entityId: String(updated.id),
+      meta: { display_name: updated.display_name },
+    });
+    kickTrackingControlForProcess(updated.id).catch((e) =>
+      console.warn('[tracking-control] resume kickoff', updated.id, e.message)
+    );
+    res.json({ data: updated });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/** Superadmin: reactivar seguimiento completado o cancelado con extensión en horas. */
+ripeningProcessesRouter.post('/:id/reactivate', requireSuperAdmin, async (req, res) => {
+  const row = await getProcessRowFromReq(req, res);
+  if (!row) return;
+  if (row.deleted_at) {
+    return res.status(403).json({ error: 'process_archived', message: 'archived processes are read-only' });
+  }
+  const previousStatus = String(row.status || '').toLowerCase();
+  if (previousStatus !== 'completed' && previousStatus !== 'cancelled') {
+    return res.status(400).json({
+      error: 'validation',
+      message: 'only completed or cancelled tracking can be reactivated',
+    });
+  }
+  const extensionHours = Number(req.body?.extensionHours);
+  if (!Number.isFinite(extensionHours) || extensionHours <= 0) {
+    return res.status(400).json({
+      error: 'validation',
+      message: 'extensionHours (positive number) is required',
+    });
+  }
+  const note = req.body?.note != null ? String(req.body.note).trim().slice(0, 500) : '';
+
+  const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
+  const deviceId = String(payload.deviceId || '').trim();
+  if (!deviceId) {
+    return res.status(400).json({ error: 'validation', message: 'process has no linked device' });
+  }
+  try {
+    const latest = await fetchLatestProcessForDevice(deviceId);
+    if (!latest || String(latest.id) !== String(row.id)) {
+      return res.status(409).json({
+        error: 'not_latest_process',
+        message: 'only the most recent process on this device can be reactivated',
+        latestId: latest?.id ?? null,
+      });
+    }
+    if (!(await assertNoActiveTrackingOnDevice(res, deviceId, row.id))) return;
+
+    const userMeta = await userMetaFromReq(req);
+    const { payload: nextPayload, timelineEvent, summary } = applyReactivationToPayload(payload, {
+      extensionHours,
+      previousStatus,
+      rowUpdatedAt: row.updated_at,
+      userMeta,
+      note: note || null,
+    });
+
+    const timeline = [timelineEvent, ...(Array.isArray(row.timeline) ? row.timeline : [])];
+
+    const { rows } = await pool.query(
+      `UPDATE app_ripening_processes
+          SET status = 'active', payload = $2::jsonb, timeline = $3::jsonb, updated_at = now()
+        WHERE id = $1::uuid AND deleted_at IS NULL AND status = ANY($4::text[])
+        RETURNING *`,
+      [row.id, JSON.stringify(nextPayload), JSON.stringify(timeline), ['completed', 'cancelled']]
+    );
+    if (!rows.length) return res.status(409).json({ error: 'conflict', message: 'state changed' });
+    const updated = rows[0];
+    await writeAudit(req, {
+      action: 'ripening.process.reactivate',
+      entityType: 'ripening_process',
+      entityId: String(updated.id),
+      meta: {
+        display_name: updated.display_name,
+        deviceId,
+        extensionHours,
+        closureAt: summary.closure?.at,
+        phaseLabel: summary.closure?.phaseLabel,
+      },
+    });
+    kickTrackingControlForProcess(updated.id).catch((e) =>
+      console.warn('[tracking-control] reactivate kickoff', updated.id, e.message)
+    );
+    res.json({ data: updated, summary });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
