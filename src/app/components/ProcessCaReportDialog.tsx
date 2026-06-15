@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   CartesianGrid,
@@ -22,7 +22,12 @@ import {
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import { fetchMaduradorRangoHistoryForImei } from '@/app/lib/madurador';
-import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import {
+  apiFileUrl,
+  fetchRipeningFileBlob,
+  type RipeningProcessDocument,
+  type RipeningProcessRow,
+} from '@/app/lib/ripeningProcessesApi';
 import type { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { processReportRangeEndMs } from '@/app/lib/trackingIntegralReport';
 import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
@@ -40,12 +45,21 @@ import {
   type CaPdfIndicators,
   type DailyCaAnalysis,
 } from '@/app/lib/caReportAnalysis';
-import { collectDomPdfSections, downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
+import { mergeCaReportWithAttachmentPdfs, triggerPdfDownload } from '@/app/lib/caReportPdfMerge';
+import {
+  formatDocumentBytes,
+  isImageDocument,
+  isPdfDocument,
+} from '@/app/lib/ripeningProcessDocuments';
+import {
+  buildDomSectionsPdfBytes,
+  collectDomPdfSections,
+  PDF_A4_CONTENT_WIDTH_PX,
+} from '@/app/lib/reportPdfExport';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
-/** Ancho fijo del documento al capturar (coincide con reportPdfExport). */
-const CA_PDF_WIDTH_PX = 680;
+const CA_PDF_WIDTH_PX = PDF_A4_CONTENT_WIDTH_PX;
 
 type Props = {
   open: boolean;
@@ -65,6 +79,24 @@ function chartTick(ts: string): string {
 function pctLabel(count: number, total: number): string {
   if (total <= 0) return '—';
   return `${count} de ${total} (${formatUiDecimal((count / total) * 100, 1)}%)`;
+}
+
+async function waitForImagesInRoot(root: HTMLElement): Promise<void> {
+  const imgs = Array.from(root.querySelectorAll('img'));
+  await Promise.all(
+    imgs.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+        })
+    )
+  );
 }
 
 const CA_FONT = 'Arial, Helvetica, sans-serif';
@@ -106,23 +138,24 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
 
 function CaPdfSection({ section, children }: { section: string; children: React.ReactNode }) {
   return (
-    <article
-      data-ca-pdf-section={section}
-      style={{
-        width: `${CA_PDF_WIDTH_PX}px`,
-        maxWidth: `${CA_PDF_WIDTH_PX}px`,
-        boxSizing: 'border-box',
-        padding: '28px 32px',
-        margin: '0 auto 20px',
-        fontFamily: CA_FONT,
-        backgroundColor: '#ffffff',
-        color: '#111827',
-        border: '1px solid #d1d5db',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-      }}
-    >
-      {children}
-    </article>
+    <div style={{ margin: '0 auto 20px', width: `${CA_PDF_WIDTH_PX}px`, maxWidth: '100%' }}>
+      <article
+        data-ca-pdf-section={section}
+        style={{
+          width: `${CA_PDF_WIDTH_PX}px`,
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          padding: '24px 28px',
+          fontFamily: CA_FONT,
+          backgroundColor: '#ffffff',
+          color: '#111827',
+          border: '1px solid #cbd5e1',
+          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+        }}
+      >
+        {children}
+      </article>
+    </div>
   );
 }
 
@@ -380,6 +413,58 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
   const { t, formatDateTime, formatFileTimestamp, language, tempUnit, convertTemp, formatTemp } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [imageUrls, setImageUrls] = useState<Record<string, string>>({});
+
+  const processDocuments = useMemo((): RipeningProcessDocument[] => {
+    const raw = (view._row as RipeningProcessRow | undefined)?.payload?.processDocuments;
+    return Array.isArray(raw) ? raw : [];
+  }, [view._row]);
+
+  const imageDocuments = useMemo(
+    () => processDocuments.filter(isImageDocument),
+    [processDocuments]
+  );
+
+  useEffect(() => {
+    if (!open || !imageDocuments.length) {
+      setImageUrls((prev) => {
+        Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
+        return {};
+      });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, string> = {};
+      for (const doc of imageDocuments) {
+        try {
+          const blob = await fetchRipeningFileBlob(apiFileUrl(doc.apiPath));
+          next[doc.id] = URL.createObjectURL(blob);
+        } catch {
+          /* omit broken image */
+        }
+      }
+      if (!cancelled) {
+        setImageUrls((prev) => {
+          Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
+          return next;
+        });
+      } else {
+        Object.values(next).forEach((u) => URL.revokeObjectURL(u));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, imageDocuments]);
+
+  useEffect(() => {
+    if (open) return;
+    setImageUrls((prev) => {
+      Object.values(prev).forEach((u) => URL.revokeObjectURL(u));
+      return {};
+    });
+  }, [open]);
 
   const deviceId = useMemo(() => {
     const p = (view._row as RipeningProcessRow | undefined)?.payload as { deviceId?: string } | undefined;
@@ -479,18 +564,22 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         toast.error(t('ca_report_pdf_error'));
         return;
       }
+      await waitForImagesInRoot(root);
+      window.dispatchEvent(new Event('resize'));
+      await new Promise((r) => setTimeout(r, 150));
       const sections = collectDomPdfSections(root, CA_PDF_SECTION_ATTR);
-      const idShort = view.id ? String(view.id).replace(/-/g, '').slice(0, 8) : 'ca';
-      await downloadDomSectionsAsPdf({
+      const filename = `informe_ca_${deviceId}_${formatFileTimestamp()}.pdf`;
+      let pdfBytes = await buildDomSectionsPdfBytes({
         root,
         sectionAttr: CA_PDF_SECTION_ATTR,
         sections,
-        filename: `informe_ca_${deviceId}_${formatFileTimestamp()}.pdf`,
-        marginMm: 14,
+        marginMm: 15,
         scale: 2,
         captureWidthPx: CA_PDF_WIDTH_PX,
         preserveSourceStyles: true,
       });
+      pdfBytes = await mergeCaReportWithAttachmentPdfs(pdfBytes, processDocuments);
+      triggerPdfDownload(pdfBytes, filename);
       toast.success(t('ca_report_pdf_success'));
     } catch (e) {
       console.error(e);
@@ -498,7 +587,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     } finally {
       setPdfBusy(false);
     }
-  }, [analysis, deviceId, formatFileTimestamp, t, view.id]);
+  }, [analysis, deviceId, formatFileTimestamp, processDocuments, t]);
 
   const varRows = analysis
     ? [
@@ -568,13 +657,12 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
             ref={printRef}
             style={{
               width: `${CA_PDF_WIDTH_PX}px`,
-              maxWidth: '100%',
               margin: '0 auto',
               fontFamily: CA_FONT,
             }}
           >
-            {/* §1 + §2 + §3 — Intro, variables y resumen KPI (una sola hoja lógica) */}
-            <CaPdfSection section="intro-summary">
+            {/* §1 + §2 — Intro y variables */}
+            <CaPdfSection section="intro">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="1" title={t('ca_report_pdf_s1_title')} />
               <CaProse>
@@ -602,7 +690,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                   tempTol: String(CA_TEMP_TOLERANCE_C),
                 })}
               </CaProse>
+            </CaPdfSection>
 
+            {/* §3 — Resumen KPI */}
+            <CaPdfSection section="summary">
+              <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="3" title={t('ca_report_pdf_s3_title')} />
               <CaProse>
                 {t('ca_report_pdf_s3_intro', {
@@ -732,6 +824,74 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 {formatDateTime(new Date().toISOString())} · {t('integral_report_field_imei')}: {deviceId}
               </p>
             </CaPdfSection>
+
+            {/* §8 — Anexos documentales */}
+            <CaPdfSection section="attachments">
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="8" title={t('ca_report_pdf_s8_title')} />
+              <CaProse>{t('ca_report_pdf_s8_intro')}</CaProse>
+              {processDocuments.length === 0 ? (
+                <CaProse>{t('ca_report_pdf_no_attachments')}</CaProse>
+              ) : (
+                <CaTechTable
+                  headers={[
+                    t('ca_report_pdf_att_desc'),
+                    t('ca_report_pdf_att_file'),
+                    t('ca_report_pdf_att_type'),
+                  ]}
+                  rows={processDocuments.map((doc) => [
+                    [doc.description || '—', doc.observations || ''].filter(Boolean).join('\n'),
+                    doc.name,
+                    isPdfDocument(doc)
+                      ? t('ca_report_pdf_att_type_pdf')
+                      : isImageDocument(doc)
+                        ? t('ca_report_pdf_att_type_image')
+                        : t('ca_report_pdf_att_type_other'),
+                  ])}
+                />
+              )}
+              {processDocuments.some(isPdfDocument) && (
+                <CaProse>{t('ca_report_pdf_s8_pdf_note')}</CaProse>
+              )}
+            </CaPdfSection>
+
+            {imageDocuments.map((doc, idx) =>
+              imageUrls[doc.id] ? (
+                <CaPdfSection key={doc.id} section={`attachment-image-${doc.id}`}>
+                  <CaPdfHeader deviceId={deviceId} t={t} />
+                  <CaSubSectionTitle
+                    n={`8.${idx + 1}`}
+                    title={doc.description || doc.name || t('ca_report_pdf_att_image')}
+                  />
+                  {doc.observations && <CaProse>{doc.observations}</CaProse>}
+                  <div style={{ textAlign: 'center', marginTop: '8px' }}>
+                    <img
+                      src={imageUrls[doc.id]}
+                      alt={doc.description || doc.name}
+                      crossOrigin="anonymous"
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '520px',
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain',
+                        border: '1px solid #e5e7eb',
+                      }}
+                    />
+                  </div>
+                  <p
+                    style={{
+                      fontSize: '10px',
+                      color: '#6b7280',
+                      marginTop: '8px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {doc.name} · {formatDocumentBytes(doc.size)}
+                  </p>
+                </CaPdfSection>
+              ) : null
+            )}
           </div>
         )}
 

@@ -284,6 +284,7 @@ type SectionCaptureSnap = {
   maxWidth: string;
   boxSizing: string;
   overflow: string;
+  margin: string;
 };
 
 function snapSectionLayout(section: HTMLElement): SectionCaptureSnap {
@@ -293,6 +294,7 @@ function snapSectionLayout(section: HTMLElement): SectionCaptureSnap {
     maxWidth: cs.maxWidth,
     boxSizing: cs.boxSizing,
     overflow: cs.overflow,
+    margin: cs.margin,
   };
 }
 
@@ -301,6 +303,7 @@ function applySectionCaptureLayout(section: HTMLElement, captureWidthPx: number)
   section.style.maxWidth = `${captureWidthPx}px`;
   section.style.boxSizing = 'border-box';
   section.style.overflow = 'visible';
+  section.style.margin = '0';
 }
 
 function restoreSectionLayout(section: HTMLElement, snap: SectionCaptureSnap) {
@@ -308,6 +311,7 @@ function restoreSectionLayout(section: HTMLElement, snap: SectionCaptureSnap) {
   section.style.maxWidth = snap.maxWidth;
   section.style.boxSizing = snap.boxSizing;
   section.style.overflow = snap.overflow;
+  section.style.margin = snap.margin;
 }
 
 function prepareClonedSectionForCanvas(
@@ -441,19 +445,14 @@ async function captureSectionToPdf(
     attrName: string;
     isFirst: boolean;
     captureWidthPx: number;
-    /** No mutar el DOM visible; copiar estilos calculados solo al clon (WYSIWYG). */
     preserveSourceStyles?: boolean;
   }
 ): Promise<void> {
   const preserve = opts.preserveSourceStyles === true;
   const restoreStyles = preserve ? () => {} : prepareSourceSectionForCapture(section);
   const layoutSnap = snapSectionLayout(section);
-  if (!preserve) {
-    applySectionCaptureLayout(section, opts.captureWidthPx);
-  }
-  const captureW = preserve
-    ? Math.max(section.offsetWidth, section.scrollWidth, opts.captureWidthPx)
-    : opts.captureWidthPx;
+  applySectionCaptureLayout(section, opts.captureWidthPx);
+  const captureW = opts.captureWidthPx;
   try {
     const canvas = await html2canvas(section, {
       scale: opts.scale,
@@ -475,34 +474,35 @@ async function captureSectionToPdf(
           cloneRoot.style.boxSizing = 'border-box';
           cloneRoot.style.overflow = 'visible';
           cloneRoot.style.backgroundColor = '#ffffff';
+          cloneRoot.style.margin = '0';
+          cloneRoot.style.padding = cloneRoot.style.padding || '';
         }
       },
     });
     if (!opts.isFirst) pdf.addPage();
     appendCanvasToPdfMultiPage(pdf, canvas, opts.marginMm);
   } finally {
-    if (!preserve) restoreSectionLayout(section, layoutSnap);
+    restoreSectionLayout(section, layoutSnap);
     restoreStyles();
   }
 }
 
-/** Captura secciones DOM y genera un PDF multipágina. */
-/** Ancho útil A4 a ~96 dpi (210 mm − márgenes típicos). */
-export const PDF_A4_CONTENT_WIDTH_PX = 680;
+/** Ancho útil A4: 210 mm − 2×15 mm margen ≈ 680 px @ 96 dpi */
+export const PDF_A4_CONTENT_WIDTH_PX = Math.round((180 / 25.4) * 96);
 
-export async function downloadDomSectionsAsPdf(opts: {
+export type DomSectionsPdfOptions = {
   root: HTMLElement;
   sectionAttr?: string;
   sections?: HTMLElement[];
-  filename: string;
   marginMm?: number;
   scale?: number;
   captureWidthPx?: number;
-  /** Captura tal como se ve en pantalla, sin quitar clases del DOM fuente. */
   preserveSourceStyles?: boolean;
-}): Promise<void> {
+};
+
+async function buildDomSectionsPdfDoc(opts: DomSectionsPdfOptions): Promise<import('jspdf').jsPDF> {
   const attrName = opts.sectionAttr ?? 'data-pdf-section';
-  const margin = opts.marginMm ?? 14;
+  const margin = opts.marginMm ?? 15;
   const scale = opts.scale ?? 2;
   const captureWidthPx = opts.captureWidthPx ?? PDF_A4_CONTENT_WIDTH_PX;
   const preserve = opts.preserveSourceStyles === true;
@@ -515,11 +515,9 @@ export async function downloadDomSectionsAsPdf(opts: {
     throw new Error('no pdf sections');
   }
 
-  const rootSnap = preserve ? null : snapSectionLayout(opts.root);
-  if (!preserve) {
-    applySectionCaptureLayout(opts.root, captureWidthPx);
-    window.dispatchEvent(new Event('resize'));
-  }
+  const rootSnap = snapSectionLayout(opts.root);
+  applySectionCaptureLayout(opts.root, captureWidthPx);
+  if (!preserve) window.dispatchEvent(new Event('resize'));
 
   const pdf = new jsPDF('p', 'mm', 'a4');
   let isFirst = true;
@@ -535,8 +533,20 @@ export async function downloadDomSectionsAsPdf(opts: {
       });
       isFirst = false;
     }
-    pdf.save(opts.filename);
+    return pdf;
   } finally {
-    if (!preserve && rootSnap) restoreSectionLayout(opts.root, rootSnap);
+    restoreSectionLayout(opts.root, rootSnap);
   }
+}
+
+export async function buildDomSectionsPdfBytes(opts: DomSectionsPdfOptions): Promise<Uint8Array> {
+  const pdf = await buildDomSectionsPdfDoc(opts);
+  return new Uint8Array(pdf.output('arraybuffer'));
+}
+
+export async function downloadDomSectionsAsPdf(
+  opts: DomSectionsPdfOptions & { filename: string }
+): Promise<void> {
+  const pdf = await buildDomSectionsPdfDoc(opts);
+  pdf.save(opts.filename);
 }
