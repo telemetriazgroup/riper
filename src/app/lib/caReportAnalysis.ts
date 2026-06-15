@@ -343,6 +343,115 @@ export type CaProcessSummary = {
   tempGlobalInRangePct: number | null;
 };
 
+export function formatCaReportPeriodDate(iso: string, locale: string): string {
+  try {
+    return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'es-PE', {
+      timeZone: LIMA_TZ,
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+      .format(new Date(iso))
+      .replace(/\s/g, '-');
+  } catch {
+    return iso;
+  }
+}
+
+export type CaPdfIndicators = {
+  co2Min: number | null;
+  co2Max: number | null;
+  o2Min: number | null;
+  o2Max: number | null;
+  ethyleneMin: number | null;
+  ethyleneMax: number | null;
+  tempMin: number | null;
+  tempMax: number | null;
+  medianCo2Sp: number | null;
+  medianO2Sp: number | null;
+  medianTempSp: number | null;
+  co2InRangeCount: number;
+  co2Evaluated: number;
+  o2InRangeCount: number;
+  o2Evaluated: number;
+  tempInRangeCount: number;
+  tempEvaluated: number;
+  ethInRangeCount: number;
+  ethEvaluated: number;
+};
+
+export function buildCaPdfIndicators(
+  prepared: CaPreparedPoint[],
+  deviceId: string
+): CaPdfIndicators {
+  const nums = (extract: (p: CaPreparedPoint) => number | null) =>
+    prepared.map(extract).filter((v): v is number => v != null && Number.isFinite(v));
+
+  const co2Vals = nums((p) => p.co2);
+  const o2Vals = nums((p) => p.o2);
+  const ethVals = nums((p) => p.ethylene);
+  const tempVals = nums((p) => p.return_air);
+
+  let co2Ok = 0;
+  let co2Ev = 0;
+  let o2Ok = 0;
+  let o2Ev = 0;
+  let tempOk = 0;
+  let tempEv = 0;
+  let ethOk = 0;
+  let ethEv = 0;
+  const prueba = isPruebaCaMonitoringDevice(deviceId);
+
+  for (const p of prepared) {
+    if (p.co2 != null && p.set_point_co2 != null) {
+      co2Ev++;
+      if (Math.abs(p.co2 - p.set_point_co2) <= CA_CO2_TOLERANCE_PCT) co2Ok++;
+    }
+    if (p.o2 != null && p.set_point_o2 != null) {
+      o2Ev++;
+      if (Math.abs(p.o2 - p.set_point_o2) <= CA_O2_TOLERANCE_PCT) o2Ok++;
+    }
+    if (p.return_air != null && p.set_point != null) {
+      tempEv++;
+      if (Math.abs(p.return_air - p.set_point) <= CA_TEMP_TOLERANCE_C) tempOk++;
+    }
+    if (p.ethylene != null) {
+      ethEv++;
+      const v = prueba ? clampPruebaCaEthylenePpm(p.ethylene) : p.ethylene;
+      if (v != null) {
+        if (prueba) {
+          if (v >= 0 && v <= 1) ethOk++;
+        } else {
+          const t = p.sp_ethyleno;
+          if (t != null && Math.abs(v - t) <= ethyleneTolerance(deviceId, t)) ethOk++;
+        }
+      }
+    }
+  }
+
+  return {
+    co2Min: co2Vals.length ? Math.min(...co2Vals) : null,
+    co2Max: co2Vals.length ? Math.max(...co2Vals) : null,
+    o2Min: o2Vals.length ? Math.min(...o2Vals) : null,
+    o2Max: o2Vals.length ? Math.max(...o2Vals) : null,
+    ethyleneMin: ethVals.length ? Math.min(...ethVals) : null,
+    ethyleneMax: ethVals.length ? Math.max(...ethVals) : null,
+    tempMin: tempVals.length ? Math.min(...tempVals) : null,
+    tempMax: tempVals.length ? Math.max(...tempVals) : null,
+    medianCo2Sp: median(prepared.map((p) => p.set_point_co2).filter((v): v is number => v != null)),
+    medianO2Sp: median(prepared.map((p) => p.set_point_o2).filter((v): v is number => v != null)),
+    medianTempSp: median(prepared.map((p) => p.set_point).filter((v): v is number => v != null)),
+    co2InRangeCount: co2Ok,
+    co2Evaluated: co2Ev,
+    o2InRangeCount: o2Ok,
+    o2Evaluated: o2Ev,
+    tempInRangeCount: tempOk,
+    tempEvaluated: tempEv,
+    ethInRangeCount: ethOk,
+    ethEvaluated: ethEv,
+  };
+}
+
 export function buildCaProcessSummary(
   prepared: CaPreparedPoint[],
   daily: DailyCaAnalysis[],

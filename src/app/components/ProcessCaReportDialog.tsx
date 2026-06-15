@@ -28,20 +28,24 @@ import type { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { processReportRangeEndMs } from '@/app/lib/trackingIntegralReport';
 import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import {
+  buildCaPdfIndicators,
   buildCaProcessSummary,
   buildDailyCaAnalysis,
   CA_CO2_TOLERANCE_PCT,
   CA_O2_TOLERANCE_PCT,
+  CA_TEMP_TOLERANCE_C,
   downsampleCaPreparedPoints,
   formatCaGasTargetLabel,
+  formatCaReportPeriodDate,
   prepareCaHistoryPoints,
+  type CaPdfIndicators,
   type DailyCaAnalysis,
 } from '@/app/lib/caReportAnalysis';
 import { collectDomPdfSections, downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
-
-const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
 import { clsx } from 'clsx';
+
+const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 
 type Props = {
   open: boolean;
@@ -58,18 +62,129 @@ function chartTick(ts: string): string {
   }
 }
 
-function RangeBadge({ ok, pct }: { ok: boolean; pct: number | null }) {
-  const { t } = useSettings();
+function pctLabel(count: number, total: number): string {
+  if (total <= 0) return '—';
+  return `${count} de ${total} (${formatUiDecimal((count / total) * 100, 1)}%)`;
+}
+
+function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => string }) {
   return (
-    <span
-      className={clsx(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold',
-        ok ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-      )}
+    <div
+      className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-400 pb-2 mb-4 text-[11px] font-semibold text-gray-800 tracking-wide"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
     >
-      {pct != null ? `${pct}% ${t('ca_report_in_range')}` : '—'}
-    </span>
+      <span>ZGROUP PERU | {t('ca_report_pdf_doc_title')}</span>
+      <span>
+        {t('ca_report_pdf_code')}: <span className="font-mono">{deviceId}</span>
+      </span>
+    </div>
   );
+}
+
+function CaSectionTitle({ n, title }: { n: string; title: string }) {
+  return (
+    <h2
+      className="text-[13px] font-bold text-gray-900 mt-4 mb-2 first:mt-0"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    >
+      {n}. {title}
+    </h2>
+  );
+}
+
+function CaSubSectionTitle({ n, title }: { n: string; title: string }) {
+  return (
+    <h3
+      className="text-[12px] font-bold text-gray-900 mt-3 mb-2"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    >
+      {n} {title}
+    </h3>
+  );
+}
+
+function CaProse({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      className="text-[11px] text-gray-800 leading-relaxed mb-3 text-justify"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function CaTechTable({
+  headers,
+  rows,
+}: {
+  headers: [string, string] | [string, string, string];
+  rows: string[][];
+}) {
+  const cols = headers.length;
+  return (
+    <table
+      className="w-full text-[11px] border-collapse mb-4"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    >
+      <thead>
+        <tr className="border-b border-gray-400">
+          {headers.map((h) => (
+            <th key={h} className="text-left py-1.5 pr-3 font-semibold text-gray-900">
+              {h}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i} className="border-b border-gray-200 align-top">
+            {row.slice(0, cols).map((cell, j) => (
+              <td
+                key={j}
+                className={clsx('py-1.5 pr-3', j === 0 && 'font-medium text-gray-900')}
+              >
+                {cell}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function CaBulletList({ items }: { items: string[] }) {
+  return (
+    <ul
+      className="text-[11px] text-gray-800 leading-relaxed mb-3 list-disc pl-5 space-y-1"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    >
+      {items.map((item, i) => (
+        <li key={i}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+function metricCell(
+  stats: DailyCaAnalysis['co2'],
+  fmt: (v: number) => string,
+  gasPercent = false
+): string {
+  const range =
+    stats.min != null && stats.max != null
+      ? `${fmt(stats.min)} – ${fmt(stats.max)}`
+      : stats.avg != null
+        ? fmt(stats.avg)
+        : '—';
+  const target =
+    stats.target != null
+      ? gasPercent && stats.tolerance != null
+        ? formatCaGasTargetLabel(stats.target, stats.tolerance, '%')
+        : fmt(stats.target)
+      : null;
+  const pct = stats.inRangePct != null ? `${stats.inRangePct}%` : '—';
+  return [range, target ? `meta ${target}` : null, pct].filter(Boolean).join('\n');
 }
 
 function DailyTable({ rows }: { rows: DailyCaAnalysis[] }) {
@@ -78,107 +193,68 @@ function DailyTable({ rows }: { rows: DailyCaAnalysis[] }) {
     return <p className="text-sm text-gray-500 py-4">{t('ca_report_no_daily')}</p>;
   }
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="w-full text-xs">
-        <thead className="bg-slate-50 text-slate-600 uppercase tracking-wide">
-          <tr>
-            <th className="text-left p-2 font-semibold">{t('ca_report_day')}</th>
-            <th className="text-left p-2 font-semibold">CO₂ (%)</th>
-            <th className="text-left p-2 font-semibold">O₂ (%)</th>
-            <th className="text-left p-2 font-semibold">{t('ethylene')} (ppm)</th>
-            <th className="text-left p-2 font-semibold">{t('ca_report_return_air')}</th>
-            <th className="text-left p-2 font-semibold">{t('ca_report_day_status')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {rows.map((d) => (
-            <tr key={d.dayKey} className="hover:bg-slate-50/80">
-              <td className="p-2 align-top">
-                <div className="font-medium text-gray-900">{d.dayLabel}</div>
-                <div className="text-[10px] text-gray-500">{d.samples} {t('ca_report_readings')}</div>
-              </td>
-              <td className="p-2 align-top">
-                <MetricCell stats={d.co2} fmt={(v) => `${formatUiDecimal(v)}%`} gasPercent />
-              </td>
-              <td className="p-2 align-top">
-                <MetricCell stats={d.o2} fmt={(v) => `${formatUiDecimal(v)}%`} gasPercent />
-              </td>
-              <td className="p-2 align-top">
-                <MetricCell
-                  stats={d.ethylene}
-                  fmt={(v) => `${formatUiDecimal(v)} ppm`}
-                  targetFmt={(v) => `≤ ${formatUiDecimal(v)} ppm`}
-                />
-              </td>
-              <td className="p-2 align-top">
-                <MetricCell
-                  stats={d.returnAir}
-                  fmt={(v) => formatTemp(convertTemp(v))}
-                  targetFmt={(v) => formatTemp(convertTemp(v))}
-                />
-              </td>
-              <td className="p-2 align-top">
-                {(() => {
-                  const pcts = [d.co2.inRangePct, d.o2.inRangePct, d.ethylene.inRangePct, d.returnAir.inRangePct].filter(
-                    (v): v is number => v != null
-                  );
-                  const worst = pcts.length ? Math.min(...pcts) : null;
-                  return (
-                    <>
-                      <RangeBadge ok={d.allInRange} pct={worst} />
-                      <p className="text-[10px] text-gray-500 mt-1">
-                        {d.allInRange ? t('ca_report_day_ok') : t('ca_report_day_review')}
-                      </p>
-                    </>
-                  );
-                })()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <CaTechTable
+      headers={[t('ca_report_day'), 'CO₂ (%)', 'O₂ (%)', `${t('ethylene')} (ppm)`, t('ca_report_return_air'), t('ca_report_day_status')]}
+      rows={rows.map((d) => {
+        const pcts = [d.co2.inRangePct, d.o2.inRangePct, d.ethylene.inRangePct, d.returnAir.inRangePct].filter(
+          (v): v is number => v != null
+        );
+        const worst = pcts.length ? Math.min(...pcts) : null;
+        return [
+          `${d.dayLabel}\n(${d.samples} ${t('ca_report_readings')})`,
+          metricCell(d.co2, (v) => `${formatUiDecimal(v)}%`, true),
+          metricCell(d.o2, (v) => `${formatUiDecimal(v)}%`, true),
+          metricCell(d.ethylene, (v) => `${formatUiDecimal(v)} ppm`),
+          metricCell(d.returnAir, (v) => formatTemp(convertTemp(v))),
+          d.allInRange
+            ? `${t('ca_report_day_ok')}${worst != null ? ` (${worst}%)` : ''}`
+            : `${t('ca_report_day_review')}${worst != null ? ` (${worst}%)` : ''}`,
+        ];
+      })}
+    />
   );
 }
 
-function MetricCell({
-  stats,
-  fmt,
-  targetFmt,
-  gasPercent = false,
-}: {
-  stats: DailyCaAnalysis['co2'];
-  fmt: (v: number) => string;
-  targetFmt?: (v: number) => string;
-  gasPercent?: boolean;
-}) {
-  const { t } = useSettings();
-  if (!stats.readings) return <span className="text-gray-400">—</span>;
-  const targetLabel =
-    stats.target != null
-      ? gasPercent && stats.tolerance != null
-        ? formatCaGasTargetLabel(stats.target, stats.tolerance, '%')
-        : targetFmt
-          ? targetFmt(stats.target)
-          : fmt(stats.target)
-      : null;
-  return (
-    <div className="space-y-1">
-      <div className="text-gray-800">
-        {stats.min != null && stats.max != null
-          ? `${fmt(stats.min)} – ${fmt(stats.max)}`
-          : stats.avg != null
-            ? fmt(stats.avg)
-            : '—'}
-      </div>
-      {targetLabel && (
-        <div className="text-[10px] text-gray-500">
-          {t('ca_report_target')} {targetLabel}
-        </div>
-      )}
-      <RangeBadge ok={stats.inRange} pct={stats.inRangePct} />
-    </div>
-  );
+function buildKpiRows(
+  t: (k: string, p?: Record<string, string>) => string,
+  summary: ReturnType<typeof buildCaProcessSummary>,
+  indicators: CaPdfIndicators,
+  periodStart: string,
+  periodEnd: string,
+  formatTemp: (v: number) => string,
+  convertTemp: (v: number) => number
+): string[][] {
+  const fmtPct = (c: number, total: number) => pctLabel(c, total);
+  const fmtMinMax = (min: number | null, max: number | null, unit: string) =>
+    min != null && max != null ? `${formatUiDecimal(min)}${unit} – ${formatUiDecimal(max)}${unit}` : '—';
+
+  return [
+    [t('ca_report_pdf_ind_total'), String(summary.totalPoints)],
+    [t('ca_report_pdf_ind_period'), `${periodStart} al ${periodEnd}`],
+    [t('ca_report_pdf_ind_chart_pts'), String(summary.chartPoints)],
+    [
+      t('ca_report_pdf_ind_co2_range', { tol: String(CA_CO2_TOLERANCE_PCT) }),
+      fmtPct(indicators.co2InRangeCount, indicators.co2Evaluated),
+    ],
+    [
+      t('ca_report_pdf_ind_o2_range', { tol: String(CA_O2_TOLERANCE_PCT) }),
+      fmtPct(indicators.o2InRangeCount, indicators.o2Evaluated),
+    ],
+    [t('ca_report_pdf_ind_eth_range'), fmtPct(indicators.ethInRangeCount, indicators.ethEvaluated)],
+    [t('ca_report_pdf_ind_temp_range'), fmtPct(indicators.tempInRangeCount, indicators.tempEvaluated)],
+    [t('ca_report_pdf_ind_co2_minmax'), fmtMinMax(indicators.co2Min, indicators.co2Max, '%')],
+    [t('ca_report_pdf_ind_o2_minmax'), fmtMinMax(indicators.o2Min, indicators.o2Max, '%')],
+    [
+      t('ca_report_pdf_ind_temp_minmax'),
+      indicators.tempMin != null && indicators.tempMax != null
+        ? `${formatTemp(convertTemp(indicators.tempMin))} – ${formatTemp(convertTemp(indicators.tempMax))}`
+        : '—',
+    ],
+    [
+      t('ca_report_pdf_ind_days_ok'),
+      `${summary.daysInRange} / ${summary.daysAnalyzed}`,
+    ],
+  ];
 }
 
 export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
@@ -190,6 +266,10 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     const p = (view._row as RipeningProcessRow | undefined)?.payload as { deviceId?: string } | undefined;
     return String(p?.deviceId ?? '').trim();
   }, [view._row]);
+
+  const trackingName = view.batch?.lotNumber ?? view.id ?? '—';
+  const productName = view.batch?.product ?? '—';
+  const clientName = view.client?.name ?? '—';
 
   const startedAtIso = view.scheduleSummary?.startedAt
     ? String(view.scheduleSummary.startedAt)
@@ -223,7 +303,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     const chartPrepared = downsampleCaPreparedPoints(prepared);
     const daily = buildDailyCaAnalysis(prepared, language, deviceId);
     const summary = buildCaProcessSummary(prepared, daily, deviceId);
+    const indicators = buildCaPdfIndicators(prepared, deviceId);
     const prueba = isPruebaCaMonitoringDevice(deviceId);
+
+    const periodStart = formatCaReportPeriodDate(startedAtIso ?? points[0]!.timestamp, language);
+    const periodEnd = formatCaReportPeriodDate(rangeEndIso, language);
 
     const gasRows = chartPrepared.map((p) => ({
       tick: chartTick(p.timestamp),
@@ -238,8 +322,27 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
       setpoint: p.set_point != null ? convertTemp(p.set_point) : null,
     }));
 
-    return { prepared, chartPrepared, daily, summary, gasRows, tempRows, prueba };
-  }, [data?.points, deviceId, language, convertTemp]);
+    const gasesOk =
+      (summary.co2GlobalInRangePct ?? 0) >= 85 &&
+      (summary.o2GlobalInRangePct ?? 0) >= 85;
+    const tempOk = (summary.tempGlobalInRangePct ?? 0) >= 85;
+
+    return {
+      prepared,
+      chartPrepared,
+      daily,
+      summary,
+      indicators,
+      gasRows,
+      tempRows,
+      prueba,
+      periodStart,
+      periodEnd,
+      gasesOk,
+      tempOk,
+      kpiRows: buildKpiRows(t, summary, indicators, periodStart, periodEnd, formatTemp, convertTemp),
+    };
+  }, [data?.points, deviceId, language, convertTemp, formatTemp, startedAtIso, rangeEndIso, t]);
 
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
@@ -263,7 +366,9 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         root,
         sectionAttr: CA_PDF_SECTION_ATTR,
         sections,
-        filename: `ca_report_${idShort}_${formatFileTimestamp()}.pdf`,
+        filename: `informe_ca_${deviceId}_${formatFileTimestamp()}.pdf`,
+        marginMm: 12,
+        scale: 1.6,
       });
       toast.success(t('ca_report_pdf_success'));
     } catch (e) {
@@ -272,7 +377,19 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     } finally {
       setPdfBusy(false);
     }
-  }, [analysis, formatFileTimestamp, t, view.id]);
+  }, [analysis, deviceId, formatFileTimestamp, t, view.id]);
+
+  const varRows = analysis
+    ? [
+        [t('ca_report_pdf_var_co2'), t('ca_report_pdf_var_co2_desc'), '%'],
+        [t('ca_report_pdf_var_o2'), t('ca_report_pdf_var_o2_desc'), '%'],
+        [t('ca_report_pdf_var_eth'), t('ca_report_pdf_var_eth_desc'), 'ppm'],
+        [t('ca_report_pdf_var_return'), t('ca_report_pdf_var_return_desc'), `°${tempUnit}`],
+        [t('ca_report_pdf_var_sp_co2'), t('ca_report_pdf_var_sp_co2_desc'), '%'],
+        [t('ca_report_pdf_var_sp_o2'), t('ca_report_pdf_var_sp_o2_desc'), '%'],
+        [t('ca_report_pdf_var_sp_temp'), t('ca_report_pdf_var_sp_temp_desc'), `°${tempUnit}`],
+      ]
+    : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -325,92 +442,194 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         )}
 
         {analysis && (
-          <div ref={printRef} className="space-y-6 pt-2">
-            <div
-              data-ca-pdf-section="cover"
-              className="ca-pdf-section rounded-lg border border-teal-100 bg-teal-50/60 p-4 text-sm space-y-2"
+          <div
+            ref={printRef}
+            className="ca-report-document bg-white text-gray-900 pt-2 space-y-0"
+            style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+          >
+            {/* §1 + §2 — Intro y variables */}
+            <article
+              data-ca-pdf-section="intro"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
             >
-              <p className="font-semibold text-teal-950">{view.batch?.product ?? '—'} · {view.client?.name ?? '—'}</p>
-              <p className="text-teal-900 text-xs">
-                {t('integral_report_field_imei')}: <span className="font-mono">{deviceId}</span>
-                {' · '}
-                {formatDateTime(startedAtIso!)} → {formatDateTime(rangeEndIso)}
-              </p>
-              <p className="text-teal-800 text-xs leading-relaxed">
-                {t('ca_report_sampling_note', {
-                  total: String(analysis.summary.totalPoints),
-                  shown: String(analysis.chartPrepared.length),
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="1" title={t('ca_report_pdf_s1_title')} />
+              <CaProse>
+                {t('ca_report_pdf_s1_body', {
+                  deviceId,
+                  tracking: String(trackingName),
+                  product: productName,
+                  client: clientName,
+                  start: analysis.periodStart,
+                  end: analysis.periodEnd,
                 })}
-              </p>
-              <p className="text-teal-900 text-xs font-medium border-t border-teal-200/80 pt-2 mt-2">
-                {t('ca_report_co2_o2_criteria', {
-                  co2Tol: String(CA_CO2_TOLERANCE_PCT),
-                  o2Tol: String(CA_O2_TOLERANCE_PCT),
-                })}
-              </p>
+              </CaProse>
+              <CaProse>{t('ca_report_pdf_s1_highlights')}</CaProse>
               {analysis.prueba && (
-                <p className="text-teal-800 text-xs">{t('ca_report_prueba_note')}</p>
+                <CaProse>{t('ca_report_prueba_note')}</CaProse>
               )}
-            </div>
 
-            <div data-ca-pdf-section="summary" className="ca-pdf-section grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <SummaryTile label="CO₂" pct={analysis.summary.co2GlobalInRangePct} />
-              <SummaryTile label="O₂" pct={analysis.summary.o2GlobalInRangePct} />
-              <SummaryTile label={t('ethylene')} pct={analysis.summary.ethyleneGlobalInRangePct} />
-              <SummaryTile label={t('ca_report_return_air')} pct={analysis.summary.tempGlobalInRangePct} />
-            </div>
+              <CaSectionTitle n="2" title={t('ca_report_pdf_s2_title')} />
+              <CaProse>{t('ca_report_pdf_s2_intro')}</CaProse>
+              <CaTechTable
+                headers={[t('ca_report_pdf_col_variable'), t('ca_report_pdf_col_description'), t('ca_report_pdf_col_unit')]}
+                rows={varRows}
+              />
+              <CaProse>
+                {t('ca_report_pdf_criteria_note', {
+                  co2Tol: String(CA_CO2_TOLERANCE_PCT),
+                  tempTol: String(CA_TEMP_TOLERANCE_C),
+                })}
+              </CaProse>
+            </article>
 
-            <section data-ca-pdf-section="gases" className="ca-pdf-section space-y-2">
-              <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_gases_chart')}</h3>
-              <p className="text-xs text-gray-500">{t('ca_report_gases_hint')}</p>
-              <div className="h-72 w-full">
+            {/* §3 — Resumen KPI */}
+            <article
+              data-ca-pdf-section="summary"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
+            >
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="3" title={t('ca_report_pdf_s3_title')} />
+              <CaProse>
+                {t('ca_report_pdf_s3_intro', {
+                  total: String(analysis.summary.totalPoints),
+                  shown: String(analysis.summary.chartPoints),
+                  daysOk: String(analysis.summary.daysInRange),
+                  daysTotal: String(analysis.summary.daysAnalyzed),
+                })}
+              </CaProse>
+              <CaTechTable
+                headers={[t('ca_report_pdf_col_indicator'), t('ca_report_pdf_col_value')]}
+                rows={analysis.kpiRows}
+              />
+            </article>
+
+            {/* §4.1 — Gases */}
+            <article
+              data-ca-pdf-section="gases"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
+            >
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="4" title={t('ca_report_pdf_s4_title')} />
+              <CaSubSectionTitle n="4.1" title={t('ca_report_pdf_s41_title')} />
+              <CaProse>{t('ca_report_pdf_s41_intro')}</CaProse>
+              <div className="h-72 w-full my-3 border border-gray-100 rounded bg-white">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={analysis.gasRows}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" />
-                    <YAxis yAxisId="pct" domain={[0, 'auto']} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} />
-                    <YAxis yAxisId="ppm" orientation="right" domain={ethDomain} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
+                    <YAxis yAxisId="pct" domain={[0, 'auto']} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
+                    <YAxis yAxisId="ppm" orientation="right" domain={ethDomain} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
                     <Tooltip formatter={(v: number | string) => formatUiDecimal(Number(v))} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line yAxisId="pct" type="monotone" dataKey="co2" name="CO₂ (%)" stroke="#64748b" dot={false} strokeWidth={2} connectNulls />
-                    <Line yAxisId="pct" type="monotone" dataKey="o2" name="O₂ (%)" stroke="#0ea5e9" dot={false} strokeWidth={2} connectNulls />
-                    <Line yAxisId="ppm" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#9333ea" dot={false} strokeWidth={2} connectNulls />
+                    <Line yAxisId="pct" type="monotone" dataKey="co2" name="CO₂ (%)" stroke="#475569" dot={false} strokeWidth={2} connectNulls />
+                    <Line yAxisId="pct" type="monotone" dataKey="o2" name="O₂ (%)" stroke="#0284c7" dot={false} strokeWidth={2} connectNulls />
+                    <Line yAxisId="ppm" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#7c3aed" dot={false} strokeWidth={2} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </section>
+              <CaProse>
+                {t('ca_report_pdf_s41_interp', {
+                  interp: analysis.gasesOk
+                    ? t('ca_report_pdf_s41_interp_ok')
+                    : t('ca_report_pdf_s41_interp_review', {
+                        co2: String(analysis.summary.co2GlobalInRangePct ?? '—'),
+                        o2: String(analysis.summary.o2GlobalInRangePct ?? '—'),
+                      }),
+                })}
+              </CaProse>
+            </article>
 
-            <section data-ca-pdf-section="temperature" className="ca-pdf-section space-y-2">
-              <h3 className="text-sm font-bold text-gray-900 border-b pb-1">{t('ca_report_temp_chart')}</h3>
-              <p className="text-xs text-gray-500">{t('ca_report_temp_hint')}</p>
-              <div className="h-72 w-full">
+            {/* §4.2 — Temperatura */}
+            <article
+              data-ca-pdf-section="temperature"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
+            >
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSubSectionTitle n="4.2" title={t('ca_report_pdf_s42_title')} />
+              <CaProse>{t('ca_report_pdf_s42_intro')}</CaProse>
+              <div className="h-72 w-full my-3 border border-gray-100 rounded bg-white">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={analysis.tempRows}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" />
-                    <YAxis domain={tempUnit === 'F' ? [32, 86] : [0, 30]} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} />
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
+                    <YAxis domain={tempUnit === 'F' ? [32, 86] : [0, 30]} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
                     <Tooltip formatter={(v: number | string) => formatUiDecimal(Number(v))} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line type="monotone" dataKey="temp" name={t('ca_report_return_air')} stroke="#ef4444" dot={false} strokeWidth={2} connectNulls />
+                    <Line type="monotone" dataKey="temp" name={t('ca_report_return_air')} stroke="#dc2626" dot={false} strokeWidth={2} connectNulls />
                     <Line type="monotone" dataKey="setpoint" name={t('ca_report_setpoint')} stroke="#94a3b8" strokeDasharray="4 4" dot={false} strokeWidth={1.5} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-            </section>
+              <CaProse>
+                {analysis.tempOk
+                  ? t('ca_report_pdf_s42_interp_ok', {
+                      pct: String(analysis.summary.tempGlobalInRangePct ?? '—'),
+                      tol: String(CA_TEMP_TOLERANCE_C),
+                    })
+                  : t('ca_report_pdf_s42_interp_review', {
+                      pct: String(analysis.summary.tempGlobalInRangePct ?? '—'),
+                    })}
+              </CaProse>
+            </article>
 
-            <section data-ca-pdf-section="daily" className="ca-pdf-section space-y-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-bold text-gray-900">{t('ca_report_daily_title')}</h3>
-                <p className="text-xs text-gray-500">
-                  {t('ca_report_daily_summary', {
-                    ok: String(analysis.summary.daysInRange),
-                    total: String(analysis.summary.daysAnalyzed),
-                  })}
-                </p>
-              </div>
-              <p className="text-xs text-gray-500">{t('ca_report_daily_hint')}</p>
+            {/* §5 — Análisis diario */}
+            <article
+              data-ca-pdf-section="daily"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
+            >
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
+              <CaProse>
+                {t('ca_report_daily_summary', {
+                  ok: String(analysis.summary.daysInRange),
+                  total: String(analysis.summary.daysAnalyzed),
+                })}
+                {' '}
+                {t('ca_report_daily_hint')}
+              </CaProse>
               <DailyTable rows={analysis.daily} />
-            </section>
+            </article>
+
+            {/* §6 + §7 — Conclusiones y recomendaciones */}
+            <article
+              data-ca-pdf-section="conclusions"
+              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
+            >
+              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaSectionTitle n="6" title={t('ca_report_pdf_s6_title')} />
+              <CaProse>
+                {t('ca_report_pdf_s6_1', {
+                  total: String(analysis.summary.totalPoints),
+                  days: String(analysis.summary.daysAnalyzed),
+                  co2: String(analysis.summary.co2GlobalInRangePct ?? '—'),
+                  o2: String(analysis.summary.o2GlobalInRangePct ?? '—'),
+                  eth: String(analysis.summary.ethyleneGlobalInRangePct ?? '—'),
+                  temp: String(analysis.summary.tempGlobalInRangePct ?? '—'),
+                })}
+              </CaProse>
+              <CaProse>
+                {analysis.summary.daysInRange === analysis.summary.daysAnalyzed && analysis.summary.daysAnalyzed > 0
+                  ? t('ca_report_pdf_s6_2_ok')
+                  : t('ca_report_pdf_s6_2_partial', {
+                      ok: String(analysis.summary.daysInRange),
+                      total: String(analysis.summary.daysAnalyzed),
+                    })}
+              </CaProse>
+
+              <CaSectionTitle n="7" title={t('ca_report_pdf_s7_title')} />
+              <CaBulletList
+                items={[
+                  t('ca_report_pdf_rec_1'),
+                  t('ca_report_pdf_rec_2'),
+                  t('ca_report_pdf_rec_3'),
+                  t('ca_report_pdf_rec_4'),
+                ]}
+              />
+              <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-200 pt-2">
+                {formatDateTime(new Date().toISOString())} · {t('integral_report_field_imei')}: {deviceId}
+              </p>
+            </article>
           </div>
         )}
 
@@ -421,14 +640,3 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     </Dialog>
   );
 };
-
-function SummaryTile({ label, pct }: { label: string; pct: number | null }) {
-  const { t } = useSettings();
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3">
-      <p className="text-[10px] uppercase text-gray-500 font-semibold">{label}</p>
-      <p className="text-lg font-bold text-gray-900 mt-1">{pct != null ? `${pct}%` : '—'}</p>
-      <p className="text-[10px] text-gray-500">{t('ca_report_global_in_range')}</p>
-    </div>
-  );
-}
