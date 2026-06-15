@@ -57,7 +57,10 @@ import {
   PDF_A4_CONTENT_WIDTH_PX,
 } from '@/app/lib/reportPdfExport';
 import { CA_PDF_PAGE_CONTENT_HEIGHT_PX, chunkDailyRowsForPdf } from '@/app/lib/caReportPdfLayout';
-import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
+import {
+  formatCaReportDeviceCode,
+  formatCaReportTrackingName,
+} from '@/app/lib/caReportDisplay';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 const CA_PDF_WIDTH_PX = PDF_A4_CONTENT_WIDTH_PX;
@@ -104,7 +107,7 @@ async function waitForImagesInRoot(root: HTMLElement): Promise<void> {
 
 const CA_FONT = 'Arial, Helvetica, sans-serif';
 
-function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => string }) {
+function CaPdfHeader({ deviceCode, t }: { deviceCode: string; t: (k: string) => string }) {
   return (
     <table
       style={{
@@ -158,7 +161,7 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
               whiteSpace: 'nowrap',
             }}
           >
-            {t('ca_report_pdf_code')}: <span style={{ fontFamily: 'monospace' }}>{deviceId}</span>
+            {t('ca_report_pdf_code')}: <span style={{ fontFamily: 'monospace' }}>{deviceCode}</span>
           </td>
         </tr>
       </tbody>
@@ -167,12 +170,12 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
 }
 
 function CaPdfFooter({
-  deviceId,
+  deviceCode,
   generatedAt,
   pageNote,
   t,
 }: {
-  deviceId: string;
+  deviceCode: string;
   generatedAt: string;
   pageNote?: string;
   t: (k: string, p?: Record<string, string>) => string;
@@ -193,7 +196,7 @@ function CaPdfFooter({
           <tr>
             <td style={{ verticalAlign: 'bottom' }}>
               {t('ca_report_pdf_footer_generated')}: {generatedAt} · {t('integral_report_field_imei')}:{' '}
-              {deviceId}
+              {deviceCode}
             </td>
             {pageNote ? (
               <td style={{ textAlign: 'right', verticalAlign: 'bottom', whiteSpace: 'nowrap' }}>
@@ -557,7 +560,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     return String(p?.deviceId ?? '').trim();
   }, [view._row]);
 
-  const trackingName = view.batch?.lotNumber ?? view.id ?? '—';
+  const reportDeviceCode = useMemo(() => formatCaReportDeviceCode(deviceId), [deviceId]);
+  const reportTrackingName = useMemo(
+    () => formatCaReportTrackingName(view, deviceId),
+    [view, deviceId]
+  );
   const productName = view.batch?.product ?? '—';
   const clientName = view.client?.name ?? '—';
 
@@ -594,7 +601,6 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     const daily = buildDailyCaAnalysis(prepared, language, deviceId);
     const summary = buildCaProcessSummary(prepared, daily, deviceId);
     const indicators = buildCaPdfIndicators(prepared, deviceId);
-    const prueba = isPruebaCaMonitoringDevice(deviceId);
 
     const periodStart = formatCaReportPeriodDate(startedAtIso ?? points[0]!.timestamp, language);
     const periodEnd = formatCaReportPeriodDate(rangeEndIso, language);
@@ -625,7 +631,6 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
       indicators,
       gasRows,
       tempRows,
-      prueba,
       periodStart,
       periodEnd,
       gasesOk,
@@ -659,7 +664,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
       window.dispatchEvent(new Event('resize'));
       await new Promise((r) => setTimeout(r, 150));
       const sections = collectDomPdfSections(root, CA_PDF_SECTION_ATTR);
-      const filename = `informe_ca_${deviceId}_${formatFileTimestamp()}.pdf`;
+      const filename = `informe_ca_${reportDeviceCode}_${formatFileTimestamp()}.pdf`;
       let pdfBytes = await buildDomSectionsPdfBytes({
         root,
         sectionAttr: CA_PDF_SECTION_ATTR,
@@ -678,7 +683,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     } finally {
       setPdfBusy(false);
     }
-  }, [analysis, deviceId, formatFileTimestamp, processDocuments, t]);
+  }, [analysis, formatFileTimestamp, processDocuments, reportDeviceCode, t]);
 
   const varRows = analysis
     ? [
@@ -754,12 +759,12 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
           >
             {/* §1 + §2 — Intro y variables */}
             <CaPdfSection section="intro">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSectionTitle n="1" title={t('ca_report_pdf_s1_title')} />
               <CaProse>
                 {t('ca_report_pdf_s1_body', {
-                  deviceId,
-                  tracking: String(trackingName),
+                  deviceId: reportDeviceCode,
+                  tracking: reportTrackingName,
                   product: productName,
                   client: clientName,
                   start: analysis.periodStart,
@@ -767,7 +772,6 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 })}
               </CaProse>
               <CaProse>{t('ca_report_pdf_s1_highlights')}</CaProse>
-              {analysis.prueba && <CaProse>{t('ca_report_prueba_note')}</CaProse>}
 
               <CaSectionTitle n="2" title={t('ca_report_pdf_s2_title')} />
               <CaProse>{t('ca_report_pdf_s2_intro')}</CaProse>
@@ -785,7 +789,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
             {/* §3 — Resumen KPI */}
             <CaPdfSection section="summary">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSectionTitle n="3" title={t('ca_report_pdf_s3_title')} />
               <CaProse>
                 {t('ca_report_pdf_s3_intro', {
@@ -803,7 +807,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
             {/* §4.1 — Gases */}
             <CaPdfSection section="gases">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSectionTitle n="4" title={t('ca_report_pdf_s4_title')} />
               <CaSubSectionTitle n="4.1" title={t('ca_report_pdf_s41_title')} />
               <CaProse>{t('ca_report_pdf_s41_intro')}</CaProse>
@@ -823,20 +827,26 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 </ResponsiveContainer>
               </CaChartBox>
               <CaProse>
-                {t('ca_report_pdf_s41_interp', {
-                  interp: analysis.gasesOk
-                    ? t('ca_report_pdf_s41_interp_ok')
-                    : t('ca_report_pdf_s41_interp_review', {
-                        co2: String(analysis.summary.co2GlobalInRangePct ?? '—'),
-                        o2: String(analysis.summary.o2GlobalInRangePct ?? '—'),
-                      }),
-                })}
+                {analysis.gasesOk
+                  ? t('ca_report_pdf_s41_analysis_ok', {
+                      co2: String(analysis.summary.co2GlobalInRangePct ?? '—'),
+                      o2: String(analysis.summary.o2GlobalInRangePct ?? '—'),
+                    })
+                  : t('ca_report_pdf_s41_analysis_review', {
+                      co2: String(analysis.summary.co2GlobalInRangePct ?? '—'),
+                      o2: String(analysis.summary.o2GlobalInRangePct ?? '—'),
+                    })}
+              </CaProse>
+              <CaProse>
+                {analysis.gasesOk
+                  ? t('ca_report_pdf_s41_implications_ok')
+                  : t('ca_report_pdf_s41_implications_review')}
               </CaProse>
             </CaPdfSection>
 
             {/* §4.2 — Temperatura */}
             <CaPdfSection section="temperature">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSubSectionTitle n="4.2" title={t('ca_report_pdf_s42_title')} />
               <CaProse>{t('ca_report_pdf_s42_intro')}</CaProse>
               <CaChartBox>
@@ -854,24 +864,29 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </CaChartBox>
               <CaProse>
                 {analysis.tempOk
-                  ? t('ca_report_pdf_s42_interp_ok', {
+                  ? t('ca_report_pdf_s42_analysis_ok', {
                       pct: String(analysis.summary.tempGlobalInRangePct ?? '—'),
                       tol: String(CA_TEMP_TOLERANCE_C),
                     })
-                  : t('ca_report_pdf_s42_interp_review', {
+                  : t('ca_report_pdf_s42_analysis_review', {
                       pct: String(analysis.summary.tempGlobalInRangePct ?? '—'),
                     })}
+              </CaProse>
+              <CaProse>
+                {analysis.tempOk
+                  ? t('ca_report_pdf_s42_implications_ok')
+                  : t('ca_report_pdf_s42_implications_review')}
               </CaProse>
             </CaPdfSection>
 
             {/* §5 — Análisis diario (paginado por bloques) */}
             {dailyChunks.length === 0 ? (
               <CaPdfSection section="daily-0" fillPage>
-                <CaPdfHeader deviceId={deviceId} t={t} />
+                <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
                 <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
                 <CaProse>{t('ca_report_no_daily')}</CaProse>
                 <CaPdfFooter
-                  deviceId={deviceId}
+                  deviceCode={reportDeviceCode}
                   generatedAt={formatDateTime(new Date().toISOString())}
                   t={t}
                 />
@@ -879,7 +894,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
             ) : (
               dailyChunks.map((chunk, idx) => (
                 <CaPdfSection key={`daily-${idx}`} section={`daily-${idx}`} fillPage>
-                  <CaPdfHeader deviceId={deviceId} t={t} />
+                  <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
                   {idx === 0 ? (
                     <>
                       <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
@@ -903,7 +918,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                   )}
                   <DailyTable rows={chunk} />
                   <CaPdfFooter
-                    deviceId={deviceId}
+                    deviceCode={reportDeviceCode}
                     generatedAt={formatDateTime(new Date().toISOString())}
                     t={t}
                     pageNote={
@@ -921,7 +936,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
             {/* §6 + §7 — Conclusiones */}
             <CaPdfSection section="conclusions">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSectionTitle n="6" title={t('ca_report_pdf_s6_title')} />
               <CaProse>
                 {t('ca_report_pdf_s6_1', {
@@ -952,13 +967,13 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 ]}
               />
               <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '16px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
-                {formatDateTime(new Date().toISOString())} · {t('integral_report_field_imei')}: {deviceId}
+                {formatDateTime(new Date().toISOString())} · {t('integral_report_field_imei')}: {reportDeviceCode}
               </p>
             </CaPdfSection>
 
             {/* §8 — Anexos documentales */}
             <CaPdfSection section="attachments">
-              <CaPdfHeader deviceId={deviceId} t={t} />
+              <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
               <CaSectionTitle n="8" title={t('ca_report_pdf_s8_title')} />
               <CaProse>{t('ca_report_pdf_s8_intro')}</CaProse>
               {processDocuments.length === 0 ? (
@@ -989,7 +1004,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
             {imageDocuments.map((doc, idx) =>
               imageUrls[doc.id] ? (
                 <CaPdfSection key={doc.id} section={`attachment-image-${doc.id}`}>
-                  <CaPdfHeader deviceId={deviceId} t={t} />
+                  <CaPdfHeader deviceCode={reportDeviceCode} t={t} />
                   <CaSubSectionTitle
                     n={`8.${idx + 1}`}
                     title={doc.description || doc.name || t('ca_report_pdf_att_image')}

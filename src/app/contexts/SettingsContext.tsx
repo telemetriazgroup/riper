@@ -498,19 +498,19 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_col_variable': 'Variable',
     'ca_report_pdf_col_description': 'Descripción',
     'ca_report_pdf_col_unit': 'Unidad',
-    'ca_report_pdf_var_co2': 'CO₂ (co2_reading)',
+    'ca_report_pdf_var_co2': 'CO₂',
     'ca_report_pdf_var_co2_desc': 'Concentración de dióxido de carbono en la cámara',
-    'ca_report_pdf_var_o2': 'O₂ (o2_reading)',
+    'ca_report_pdf_var_o2': 'O₂',
     'ca_report_pdf_var_o2_desc': 'Concentración de oxígeno en la atmósfera controlada',
-    'ca_report_pdf_var_eth': 'Etileno (campo_1)',
-    'ca_report_pdf_var_eth_desc': 'Concentración de etileno medida por el sensor',
-    'ca_report_pdf_var_return': 'Return_air',
-    'ca_report_pdf_var_return_desc': 'Temperatura del aire de retorno al equipo',
-    'ca_report_pdf_var_sp_co2': 'Set_point_co2',
+    'ca_report_pdf_var_eth': 'Etileno',
+    'ca_report_pdf_var_eth_desc': 'Concentración de etileno en la atmósfera',
+    'ca_report_pdf_var_return': 'Temperatura de retorno',
+    'ca_report_pdf_var_return_desc': 'Temperatura del aire de retorno al equipo de frío',
+    'ca_report_pdf_var_sp_co2': 'Setpoint CO₂',
     'ca_report_pdf_var_sp_co2_desc': 'Objetivo programado de CO₂ en cada lectura',
-    'ca_report_pdf_var_sp_o2': 'Set_point_o2',
+    'ca_report_pdf_var_sp_o2': 'Setpoint O₂',
     'ca_report_pdf_var_sp_o2_desc': 'Objetivo programado de O₂ en cada lectura',
-    'ca_report_pdf_var_sp_temp': 'Set_point',
+    'ca_report_pdf_var_sp_temp': 'Setpoint temperatura',
     'ca_report_pdf_var_sp_temp_desc': 'Temperatura de consigna programada',
     'ca_report_pdf_criteria_note':
       'Criterio de conformidad CO₂ y O₂: lectura en rango si está a ±{{co2Tol}} % del setpoint de cada momento. Temperatura: ±{{tempTol}} °C respecto al setpoint. Día conforme: ≥85 % de lecturas en rango en todos los parámetros evaluados.',
@@ -533,25 +533,31 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s4_title': 'Análisis Gráfico del Comportamiento',
     'ca_report_pdf_s41_title': 'Panorama de gases (CO₂, O₂ y etileno)',
     'ca_report_pdf_s41_intro':
-      'La siguiente gráfica muestra la evolución de CO₂ (%), O₂ (%) y etileno (ppm) durante el seguimiento, con puntos seleccionados para resaltar variaciones relevantes.',
-    'ca_report_pdf_s41_interp':
-      'Interpretación: {{interp}}',
-    'ca_report_pdf_s41_interp_ok':
-      'Los gases se mantuvieron predominantemente dentro de los márgenes definidos respecto a sus setpoints. Las desviaciones puntuales son visibles como picos o valles en las curvas.',
-    'ca_report_pdf_s41_interp_review':
-      'Se observan tramos con desviación respecto al setpoint (CO₂ global {{co2}} % en rango, O₂ {{o2}} % en rango). Conviene revisar los días marcados como «Revisar desviaciones» en el análisis diario.',
+      'La siguiente gráfica muestra la evolución de CO₂ (%), O₂ (%) y etileno (ppm) durante el seguimiento, con puntos seleccionados para resaltar variaciones relevantes del equilibrio gasoso en cámara.',
+    'ca_report_pdf_s41_analysis_ok':
+      'Análisis de funcionamiento: la atmósfera controlada regula CO₂ y O₂ para reducir la respiración del producto y mantener las condiciones pactadas. Durante el período evaluado, ambos gases siguieron en general la tendencia programada (CO₂ {{co2}} % y O₂ {{o2}} % de lecturas conformes), lo que indica estabilidad del equilibrio gasoso.',
+    'ca_report_pdf_s41_implications_ok':
+      'Implicancias: un comportamiento estable de CO₂ y O₂ favorece la homogeneidad del lote, reduce estrés fisiológico y sostiene la calidad comercial acordada. El etileno se mantiene acorde al nivel esperado para la etapa, sin variaciones prolongadas que aceleren la maduración de forma no controlada.',
+    'ca_report_pdf_s41_analysis_review':
+      'Análisis de funcionamiento: se identifican tramos en los que CO₂ u O₂ se apartaron del setpoint programado ({{co2}} % y {{o2}} % de lecturas en rango, respectivamente). Estas desviaciones aparecen como picos o valles en las curvas y pueden concentrarse en días concretos del seguimiento.',
+    'ca_report_pdf_s41_implications_review':
+      'Implicancias: desviaciones sostenidas alteran el ritmo respiratorio del producto, pueden afectar firmeza, color o vida útil, y requieren revisión operativa del programa de atmósfera. Correlacione estos tramos con los días marcados en el §5 para priorizar acciones correctivas.',
     'ca_report_pdf_s42_title': 'Temperatura de retorno vs setpoint',
     'ca_report_pdf_s42_intro':
-      'Comportamiento de la temperatura de retorno (return_air) frente al setpoint programado durante el mismo período.',
-    'ca_report_pdf_s42_interp_ok':
-      'La temperatura de retorno se mantuvo en general alineada con el setpoint programado ({{pct}} % de lecturas en rango ±{{tol}} °C).',
-    'ca_report_pdf_s42_interp_review':
-      'Existen intervalos con desviación térmica respecto al setpoint ({{pct}} % de lecturas en rango). Verifique eventos de defrost, apertura de puertas o variaciones de carga.',
+      'Comportamiento de la temperatura de retorno frente al setpoint programado. La curva continua representa la temperatura medida; la línea discontinua, el objetivo del equipo.',
+    'ca_report_pdf_s42_analysis_ok':
+      'Análisis de funcionamiento: la temperatura de retorno refleja la capacidad del sistema de frío para sostener el ambiente térmico de la cámara. Con {{pct}} % de lecturas dentro de ±{{tol}} °C respecto al setpoint, el control térmico fue adecuado durante la mayor parte del seguimiento.',
+    'ca_report_pdf_s42_implications_ok':
+      'Implicancias: la estabilidad térmica contribuye a una maduración uniforme, conservación de firmeza y eficiencia del proceso. También favorece lecturas fiables de los sensores de atmósfera, sensibles a cambios bruscos de temperatura.',
+    'ca_report_pdf_s42_analysis_review':
+      'Análisis de funcionamiento: existen intervalos con desviación térmica respecto al setpoint ({{pct}} % de lecturas en rango). Las separaciones entre curva medida y setpoint sugieren eventos puntuales o tramos de inestabilidad térmica.',
+    'ca_report_pdf_s42_implications_review':
+      'Implicancias: variaciones térmicas prolongadas pueden generar maduración desigual, condensación superficial o pérdida de firmeza. Conviene revisar aperturas de puerta, ciclos de deshielo, carga de producto y calibración del control de temperatura en los días señalados en el §5.',
     'ca_report_pdf_s5_title': 'Análisis Diario de Comportamiento',
     'ca_report_pdf_continued': 'continuación',
     'ca_report_pdf_s5_continued_note': 'Continuación del análisis diario (tabla por bloques).',
     'ca_report_pdf_footer_generated': 'Generado',
-    'ca_report_pdf_page_of': '§5 — {current} / {total}',
+    'ca_report_pdf_page_of': '§5 — {{current}} / {{total}}',
     'ca_report_pdf_s6_title': 'Conclusiones Generales',
     'ca_report_pdf_s6_1':
       'Operación general: el seguimiento registró {{total}} lecturas en {{days}} día(s). El cumplimiento global fue de {{co2}} % (CO₂), {{o2}} % (O₂), {{eth}} % (etileno) y {{temp}} % (temperatura) de lecturas en rango.',
@@ -560,7 +566,7 @@ const translations: Record<Language, Record<string, string>> = {
       '{{ok}} de {{total}} días cumplieron todos los parámetros; los restantes requieren revisión según la tabla diaria.',
     'ca_report_pdf_s7_title': 'Recomendaciones',
     'ca_report_pdf_rec_1': 'Continuar el monitoreo de CO₂, O₂ y etileno para detectar tendencias anómalas de forma temprana.',
-    'ca_report_pdf_rec_2': 'Revisar los días con desviaciones en el análisis diario e identificar causas operativas (ventilación, carga, setpoints).',
+    'ca_report_pdf_rec_2': 'Revisar los días con desviaciones en el análisis diario e identificar causas operativas (carga, setpoints, apertura de puertas o ciclos de deshielo).',
     'ca_report_pdf_rec_3': 'Verificar calibración de sensores de gas si las desviaciones de CO₂ u O₂ son recurrentes.',
     'ca_report_pdf_rec_4': 'Mantener registros de muestreos de pulpa y firmeza como referencia cruzada con la telemetría de atmósfera.',
     'ca_report_pdf_s8_title': 'Anexos — Documentos e imágenes adjuntos',
@@ -1923,19 +1929,19 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_col_variable': 'Variable',
     'ca_report_pdf_col_description': 'Description',
     'ca_report_pdf_col_unit': 'Unit',
-    'ca_report_pdf_var_co2': 'CO₂ (co2_reading)',
+    'ca_report_pdf_var_co2': 'CO₂',
     'ca_report_pdf_var_co2_desc': 'Carbon dioxide concentration in the chamber',
-    'ca_report_pdf_var_o2': 'O₂ (o2_reading)',
+    'ca_report_pdf_var_o2': 'O₂',
     'ca_report_pdf_var_o2_desc': 'Oxygen concentration in the controlled atmosphere',
-    'ca_report_pdf_var_eth': 'Ethylene (campo_1)',
-    'ca_report_pdf_var_eth_desc': 'Ethylene concentration from the sensor',
-    'ca_report_pdf_var_return': 'Return_air',
-    'ca_report_pdf_var_return_desc': 'Return-air temperature at the unit',
-    'ca_report_pdf_var_sp_co2': 'Set_point_co2',
+    'ca_report_pdf_var_eth': 'Ethylene',
+    'ca_report_pdf_var_eth_desc': 'Ethylene concentration in the atmosphere',
+    'ca_report_pdf_var_return': 'Return temperature',
+    'ca_report_pdf_var_return_desc': 'Return-air temperature at the refrigeration unit',
+    'ca_report_pdf_var_sp_co2': 'CO₂ setpoint',
     'ca_report_pdf_var_sp_co2_desc': 'Programmed CO₂ target at each reading',
-    'ca_report_pdf_var_sp_o2': 'Set_point_o2',
+    'ca_report_pdf_var_sp_o2': 'O₂ setpoint',
     'ca_report_pdf_var_sp_o2_desc': 'Programmed O₂ target at each reading',
-    'ca_report_pdf_var_sp_temp': 'Set_point',
+    'ca_report_pdf_var_sp_temp': 'Temperature setpoint',
     'ca_report_pdf_var_sp_temp_desc': 'Programmed temperature setpoint',
     'ca_report_pdf_criteria_note':
       'CO₂ and O₂ compliance: reading in range if within ±{{co2Tol}}% of the setpoint at that time. Temperature: ±{{tempTol}} °C vs setpoint. Compliant day: ≥85% of readings in range for all evaluated parameters.',
@@ -1958,23 +1964,31 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s4_title': 'Graphical behavior analysis',
     'ca_report_pdf_s41_title': 'Gas overview (CO₂, O₂ and ethylene)',
     'ca_report_pdf_s41_intro':
-      'The chart below shows CO₂ (%), O₂ (%) and ethylene (ppm) over the tracking period, with points selected to highlight relevant changes.',
-    'ca_report_pdf_s41_interp': 'Interpretation: {{interp}}',
-    'ca_report_pdf_s41_interp_ok':
-      'Gases remained predominantly within margins vs their setpoints. Point deviations appear as peaks or valleys on the curves.',
-    'ca_report_pdf_s41_interp_review':
-      'Intervals deviate from setpoints (CO₂ global {{co2}}% in range, O₂ {{o2}}% in range). Review days marked «Review deviations» in the daily table.',
+      'The chart below shows CO₂ (%), O₂ (%) and ethylene (ppm) over the tracking period, with points selected to highlight relevant gas-balance changes in the chamber.',
+    'ca_report_pdf_s41_analysis_ok':
+      'Operation analysis: controlled atmosphere regulates CO₂ and O₂ to reduce product respiration and maintain agreed conditions. During the evaluated period, both gases generally followed the programmed trend ({{co2}}% and {{o2}}% compliant readings), indicating a stable gas balance.',
+    'ca_report_pdf_s41_implications_ok':
+      'Implications: stable CO₂ and O₂ behavior supports lot homogeneity, reduces physiological stress and sustains agreed commercial quality. Ethylene remained consistent with the expected level for the stage, without prolonged variations that would accelerate ripening uncontrollably.',
+    'ca_report_pdf_s41_analysis_review':
+      'Operation analysis: intervals were identified where CO₂ or O₂ deviated from the programmed setpoint ({{co2}}% and {{o2}}% of readings in range, respectively). These deviations appear as peaks or valleys on the curves and may concentrate on specific days.',
+    'ca_report_pdf_s41_implications_review':
+      'Implications: sustained deviations alter product respiration rate, may affect firmness, color or shelf life, and require operational review of the atmosphere program. Correlate these intervals with days marked in §5 to prioritize corrective actions.',
     'ca_report_pdf_s42_title': 'Return temperature vs setpoint',
-    'ca_report_pdf_s42_intro': 'Return-air temperature vs programmed setpoint over the same period.',
-    'ca_report_pdf_s42_interp_ok':
-      'Return temperature generally tracked the setpoint ({{pct}}% of readings within ±{{tol}} °C).',
-    'ca_report_pdf_s42_interp_review':
-      'Thermal deviation intervals vs setpoint ({{pct}}% of readings in range). Check defrost, door openings or load changes.',
+    'ca_report_pdf_s42_intro':
+      'Return temperature behavior vs the programmed setpoint. The solid line is measured temperature; the dashed line is the equipment target.',
+    'ca_report_pdf_s42_analysis_ok':
+      'Operation analysis: return temperature reflects the refrigeration system\'s ability to maintain the chamber thermal environment. With {{pct}}% of readings within ±{{tol}} °C of setpoint, thermal control was adequate for most of the tracking period.',
+    'ca_report_pdf_s42_implications_ok':
+      'Implications: thermal stability contributes to uniform ripening, firmness retention and process efficiency. It also supports reliable atmosphere sensor readings, which are sensitive to abrupt temperature changes.',
+    'ca_report_pdf_s42_analysis_review':
+      'Operation analysis: intervals with thermal deviation from setpoint were found ({{pct}}% of readings in range). Gaps between measured curve and setpoint suggest punctual events or periods of thermal instability.',
+    'ca_report_pdf_s42_implications_review':
+      'Implications: prolonged thermal variations may cause uneven ripening, surface condensation or firmness loss. Review door openings, defrost cycles, product load and temperature control calibration on days flagged in §5.',
     'ca_report_pdf_s5_title': 'Daily behavior analysis',
     'ca_report_pdf_continued': 'continued',
     'ca_report_pdf_s5_continued_note': 'Continued daily analysis (table in blocks).',
     'ca_report_pdf_footer_generated': 'Generated',
-    'ca_report_pdf_page_of': '§5 — {current} / {total}',
+    'ca_report_pdf_page_of': '§5 — {{current}} / {{total}}',
     'ca_report_pdf_s6_title': 'General conclusions',
     'ca_report_pdf_s6_1':
       'Overall operation: {{total}} readings over {{days}} day(s). Global compliance: {{co2}}% (CO₂), {{o2}}% (O₂), {{eth}}% (ethylene), {{temp}}% (temperature) readings in range.',
