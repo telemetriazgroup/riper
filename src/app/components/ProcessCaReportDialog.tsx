@@ -43,9 +43,10 @@ import {
 } from '@/app/lib/caReportAnalysis';
 import { collectDomPdfSections, downloadDomSectionsAsPdf } from '@/app/lib/reportPdfExport';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
-import { clsx } from 'clsx';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
+/** Ancho fijo del documento al capturar (coincide con reportPdfExport). */
+const CA_PDF_WIDTH_PX = 680;
 
 type Props = {
   open: boolean;
@@ -69,14 +70,50 @@ function pctLabel(count: number, total: number): string {
 
 function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => string }) {
   return (
-    <div
-      className="flex flex-wrap justify-between items-center gap-2 border-b border-gray-400 pb-2 mb-4 text-[11px] font-semibold text-gray-800 tracking-wide"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+    <table
+      className="w-full border-b border-gray-500 mb-4"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '11px', borderCollapse: 'collapse' }}
     >
-      <span>ZGROUP PERU | {t('ca_report_pdf_doc_title')}</span>
-      <span>
-        {t('ca_report_pdf_code')}: <span className="font-mono">{deviceId}</span>
-      </span>
+      <tbody>
+        <tr>
+          <td className="pb-2 font-semibold text-gray-800 align-bottom">
+            ZGROUP PERU | {t('ca_report_pdf_doc_title')}
+          </td>
+          <td className="pb-2 font-semibold text-gray-800 text-right align-bottom whitespace-nowrap">
+            {t('ca_report_pdf_code')}: <span style={{ fontFamily: 'monospace' }}>{deviceId}</span>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function CaPdfSection({ section, children }: { section: string; children: React.ReactNode }) {
+  return (
+    <article
+      data-ca-pdf-section={section}
+      className="ca-pdf-section bg-white text-gray-900"
+      style={{
+        width: `${CA_PDF_WIDTH_PX}px`,
+        maxWidth: `${CA_PDF_WIDTH_PX}px`,
+        boxSizing: 'border-box',
+        padding: '28px 32px',
+        margin: '0 auto 16px',
+        fontFamily: 'Arial, Helvetica, sans-serif',
+      }}
+    >
+      {children}
+    </article>
+  );
+}
+
+function CaChartBox({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="my-3 bg-white"
+      style={{ width: '100%', height: '240px', minHeight: '240px', overflow: 'hidden' }}
+    >
+      {children}
     </div>
   );
 }
@@ -117,20 +154,27 @@ function CaProse({ children }: { children: React.ReactNode }) {
 function CaTechTable({
   headers,
   rows,
+  compact = false,
 }: {
-  headers: [string, string] | [string, string, string];
+  headers: [string, string] | [string, string, string] | string[];
   rows: string[][];
+  compact?: boolean;
 }) {
   const cols = headers.length;
+  const fs = compact ? '10px' : '11px';
   return (
     <table
-      className="w-full text-[11px] border-collapse mb-4"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+      className="w-full border-collapse mb-4"
+      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: fs, tableLayout: 'fixed', width: '100%' }}
     >
       <thead>
-        <tr className="border-b border-gray-400">
+        <tr style={{ borderBottom: '1px solid #6b7280' }}>
           {headers.map((h) => (
-            <th key={h} className="text-left py-1.5 pr-3 font-semibold text-gray-900">
+            <th
+              key={h}
+              className="text-left font-semibold text-gray-900"
+              style={{ padding: '6px 8px 6px 0', verticalAlign: 'bottom', wordBreak: 'break-word' }}
+            >
               {h}
             </th>
           ))}
@@ -138,11 +182,18 @@ function CaTechTable({
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i} className="border-b border-gray-200 align-top">
+          <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
             {row.slice(0, cols).map((cell, j) => (
               <td
                 key={j}
-                className={clsx('py-1.5 pr-3', j === 0 && 'font-medium text-gray-900')}
+                style={{
+                  padding: '6px 8px 6px 0',
+                  verticalAlign: 'top',
+                  whiteSpace: 'pre-line',
+                  wordBreak: 'break-word',
+                  fontWeight: j === 0 ? 600 : 400,
+                  color: '#111827',
+                }}
               >
                 {cell}
               </td>
@@ -194,7 +245,8 @@ function DailyTable({ rows }: { rows: DailyCaAnalysis[] }) {
   }
   return (
     <CaTechTable
-      headers={[t('ca_report_day'), 'CO₂ (%)', 'O₂ (%)', `${t('ethylene')} (ppm)`, t('ca_report_return_air'), t('ca_report_day_status')]}
+      compact
+      headers={[t('ca_report_day'), 'CO₂', 'O₂', t('ethylene'), t('ca_report_return_air'), t('ca_report_day_status')]}
       rows={rows.map((d) => {
         const pcts = [d.co2.inRangePct, d.o2.inRangePct, d.ethylene.inRangePct, d.returnAir.inRangePct].filter(
           (v): v is number => v != null
@@ -353,7 +405,8 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     await new Promise<void>((r) => {
       requestAnimationFrame(() => requestAnimationFrame(() => r()));
     });
-    await new Promise((r) => setTimeout(r, 600));
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 900));
     try {
       const root = printRef.current;
       if (!root) {
@@ -367,8 +420,9 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         sectionAttr: CA_PDF_SECTION_ATTR,
         sections,
         filename: `informe_ca_${deviceId}_${formatFileTimestamp()}.pdf`,
-        marginMm: 12,
-        scale: 1.6,
+        marginMm: 14,
+        scale: 2,
+        captureWidthPx: CA_PDF_WIDTH_PX,
       });
       toast.success(t('ca_report_pdf_success'));
     } catch (e) {
@@ -444,14 +498,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         {analysis && (
           <div
             ref={printRef}
-            className="ca-report-document bg-white text-gray-900 pt-2 space-y-0"
+            className="ca-report-document bg-slate-100 py-4"
             style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
           >
-            {/* §1 + §2 — Intro y variables */}
-            <article
-              data-ca-pdf-section="intro"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
+            {/* §1 + §2 + §3 — Intro, variables y resumen KPI (una sola hoja lógica) */}
+            <CaPdfSection section="intro-summary">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="1" title={t('ca_report_pdf_s1_title')} />
               <CaProse>
@@ -465,9 +516,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 })}
               </CaProse>
               <CaProse>{t('ca_report_pdf_s1_highlights')}</CaProse>
-              {analysis.prueba && (
-                <CaProse>{t('ca_report_prueba_note')}</CaProse>
-              )}
+              {analysis.prueba && <CaProse>{t('ca_report_prueba_note')}</CaProse>}
 
               <CaSectionTitle n="2" title={t('ca_report_pdf_s2_title')} />
               <CaProse>{t('ca_report_pdf_s2_intro')}</CaProse>
@@ -481,14 +530,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                   tempTol: String(CA_TEMP_TOLERANCE_C),
                 })}
               </CaProse>
-            </article>
 
-            {/* §3 — Resumen KPI */}
-            <article
-              data-ca-pdf-section="summary"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
-              <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="3" title={t('ca_report_pdf_s3_title')} />
               <CaProse>
                 {t('ca_report_pdf_s3_intro', {
@@ -502,32 +544,29 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 headers={[t('ca_report_pdf_col_indicator'), t('ca_report_pdf_col_value')]}
                 rows={analysis.kpiRows}
               />
-            </article>
+            </CaPdfSection>
 
             {/* §4.1 — Gases */}
-            <article
-              data-ca-pdf-section="gases"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
+            <CaPdfSection section="gases">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="4" title={t('ca_report_pdf_s4_title')} />
               <CaSubSectionTitle n="4.1" title={t('ca_report_pdf_s41_title')} />
               <CaProse>{t('ca_report_pdf_s41_intro')}</CaProse>
-              <div className="h-72 w-full my-3 border border-gray-100 rounded bg-white">
+              <CaChartBox>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analysis.gasRows}>
+                  <LineChart data={analysis.gasRows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
-                    <YAxis yAxisId="pct" domain={[0, 'auto']} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
-                    <YAxis yAxisId="ppm" orientation="right" domain={ethDomain} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
+                    <XAxis dataKey="tick" fontSize={9} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
+                    <YAxis yAxisId="pct" domain={[0, 'auto']} fontSize={9} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" width={36} />
+                    <YAxis yAxisId="ppm" orientation="right" domain={ethDomain} fontSize={9} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" width={40} />
                     <Tooltip formatter={(v: number | string) => formatUiDecimal(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
                     <Line yAxisId="pct" type="monotone" dataKey="co2" name="CO₂ (%)" stroke="#475569" dot={false} strokeWidth={2} connectNulls />
                     <Line yAxisId="pct" type="monotone" dataKey="o2" name="O₂ (%)" stroke="#0284c7" dot={false} strokeWidth={2} connectNulls />
                     <Line yAxisId="ppm" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#7c3aed" dot={false} strokeWidth={2} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </CaChartBox>
               <CaProse>
                 {t('ca_report_pdf_s41_interp', {
                   interp: analysis.gasesOk
@@ -538,29 +577,26 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                       }),
                 })}
               </CaProse>
-            </article>
+            </CaPdfSection>
 
             {/* §4.2 — Temperatura */}
-            <article
-              data-ca-pdf-section="temperature"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
+            <CaPdfSection section="temperature">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSubSectionTitle n="4.2" title={t('ca_report_pdf_s42_title')} />
               <CaProse>{t('ca_report_pdf_s42_intro')}</CaProse>
-              <div className="h-72 w-full my-3 border border-gray-100 rounded bg-white">
+              <CaChartBox>
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analysis.tempRows}>
+                  <LineChart data={analysis.tempRows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <XAxis dataKey="tick" fontSize={10} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
-                    <YAxis domain={tempUnit === 'F' ? [32, 86] : [0, 30]} fontSize={10} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" />
+                    <XAxis dataKey="tick" fontSize={9} tickLine={false} interval="preserveStartEnd" stroke="#374151" />
+                    <YAxis domain={tempUnit === 'F' ? [32, 86] : [0, 30]} fontSize={9} tickFormatter={(v) => formatUiDecimal(Number(v))} stroke="#374151" width={36} />
                     <Tooltip formatter={(v: number | string) => formatUiDecimal(Number(v))} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
                     <Line type="monotone" dataKey="temp" name={t('ca_report_return_air')} stroke="#dc2626" dot={false} strokeWidth={2} connectNulls />
                     <Line type="monotone" dataKey="setpoint" name={t('ca_report_setpoint')} stroke="#94a3b8" strokeDasharray="4 4" dot={false} strokeWidth={1.5} connectNulls />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
+              </CaChartBox>
               <CaProse>
                 {analysis.tempOk
                   ? t('ca_report_pdf_s42_interp_ok', {
@@ -571,13 +607,10 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                       pct: String(analysis.summary.tempGlobalInRangePct ?? '—'),
                     })}
               </CaProse>
-            </article>
+            </CaPdfSection>
 
             {/* §5 — Análisis diario */}
-            <article
-              data-ca-pdf-section="daily"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
+            <CaPdfSection section="daily">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
               <CaProse>
@@ -589,13 +622,10 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 {t('ca_report_daily_hint')}
               </CaProse>
               <DailyTable rows={analysis.daily} />
-            </article>
+            </CaPdfSection>
 
-            {/* §6 + §7 — Conclusiones y recomendaciones */}
-            <article
-              data-ca-pdf-section="conclusions"
-              className="ca-pdf-section px-6 py-5 border border-gray-200 rounded-lg mb-4 bg-white"
-            >
+            {/* §6 + §7 — Conclusiones */}
+            <CaPdfSection section="conclusions">
               <CaPdfHeader deviceId={deviceId} t={t} />
               <CaSectionTitle n="6" title={t('ca_report_pdf_s6_title')} />
               <CaProse>
@@ -626,10 +656,10 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                   t('ca_report_pdf_rec_4'),
                 ]}
               />
-              <p className="text-[10px] text-gray-500 mt-4 border-t border-gray-200 pt-2">
+              <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '16px', borderTop: '1px solid #e5e7eb', paddingTop: '8px' }}>
                 {formatDateTime(new Date().toISOString())} · {t('integral_report_field_imei')}: {deviceId}
               </p>
-            </article>
+            </CaPdfSection>
           </div>
         )}
 
