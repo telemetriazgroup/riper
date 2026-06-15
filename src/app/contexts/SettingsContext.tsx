@@ -548,6 +548,10 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s42_interp_review':
       'Existen intervalos con desviación térmica respecto al setpoint ({{pct}} % de lecturas en rango). Verifique eventos de defrost, apertura de puertas o variaciones de carga.',
     'ca_report_pdf_s5_title': 'Análisis Diario de Comportamiento',
+    'ca_report_pdf_continued': 'continuación',
+    'ca_report_pdf_s5_continued_note': 'Continuación del análisis diario (tabla por bloques).',
+    'ca_report_pdf_footer_generated': 'Generado',
+    'ca_report_pdf_page_of': '§5 — {current} / {total}',
     'ca_report_pdf_s6_title': 'Conclusiones Generales',
     'ca_report_pdf_s6_1':
       'Operación general: el seguimiento registró {{total}} lecturas en {{days}} día(s). El cumplimiento global fue de {{co2}} % (CO₂), {{o2}} % (O₂), {{eth}} % (etileno) y {{temp}} % (temperatura) de lecturas en rango.',
@@ -1967,6 +1971,10 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s42_interp_review':
       'Thermal deviation intervals vs setpoint ({{pct}}% of readings in range). Check defrost, door openings or load changes.',
     'ca_report_pdf_s5_title': 'Daily behavior analysis',
+    'ca_report_pdf_continued': 'continued',
+    'ca_report_pdf_s5_continued_note': 'Continued daily analysis (table in blocks).',
+    'ca_report_pdf_footer_generated': 'Generated',
+    'ca_report_pdf_page_of': '§5 — {current} / {total}',
     'ca_report_pdf_s6_title': 'General conclusions',
     'ca_report_pdf_s6_1':
       'Overall operation: {{total}} readings over {{days}} day(s). Global compliance: {{co2}}% (CO₂), {{o2}}% (O₂), {{eth}}% (ethylene), {{temp}}% (temperature) readings in range.',

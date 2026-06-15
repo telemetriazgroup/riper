@@ -490,6 +490,9 @@ async function captureSectionToPdf(
 /** Ancho útil A4: 210 mm − 2×15 mm margen ≈ 680 px @ 96 dpi */
 export const PDF_A4_CONTENT_WIDTH_PX = Math.round((180 / 25.4) * 96);
 
+/** Alto útil A4: 297 mm − 2×15 mm margen ≈ 1009 px @ 96 dpi */
+export const PDF_A4_CONTENT_HEIGHT_PX = Math.round((267 / 25.4) * 96);
+
 export type DomSectionsPdfOptions = {
   root: HTMLElement;
   sectionAttr?: string;

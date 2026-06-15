@@ -56,10 +56,13 @@ import {
   collectDomPdfSections,
   PDF_A4_CONTENT_WIDTH_PX,
 } from '@/app/lib/reportPdfExport';
+import { CA_PDF_PAGE_CONTENT_HEIGHT_PX, chunkDailyRowsForPdf } from '@/app/lib/caReportPdfLayout';
 import { isPruebaCaMonitoringDevice } from '@/app/lib/pruebaCaMonitoringOverrides';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 const CA_PDF_WIDTH_PX = PDF_A4_CONTENT_WIDTH_PX;
+const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
+const CA_HEADER_LOGO_HEIGHT_PX = 36;
 
 type Props = {
   open: boolean;
@@ -115,7 +118,34 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
     >
       <tbody>
         <tr>
-          <td style={{ paddingBottom: '8px', fontWeight: 600, color: '#1f2937', verticalAlign: 'bottom' }}>
+          <td
+            style={{
+              width: '130px',
+              paddingBottom: '8px',
+              paddingRight: '12px',
+              verticalAlign: 'middle',
+            }}
+          >
+            <img
+              src={ZTRACK_LOGO_SRC}
+              alt="ZTRACK"
+              style={{
+                display: 'block',
+                height: `${CA_HEADER_LOGO_HEIGHT_PX}px`,
+                width: 'auto',
+                maxWidth: '120px',
+                objectFit: 'contain',
+              }}
+            />
+          </td>
+          <td
+            style={{
+              paddingBottom: '8px',
+              fontWeight: 600,
+              color: '#1f2937',
+              verticalAlign: 'middle',
+            }}
+          >
             ZGROUP PERU | {t('ca_report_pdf_doc_title')}
           </td>
           <td
@@ -124,7 +154,7 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
               fontWeight: 600,
               color: '#1f2937',
               textAlign: 'right',
-              verticalAlign: 'bottom',
+              verticalAlign: 'middle',
               whiteSpace: 'nowrap',
             }}
           >
@@ -136,7 +166,56 @@ function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => stri
   );
 }
 
-function CaPdfSection({ section, children }: { section: string; children: React.ReactNode }) {
+function CaPdfFooter({
+  deviceId,
+  generatedAt,
+  pageNote,
+  t,
+}: {
+  deviceId: string;
+  generatedAt: string;
+  pageNote?: string;
+  t: (k: string, p?: Record<string, string>) => string;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 'auto',
+        paddingTop: '10px',
+        borderTop: '1px solid #cbd5e1',
+        fontFamily: CA_FONT,
+        fontSize: '10px',
+        color: '#6b7280',
+      }}
+    >
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody>
+          <tr>
+            <td style={{ verticalAlign: 'bottom' }}>
+              {t('ca_report_pdf_footer_generated')}: {generatedAt} · {t('integral_report_field_imei')}:{' '}
+              {deviceId}
+            </td>
+            {pageNote ? (
+              <td style={{ textAlign: 'right', verticalAlign: 'bottom', whiteSpace: 'nowrap' }}>
+                {pageNote}
+              </td>
+            ) : null}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function CaPdfSection({
+  section,
+  children,
+  fillPage = false,
+}: {
+  section: string;
+  children: React.ReactNode;
+  fillPage?: boolean;
+}) {
   return (
     <div style={{ margin: '0 auto 20px', width: `${CA_PDF_WIDTH_PX}px`, maxWidth: '100%' }}>
       <article
@@ -151,6 +230,13 @@ function CaPdfSection({ section, children }: { section: string; children: React.
           color: '#111827',
           border: '1px solid #cbd5e1',
           boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
+          ...(fillPage
+            ? {
+                display: 'flex',
+                flexDirection: 'column' as const,
+                minHeight: `${CA_PDF_PAGE_CONTENT_HEIGHT_PX}px`,
+              }
+            : {}),
         }}
       >
         {children}
@@ -550,6 +636,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
+  const dailyChunks = useMemo(
+    () => (analysis ? chunkDailyRowsForPdf(analysis.daily) : []),
+    [analysis]
+  );
+
   const handleDownloadPdf = useCallback(async () => {
     if (!analysis) return;
     setPdfBusy(true);
@@ -773,20 +864,60 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               </CaProse>
             </CaPdfSection>
 
-            {/* §5 — Análisis diario */}
-            <CaPdfSection section="daily">
-              <CaPdfHeader deviceId={deviceId} t={t} />
-              <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
-              <CaProse>
-                {t('ca_report_daily_summary', {
-                  ok: String(analysis.summary.daysInRange),
-                  total: String(analysis.summary.daysAnalyzed),
-                })}
-                {' '}
-                {t('ca_report_daily_hint')}
-              </CaProse>
-              <DailyTable rows={analysis.daily} />
-            </CaPdfSection>
+            {/* §5 — Análisis diario (paginado por bloques) */}
+            {dailyChunks.length === 0 ? (
+              <CaPdfSection section="daily-0" fillPage>
+                <CaPdfHeader deviceId={deviceId} t={t} />
+                <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
+                <CaProse>{t('ca_report_no_daily')}</CaProse>
+                <CaPdfFooter
+                  deviceId={deviceId}
+                  generatedAt={formatDateTime(new Date().toISOString())}
+                  t={t}
+                />
+              </CaPdfSection>
+            ) : (
+              dailyChunks.map((chunk, idx) => (
+                <CaPdfSection key={`daily-${idx}`} section={`daily-${idx}`} fillPage>
+                  <CaPdfHeader deviceId={deviceId} t={t} />
+                  {idx === 0 ? (
+                    <>
+                      <CaSectionTitle n="5" title={t('ca_report_pdf_s5_title')} />
+                      <CaProse>
+                        {t('ca_report_daily_summary', {
+                          ok: String(analysis.summary.daysInRange),
+                          total: String(analysis.summary.daysAnalyzed),
+                        })}
+                        {' '}
+                        {t('ca_report_daily_hint')}
+                      </CaProse>
+                    </>
+                  ) : (
+                    <>
+                      <CaSubSectionTitle
+                        n="5"
+                        title={`${t('ca_report_pdf_s5_title')} — ${t('ca_report_pdf_continued')}`}
+                      />
+                      <CaProse>{t('ca_report_pdf_s5_continued_note')}</CaProse>
+                    </>
+                  )}
+                  <DailyTable rows={chunk} />
+                  <CaPdfFooter
+                    deviceId={deviceId}
+                    generatedAt={formatDateTime(new Date().toISOString())}
+                    t={t}
+                    pageNote={
+                      dailyChunks.length > 1
+                        ? t('ca_report_pdf_page_of', {
+                            current: String(idx + 1),
+                            total: String(dailyChunks.length),
+                          })
+                        : undefined
+                    }
+                  />
+                </CaPdfSection>
+              ))
+            )}
 
             {/* §6 + §7 — Conclusiones */}
             <CaPdfSection section="conclusions">
