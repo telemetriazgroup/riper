@@ -17,7 +17,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog';
 import { useSettings } from '@/app/contexts/SettingsContext';
@@ -68,18 +67,35 @@ function pctLabel(count: number, total: number): string {
   return `${count} de ${total} (${formatUiDecimal((count / total) * 100, 1)}%)`;
 }
 
+const CA_FONT = 'Arial, Helvetica, sans-serif';
+
 function CaPdfHeader({ deviceId, t }: { deviceId: string; t: (k: string) => string }) {
   return (
     <table
-      className="w-full border-b border-gray-500 mb-4"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '11px', borderCollapse: 'collapse' }}
+      style={{
+        width: '100%',
+        fontFamily: CA_FONT,
+        fontSize: '11px',
+        borderCollapse: 'collapse',
+        borderBottom: '1px solid #6b7280',
+        marginBottom: '16px',
+      }}
     >
       <tbody>
         <tr>
-          <td className="pb-2 font-semibold text-gray-800 align-bottom">
+          <td style={{ paddingBottom: '8px', fontWeight: 600, color: '#1f2937', verticalAlign: 'bottom' }}>
             ZGROUP PERU | {t('ca_report_pdf_doc_title')}
           </td>
-          <td className="pb-2 font-semibold text-gray-800 text-right align-bottom whitespace-nowrap">
+          <td
+            style={{
+              paddingBottom: '8px',
+              fontWeight: 600,
+              color: '#1f2937',
+              textAlign: 'right',
+              verticalAlign: 'bottom',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {t('ca_report_pdf_code')}: <span style={{ fontFamily: 'monospace' }}>{deviceId}</span>
           </td>
         </tr>
@@ -92,14 +108,17 @@ function CaPdfSection({ section, children }: { section: string; children: React.
   return (
     <article
       data-ca-pdf-section={section}
-      className="ca-pdf-section bg-white text-gray-900"
       style={{
         width: `${CA_PDF_WIDTH_PX}px`,
         maxWidth: `${CA_PDF_WIDTH_PX}px`,
         boxSizing: 'border-box',
         padding: '28px 32px',
-        margin: '0 auto 16px',
-        fontFamily: 'Arial, Helvetica, sans-serif',
+        margin: '0 auto 20px',
+        fontFamily: CA_FONT,
+        backgroundColor: '#ffffff',
+        color: '#111827',
+        border: '1px solid #d1d5db',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
       }}
     >
       {children}
@@ -109,10 +128,7 @@ function CaPdfSection({ section, children }: { section: string; children: React.
 
 function CaChartBox({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="my-3 bg-white"
-      style={{ width: '100%', height: '240px', minHeight: '240px', overflow: 'hidden' }}
-    >
+    <div style={{ width: '100%', height: '240px', minHeight: '240px', overflow: 'hidden', margin: '12px 0' }}>
       {children}
     </div>
   );
@@ -121,8 +137,13 @@ function CaChartBox({ children }: { children: React.ReactNode }) {
 function CaSectionTitle({ n, title }: { n: string; title: string }) {
   return (
     <h2
-      className="text-[13px] font-bold text-gray-900 mt-4 mb-2 first:mt-0"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+      style={{
+        fontFamily: CA_FONT,
+        fontSize: '13px',
+        fontWeight: 700,
+        color: '#111827',
+        margin: '16px 0 8px',
+      }}
     >
       {n}. {title}
     </h2>
@@ -132,8 +153,13 @@ function CaSectionTitle({ n, title }: { n: string; title: string }) {
 function CaSubSectionTitle({ n, title }: { n: string; title: string }) {
   return (
     <h3
-      className="text-[12px] font-bold text-gray-900 mt-3 mb-2"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+      style={{
+        fontFamily: CA_FONT,
+        fontSize: '12px',
+        fontWeight: 700,
+        color: '#111827',
+        margin: '12px 0 8px',
+      }}
     >
       {n} {title}
     </h3>
@@ -143,37 +169,68 @@ function CaSubSectionTitle({ n, title }: { n: string; title: string }) {
 function CaProse({ children }: { children: React.ReactNode }) {
   return (
     <p
-      className="text-[11px] text-gray-800 leading-relaxed mb-3 text-justify"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+      style={{
+        fontFamily: CA_FONT,
+        fontSize: '11px',
+        color: '#1f2937',
+        lineHeight: 1.55,
+        margin: '0 0 12px',
+        textAlign: 'justify',
+      }}
     >
       {children}
     </p>
   );
 }
 
+const COL_WIDTHS: Record<number, string[]> = {
+  2: ['48%', '52%'],
+  3: ['24%', '56%', '20%'],
+  6: ['17%', '14%', '14%', '14%', '14%', '27%'],
+};
+
 function CaTechTable({
   headers,
   rows,
   compact = false,
 }: {
-  headers: [string, string] | [string, string, string] | string[];
+  headers: string[];
   rows: string[][];
   compact?: boolean;
 }) {
   const cols = headers.length;
   const fs = compact ? '10px' : '11px';
+  const colWidths = COL_WIDTHS[cols] ?? headers.map(() => `${Math.floor(100 / cols)}%`);
   return (
     <table
-      className="w-full border-collapse mb-4"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: fs, tableLayout: 'fixed', width: '100%' }}
+      style={{
+        fontFamily: CA_FONT,
+        fontSize: fs,
+        tableLayout: 'fixed',
+        width: '100%',
+        borderCollapse: 'collapse',
+        marginBottom: '16px',
+      }}
     >
+      <colgroup>
+        {colWidths.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
-        <tr style={{ borderBottom: '1px solid #6b7280' }}>
+        <tr>
           {headers.map((h) => (
             <th
               key={h}
-              className="text-left font-semibold text-gray-900"
-              style={{ padding: '6px 8px 6px 0', verticalAlign: 'bottom', wordBreak: 'break-word' }}
+              style={{
+                textAlign: 'left',
+                fontWeight: 600,
+                color: '#111827',
+                padding: '6px 6px 6px 0',
+                verticalAlign: 'bottom',
+                wordBreak: 'break-word',
+                borderBottom: '1px solid #6b7280',
+              }}
             >
               {h}
             </th>
@@ -182,17 +239,18 @@ function CaTechTable({
       </thead>
       <tbody>
         {rows.map((row, i) => (
-          <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+          <tr key={i}>
             {row.slice(0, cols).map((cell, j) => (
               <td
                 key={j}
                 style={{
-                  padding: '6px 8px 6px 0',
+                  padding: '6px 6px 6px 0',
                   verticalAlign: 'top',
                   whiteSpace: 'pre-line',
                   wordBreak: 'break-word',
                   fontWeight: j === 0 ? 600 : 400,
                   color: '#111827',
+                  borderBottom: '1px solid #e5e7eb',
                 }}
               >
                 {cell}
@@ -208,11 +266,20 @@ function CaTechTable({
 function CaBulletList({ items }: { items: string[] }) {
   return (
     <ul
-      className="text-[11px] text-gray-800 leading-relaxed mb-3 list-disc pl-5 space-y-1"
-      style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+      style={{
+        fontFamily: CA_FONT,
+        fontSize: '11px',
+        color: '#1f2937',
+        lineHeight: 1.55,
+        margin: '0 0 12px',
+        paddingLeft: '20px',
+        listStyleType: 'disc',
+      }}
     >
       {items.map((item, i) => (
-        <li key={i}>{item}</li>
+        <li key={i} style={{ marginBottom: '4px' }}>
+          {item}
+        </li>
       ))}
     </ul>
   );
@@ -405,8 +472,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     await new Promise<void>((r) => {
       requestAnimationFrame(() => requestAnimationFrame(() => r()));
     });
-    window.dispatchEvent(new Event('resize'));
-    await new Promise((r) => setTimeout(r, 900));
+    await new Promise((r) => setTimeout(r, 400));
     try {
       const root = printRef.current;
       if (!root) {
@@ -423,6 +489,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         marginMm: 14,
         scale: 2,
         captureWidthPx: CA_PDF_WIDTH_PX,
+        preserveSourceStyles: true,
       });
       toast.success(t('ca_report_pdf_success'));
     } catch (e) {
@@ -447,14 +514,14 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[96vw] max-h-[92vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-start justify-between gap-3 pr-8">
-          <div>
-            <DialogTitle className="flex items-center gap-2 text-lg">
-              <Atom className="w-5 h-5 text-teal-700" />
+      <DialogContent className="!max-w-[98vw] !w-[98vw] h-[96vh] !max-h-[96vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <div className="shrink-0 flex flex-row items-start justify-between gap-3 border-b border-border px-5 py-4 pr-14">
+          <div className="min-w-0">
+            <DialogTitle className="flex items-center gap-2 text-lg text-left">
+              <Atom className="w-5 h-5 text-teal-700 shrink-0" />
               {t('ca_report_title')}
             </DialogTitle>
-            <DialogDescription>{t('ca_report_desc')}</DialogDescription>
+            <DialogDescription className="text-left mt-1">{t('ca_report_desc')}</DialogDescription>
           </div>
           {analysis && (
             <Button
@@ -469,8 +536,9 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               {t('ca_report_download_pdf')}
             </Button>
           )}
-        </DialogHeader>
+        </div>
 
+        <div className="flex-1 min-h-0 overflow-y-auto bg-slate-300/40 px-3 py-5 sm:px-6">
         {!deviceId && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             {t('integral_report_no_device')}
@@ -498,8 +566,12 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         {analysis && (
           <div
             ref={printRef}
-            className="ca-report-document bg-slate-100 py-4"
-            style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
+            style={{
+              width: `${CA_PDF_WIDTH_PX}px`,
+              maxWidth: '100%',
+              margin: '0 auto',
+              fontFamily: CA_FONT,
+            }}
           >
             {/* §1 + §2 + §3 — Intro, variables y resumen KPI (una sola hoja lógica) */}
             <CaPdfSection section="intro-summary">
@@ -666,6 +738,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
         {!isLoading && !error && deviceId && startedAtIso && data && !analysis && (
           <p className="text-sm text-gray-500 py-6 text-center">{t('integral_report_no_series')}</p>
         )}
+        </div>
       </DialogContent>
     </Dialog>
   );
