@@ -492,7 +492,19 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s1_body':
       'El presente informe documenta y analiza el comportamiento de la atmósfera controlada (CO₂, O₂, etileno y temperatura de retorno) del equipo {{deviceId}} de ZGROUP PERU, durante el seguimiento «{{tracking}}» ({{product}} · {{client}}), comprendido entre el {{start}} y el {{end}}.',
     'ca_report_pdf_s1_highlights':
-      'Se evalúa el cumplimiento de los setpoints programados, la evolución gráfica de gases y temperatura, y un análisis diario de conformidad por parámetro.',
+      'Se evalúa el cumplimiento de los setpoints programados, la evolución gráfica de gases y temperatura, y un análisis diario de conformidad por parámetro. En el apartado 1.1 se detallan los objetivos de temperatura y atmósfera definidos en la receta del seguimiento.',
+    'ca_report_pdf_s1_targets_title': 'Objetivos programados del seguimiento',
+    'ca_report_pdf_s1_targets_intro':
+      'La receta «{{recipe}}» establece los setpoints objetivo por fase (temperatura de consigna, humedad relativa, CO₂ y etileno). Estos valores son la referencia contra la cual se evalúa el comportamiento de la atmósfera controlada en las secciones siguientes.',
+    'ca_report_pdf_s1_targets_telemetry_note':
+      'Setpoints registrados en telemetría durante el período analizado (valor mediano). Sirven como referencia operativa efectiva frente a las lecturas de CO₂, O₂ y temperatura de retorno.',
+    'ca_report_pdf_s1_no_recipe_targets': 'No hay fases con objetivos definidos en la receta de este seguimiento.',
+    'ca_report_pdf_col_phase': 'Fase',
+    'ca_report_pdf_col_temp_set': 'Temp. objetivo',
+    'ca_report_pdf_col_humidity_set': 'HR objetivo',
+    'ca_report_pdf_col_co2_set': 'CO₂ objetivo',
+    'ca_report_pdf_col_eth_set': 'Etileno objetivo',
+    'ca_report_pdf_col_duration': 'Duración',
     'ca_report_pdf_s2_title': 'Descripción de Variables Monitoreadas',
     'ca_report_pdf_s2_intro': 'Los datos fueron registrados con los siguientes sensores y parámetros:',
     'ca_report_pdf_col_variable': 'Variable',
@@ -1927,7 +1939,19 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s1_body':
       'This report documents and analyzes controlled-atmosphere behavior (CO₂, O₂, ethylene and return-air temperature) for unit {{deviceId}} (ZGROUP PERU), tracking «{{tracking}}» ({{product}} · {{client}}), from {{start}} to {{end}}.',
     'ca_report_pdf_s1_highlights':
-      'Setpoint compliance, gas and temperature charts, and daily parameter conformity are evaluated.',
+      'Setpoint compliance, gas and temperature charts, and daily parameter conformity are evaluated. Section 1.1 lists temperature and atmosphere targets from the tracking recipe.',
+    'ca_report_pdf_s1_targets_title': 'Programmed tracking objectives',
+    'ca_report_pdf_s1_targets_intro':
+      'Recipe «{{recipe}}» defines target setpoints per phase (temperature, relative humidity, CO₂ and ethylene). These values are the reference for controlled-atmosphere behavior in the following sections.',
+    'ca_report_pdf_s1_targets_telemetry_note':
+      'Setpoints recorded in telemetry during the analyzed period (median value). They represent the effective operational reference vs CO₂, O₂ and return-air readings.',
+    'ca_report_pdf_s1_no_recipe_targets': 'No phases with defined targets in this tracking recipe.',
+    'ca_report_pdf_col_phase': 'Phase',
+    'ca_report_pdf_col_temp_set': 'Target temp.',
+    'ca_report_pdf_col_humidity_set': 'Target RH',
+    'ca_report_pdf_col_co2_set': 'Target CO₂',
+    'ca_report_pdf_col_eth_set': 'Target ethylene',
+    'ca_report_pdf_col_duration': 'Duration',
     'ca_report_pdf_s2_title': 'Monitored variables',
     'ca_report_pdf_s2_intro': 'Data were recorded using the following sensors and parameters:',
     'ca_report_pdf_col_variable': 'Variable',

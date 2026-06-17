@@ -61,6 +61,11 @@ import {
   formatCaReportDeviceCode,
   formatCaReportTrackingName,
 } from '@/app/lib/caReportDisplay';
+import {
+  buildCaReportPhaseTargetRows,
+  buildCaReportTelemetrySetpointRows,
+  hasCaReportProcessTargets,
+} from '@/app/lib/caReportProcessTargets';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 const CA_PDF_WIDTH_PX = PDF_A4_CONTENT_WIDTH_PX;
@@ -308,7 +313,8 @@ function CaProse({ children }: { children: React.ReactNode }) {
 const COL_WIDTHS: Record<number, string[]> = {
   2: ['48%', '52%'],
   3: ['24%', '56%', '20%'],
-  6: ['17%', '14%', '14%', '14%', '14%', '27%'],
+  6: ['22%', '14%', '12%', '12%', '14%', '26%'],
+  7: ['17%', '14%', '14%', '14%', '14%', '27%'],
 };
 
 function CaTechTable({
@@ -646,6 +652,21 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     [analysis]
   );
 
+  const phaseTargetRows = useMemo(
+    () => buildCaReportPhaseTargetRows(view, t, formatTemp, convertTemp),
+    [view, t, formatTemp, convertTemp]
+  );
+
+  const telemetrySetpointRows = useMemo(
+    () =>
+      analysis
+        ? buildCaReportTelemetrySetpointRows(analysis.indicators, t, formatTemp, convertTemp)
+        : [],
+    [analysis, t, formatTemp, convertTemp]
+  );
+
+  const showProcessTargets = hasCaReportProcessTargets(view) || telemetrySetpointRows.length > 0;
+
   const handleDownloadPdf = useCallback(async () => {
     if (!analysis) return;
     setPdfBusy(true);
@@ -772,6 +793,43 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 })}
               </CaProse>
               <CaProse>{t('ca_report_pdf_s1_highlights')}</CaProse>
+
+              {showProcessTargets ? (
+                <>
+                  <CaSubSectionTitle n="1.1" title={t('ca_report_pdf_s1_targets_title')} />
+                  <CaProse>
+                    {t('ca_report_pdf_s1_targets_intro', {
+                      recipe: view.recipe?.name ?? '—',
+                    })}
+                  </CaProse>
+                  {phaseTargetRows.length > 0 ? (
+                    <CaTechTable
+                      compact
+                      headers={[
+                        t('ca_report_pdf_col_phase'),
+                        t('ca_report_pdf_col_temp_set'),
+                        t('ca_report_pdf_col_humidity_set'),
+                        t('ca_report_pdf_col_co2_set'),
+                        t('ca_report_pdf_col_eth_set'),
+                        t('ca_report_pdf_col_duration'),
+                      ]}
+                      rows={phaseTargetRows}
+                    />
+                  ) : (
+                    <CaProse>{t('ca_report_pdf_s1_no_recipe_targets')}</CaProse>
+                  )}
+                  {telemetrySetpointRows.length > 0 ? (
+                    <>
+                      <CaProse>{t('ca_report_pdf_s1_targets_telemetry_note')}</CaProse>
+                      <CaTechTable
+                        compact
+                        headers={[t('ca_report_pdf_col_variable'), t('ca_report_pdf_col_value')]}
+                        rows={telemetrySetpointRows}
+                      />
+                    </>
+                  ) : null}
+                </>
+              ) : null}
 
               <CaSectionTitle n="2" title={t('ca_report_pdf_s2_title')} />
               <CaProse>{t('ca_report_pdf_s2_intro')}</CaProse>
