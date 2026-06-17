@@ -66,6 +66,11 @@ import {
   buildCaReportTelemetrySetpointRows,
   hasCaReportProcessTargets,
 } from '@/app/lib/caReportProcessTargets';
+import {
+  buildCaReportProcessTrackingInfo,
+  CA_REPORT_PRUEBA_CA_MACHINE_SERIAL,
+  CA_REPORT_PRUEBA_CA_RECIPE_MATCH,
+} from '@/app/lib/caReportProcessTracking';
 
 const CA_PDF_SECTION_ATTR = 'data-ca-pdf-section';
 const CA_PDF_WIDTH_PX = PDF_A4_CONTENT_WIDTH_PX;
@@ -665,6 +670,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     [analysis, t, formatTemp, convertTemp]
   );
 
+  const processTracking = useMemo(
+    () => buildCaReportProcessTrackingInfo(view, deviceId, t, formatDateTime),
+    [view, deviceId, t, formatDateTime]
+  );
+
   const showProcessTargets = hasCaReportProcessTargets(view) || telemetrySetpointRows.length > 0;
 
   const handleDownloadPdf = useCallback(async () => {
@@ -828,6 +838,26 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                       />
                     </>
                   ) : null}
+                </>
+              ) : null}
+
+              <CaSubSectionTitle n="1.2" title={t('ca_report_pdf_s1_tracking_title')} />
+              <CaProse>{t('ca_report_pdf_s1_tracking_intro')}</CaProse>
+              <CaTechTable
+                compact
+                headers={[t('ca_report_pdf_col_field'), t('ca_report_pdf_col_value')]}
+                rows={processTracking.rows}
+              />
+
+              {processTracking.showMachineSerial ? (
+                <>
+                  <CaSubSectionTitle n="1.3" title={t('ca_report_pdf_s1_equipment_title')} />
+                  <CaProse>
+                    {t('ca_report_pdf_s1_equipment_serial', {
+                      serial: CA_REPORT_PRUEBA_CA_MACHINE_SERIAL,
+                      recipe: view.recipe?.name ?? CA_REPORT_PRUEBA_CA_RECIPE_MATCH,
+                    })}
+                  </CaProse>
                 </>
               ) : null}
 
