@@ -807,7 +807,6 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                   end: analysis.periodEnd,
                 })}
               </CaProse>
-              <CaProse>{t('ca_report_pdf_s1_highlights')}</CaProse>
 
               {showProcessTargets ? (
                 <>
