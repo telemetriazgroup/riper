@@ -105,3 +105,24 @@ export function hasCaReportProcessTargets(view: ReturnType<typeof mapRowToProces
   const phases = view.recipe?.phases ?? [];
   return phases.some((p) => p && (p as { enabled?: boolean }).enabled !== false);
 }
+
+/** Objetivos de CO₂/O₂ de la primera fase habilitada; O₂ cae al setpoint telemétrico inicial. */
+export function getCaReportInitialGasObjectives(
+  view: ReturnType<typeof mapRowToProcessView>,
+  fallback: { co2: number | null; o2: number | null }
+): { co2: number | null; o2: number | null } {
+  const phases = (view.recipe?.phases ?? []).filter(
+    (p): p is PhaseRaw => Boolean(p) && (p as { enabled?: boolean }).enabled !== false
+  );
+  let co2: number | null = null;
+  for (const raw of phases) {
+    if (raw.co2Limit != null && Number.isFinite(Number(raw.co2Limit))) {
+      co2 = Number(raw.co2Limit);
+      break;
+    }
+  }
+  return {
+    co2: co2 ?? fallback.co2,
+    o2: fallback.o2,
+  };
+}

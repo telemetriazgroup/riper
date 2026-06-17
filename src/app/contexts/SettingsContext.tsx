@@ -545,10 +545,10 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s3_title': 'Resumen',
     'ca_report_pdf_s31_title': 'Lectura inicial de gases y estabilización',
     'ca_report_pdf_s31_intro':
-      'Primera lectura disponible de CO₂ y O₂ al inicio del seguimiento, con la hora en que cada gas alcanzó el rango de tolerancia (±{{co2Tol}} % para CO₂ y ±{{o2Tol}} % para O₂ respecto al setpoint vigente).',
+      'Primera lectura disponible de CO₂ y O₂ al inicio del seguimiento. El objetivo inicial de CO₂ proviene de la receta del proceso; el de O₂ del setpoint telemétrico de arranque. Se registra la hora en que cada gas alcanzó el rango de tolerancia (±{{co2Tol}} % para CO₂ y ±{{o2Tol}} % para O₂ respecto a ese objetivo).',
     'ca_report_pdf_s31_col_gas': 'Gas',
     'ca_report_pdf_s31_col_initial': 'Lectura inicial',
-    'ca_report_pdf_s31_col_setpoint': 'Setpoint inicial',
+    'ca_report_pdf_s31_col_objective': 'Objetivo inicial',
     'ca_report_pdf_s31_col_start': 'Hora inicio',
     'ca_report_pdf_s31_col_in_range': 'Hora en rango',
     'ca_report_pdf_s31_col_duration': 'Tiempo hasta rango',
@@ -558,6 +558,37 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s31_duration_min': '{{min}} min',
     'ca_report_pdf_s31_duration_h': '{{h}} h',
     'ca_report_pdf_s31_duration_hm': '{{h}} h {{min}} min',
+    'ca_report_pdf_s31_chart_title': 'Evolución desde el inicio hasta la estabilización',
+    'ca_report_pdf_s31_chart_intro':
+      'Curvas de CO₂ y O₂ desde la primera lectura hasta que ambos gases alcanzan el rango objetivo (o el tramo inicial disponible). Las líneas discontinuas indican el objetivo inicial de cada gas.',
+    'ca_report_pdf_s31_chart_co2': 'CO₂ (%)',
+    'ca_report_pdf_s31_chart_o2': 'O₂ (%)',
+    'ca_report_pdf_s31_chart_co2_objective': 'Obj. CO₂',
+    'ca_report_pdf_s31_chart_o2_objective': 'Obj. O₂',
+    'ca_report_pdf_s31_co2_title': 'Análisis CO₂',
+    'ca_report_pdf_s31_o2_title': 'Análisis O₂',
+    'ca_report_pdf_s31_co2_analysis_no_data': 'No hay lecturas de CO₂ disponibles para evaluar la fase de estabilización inicial.',
+    'ca_report_pdf_s31_o2_analysis_no_data': 'No hay lecturas de O₂ disponibles para evaluar la fase de estabilización inicial.',
+    'ca_report_pdf_s31_co2_analysis_immediate':
+      'Análisis CO₂: la concentración inició en {{initial}} %, ya dentro del rango ±{{tol}} % del objetivo ({{objective}} %). No se requirió tiempo adicional de ajuste.',
+    'ca_report_pdf_s31_o2_analysis_immediate':
+      'Análisis O₂: el oxígeno inició en {{initial}} %, ya dentro del rango ±{{tol}} % del objetivo ({{objective}} %). No se requirió tiempo adicional de ajuste.',
+    'ca_report_pdf_s31_co2_analysis_rise':
+      'Análisis CO₂: la concentración partió de {{initial}} % y ascendió hacia el objetivo de {{objective}} %, alcanzando el rango de tolerancia (±{{tol}} %) el {{inRangeAt}} ({{duration}} desde el inicio). La curva refleja el incremento progresivo de CO₂ propio de la fase de pulldown y estabilización de atmósfera controlada.',
+    'ca_report_pdf_s31_co2_analysis_fall':
+      'Análisis CO₂: la concentración inició en {{initial}} % por encima del objetivo ({{objective}} %) y descendió hasta entrar en rango el {{inRangeAt}} ({{duration}}). El ajuste descendente indica corrección hacia el equilibrio programado.',
+    'ca_report_pdf_s31_co2_analysis_stable':
+      'Análisis CO₂: la concentración se mantuvo cercana a {{initial}} % respecto al objetivo de {{objective}} %, estabilizándose en rango el {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_co2_analysis_not_reached':
+      'Análisis CO₂: la concentración partió de {{initial}} % con objetivo {{objective}} %, pero no alcanzó el rango ±{{tol}} % dentro del tramo evaluado (última lectura: {{end}} %). Conviene revisar el pulldown y la hermeticidad de la cámara.',
+    'ca_report_pdf_s31_o2_analysis_fall':
+      'Análisis O₂: el oxígeno inició en {{initial}} % y descendió hacia el objetivo de {{objective}} %, entrando en rango el {{inRangeAt}} ({{duration}}). Este comportamiento es coherente con la reducción de O₂ propia de atmósfera controlada.',
+    'ca_report_pdf_s31_o2_analysis_rise':
+      'Análisis O₂: el oxígeno partió de {{initial}} % por debajo del objetivo ({{objective}} %) y ascendió hasta entrar en rango el {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_o2_analysis_stable':
+      'Análisis O₂: el oxígeno se mantuvo cercano a {{initial}} % respecto al objetivo de {{objective}} %, estabilizándose en rango el {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_o2_analysis_not_reached':
+      'Análisis O₂: el oxígeno inició en {{initial}} % con objetivo {{objective}} %, pero no alcanzó el rango ±{{tol}} % dentro del tramo evaluado (última lectura: {{end}} %). Conviene revisar el sistema de generación de atmósfera y posibles entradas de aire.',
     'ca_report_pdf_s3_intro':
       'Durante el período analizado se procesaron {{total}} registros de telemetría. La gráfica utiliza {{shown}} puntos representativos (mín/máx, cambios relevantes y anclas diarias). {{daysOk}} de {{daysTotal}} días cumplieron todos los criterios de conformidad.',
     'ca_report_pdf_col_indicator': 'Indicador',
@@ -2023,10 +2054,10 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s3_title': 'Summary',
     'ca_report_pdf_s31_title': 'Initial gas reading and stabilization',
     'ca_report_pdf_s31_intro':
-      'First available CO₂ and O₂ readings at the start of monitoring, with the time each gas reached the tolerance band (±{{co2Tol}} % for CO₂ and ±{{o2Tol}} % for O₂ vs. the active setpoint).',
+      'First available CO₂ and O₂ readings at the start of monitoring. The initial CO₂ target comes from the process recipe; O₂ from the telemetry setpoint at startup. The time each gas reached the tolerance band is recorded (±{{co2Tol}} % for CO₂ and ±{{o2Tol}} % for O₂ vs. that target).',
     'ca_report_pdf_s31_col_gas': 'Gas',
     'ca_report_pdf_s31_col_initial': 'Initial reading',
-    'ca_report_pdf_s31_col_setpoint': 'Initial setpoint',
+    'ca_report_pdf_s31_col_objective': 'Initial target',
     'ca_report_pdf_s31_col_start': 'Start time',
     'ca_report_pdf_s31_col_in_range': 'In-range time',
     'ca_report_pdf_s31_col_duration': 'Time to range',
@@ -2036,6 +2067,37 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_s31_duration_min': '{{min}} min',
     'ca_report_pdf_s31_duration_h': '{{h}} h',
     'ca_report_pdf_s31_duration_hm': '{{h}} h {{min}} min',
+    'ca_report_pdf_s31_chart_title': 'Evolution from start to stabilization',
+    'ca_report_pdf_s31_chart_intro':
+      'CO₂ and O₂ curves from the first reading until both gases reach the target band (or the available initial window). Dashed lines show each gas initial target.',
+    'ca_report_pdf_s31_chart_co2': 'CO₂ (%)',
+    'ca_report_pdf_s31_chart_o2': 'O₂ (%)',
+    'ca_report_pdf_s31_chart_co2_objective': 'CO₂ tgt.',
+    'ca_report_pdf_s31_chart_o2_objective': 'O₂ tgt.',
+    'ca_report_pdf_s31_co2_title': 'CO₂ analysis',
+    'ca_report_pdf_s31_o2_title': 'O₂ analysis',
+    'ca_report_pdf_s31_co2_analysis_no_data': 'No CO₂ readings are available to assess the initial stabilization phase.',
+    'ca_report_pdf_s31_o2_analysis_no_data': 'No O₂ readings are available to assess the initial stabilization phase.',
+    'ca_report_pdf_s31_co2_analysis_immediate':
+      'CO₂ analysis: concentration started at {{initial}} %, already within ±{{tol}} % of the target ({{objective}} %). No additional adjustment time was required.',
+    'ca_report_pdf_s31_o2_analysis_immediate':
+      'O₂ analysis: oxygen started at {{initial}} %, already within ±{{tol}} % of the target ({{objective}} %). No additional adjustment time was required.',
+    'ca_report_pdf_s31_co2_analysis_rise':
+      'CO₂ analysis: concentration rose from {{initial}} % toward the {{objective}} % target, entering the ±{{tol}} % band on {{inRangeAt}} ({{duration}} from start). The curve reflects the progressive CO₂ increase typical of CA pulldown and stabilization.',
+    'ca_report_pdf_s31_co2_analysis_fall':
+      'CO₂ analysis: concentration started at {{initial}} % above the {{objective}} % target and decreased until in range on {{inRangeAt}} ({{duration}}). The downward adjustment indicates correction toward the programmed equilibrium.',
+    'ca_report_pdf_s31_co2_analysis_stable':
+      'CO₂ analysis: concentration stayed near {{initial}} % vs. the {{objective}} % target, reaching the band on {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_co2_analysis_not_reached':
+      'CO₂ analysis: concentration started at {{initial}} % with a {{objective}} % target but did not reach ±{{tol}} % within the evaluated window (last reading: {{end}} %). Review pulldown and chamber tightness.',
+    'ca_report_pdf_s31_o2_analysis_fall':
+      'O₂ analysis: oxygen started at {{initial}} % and decreased toward the {{objective}} % target, entering the band on {{inRangeAt}} ({{duration}}). This behavior is consistent with O₂ reduction in controlled atmosphere.',
+    'ca_report_pdf_s31_o2_analysis_rise':
+      'O₂ analysis: oxygen started at {{initial}} % below the {{objective}} % target and increased until in range on {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_o2_analysis_stable':
+      'O₂ analysis: oxygen stayed near {{initial}} % vs. the {{objective}} % target, reaching the band on {{inRangeAt}} ({{duration}}).',
+    'ca_report_pdf_s31_o2_analysis_not_reached':
+      'O₂ analysis: oxygen started at {{initial}} % with a {{objective}} % target but did not reach ±{{tol}} % within the evaluated window (last reading: {{end}} %). Review the atmosphere system and possible air ingress.',
     'ca_report_pdf_s3_intro':
       '{{total}} telemetry records were processed. Charts use {{shown}} representative points (min/max, significant changes and daily anchors). {{daysOk}} of {{daysTotal}} days met all conformity criteria.',
     'ca_report_pdf_col_indicator': 'Indicator',

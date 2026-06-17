@@ -513,109 +513,217 @@ export function buildCaProcessSummary(
   };
 }
 
+export type CaGasStabilizationTrend = 'up' | 'down' | 'stable';
+
 export type CaGasStabilizationResult = {
   gas: 'co2' | 'o2';
   initialValue: number | null;
-  initialSetpoint: number | null;
+  /** Objetivo inicial (receta o setpoint telemétrico de arranque). */
+  objectiveTarget: number | null;
   initialAt: string | null;
   inRangeAt: string | null;
   timeToRangeMs: number | null;
   reachedRange: boolean;
+  endValue: number | null;
+  trend: CaGasStabilizationTrend | null;
+};
+
+export type CaGasStabilizationChartPoint = {
+  timestamp: string;
+  co2: number | null;
+  o2: number | null;
+  co2Objective: number | null;
+  o2Objective: number | null;
+};
+
+export type CaGasStabilizationReport = {
+  co2: CaGasStabilizationResult;
+  o2: CaGasStabilizationResult;
+  windowStartAt: string | null;
+  windowEndAt: string | null;
+  chartPoints: CaGasStabilizationChartPoint[];
 };
 
 function gasReadingInRange(value: number, target: number, tolerance: number): boolean {
   return Math.abs(value - target) <= tolerance;
 }
 
+function gasTrend(initial: number, end: number): CaGasStabilizationTrend {
+  const delta = end - initial;
+  if (Math.abs(delta) < 0.05) return 'stable';
+  return delta > 0 ? 'up' : 'down';
+}
+
 function analyzeGasStabilization(
   prepared: CaPreparedPoint[],
   getValue: (p: CaPreparedPoint) => number | null,
   getSetpoint: (p: CaPreparedPoint) => number | null,
-  tolerance: number
+  tolerance: number,
+  objectiveTarget: number | null
 ): Omit<CaGasStabilizationResult, 'gas'> {
   const firstIdx = prepared.findIndex((p) => {
     const v = getValue(p);
-    const sp = getSetpoint(p);
-    return v != null && sp != null;
+    return v != null && (objectiveTarget != null || getSetpoint(p) != null);
   });
   if (firstIdx < 0) {
     return {
       initialValue: null,
-      initialSetpoint: null,
+      objectiveTarget: objectiveTarget ?? null,
       initialAt: null,
       inRangeAt: null,
       timeToRangeMs: null,
       reachedRange: false,
+      endValue: null,
+      trend: null,
     };
   }
 
   const first = prepared[firstIdx]!;
   const initialValue = getValue(first)!;
-  const initialSetpoint = getSetpoint(first)!;
+  const target = objectiveTarget ?? getSetpoint(first)!;
   const initialAt = first.timestamp;
 
-  if (gasReadingInRange(initialValue, initialSetpoint, tolerance)) {
+  if (gasReadingInRange(initialValue, target, tolerance)) {
     return {
       initialValue,
-      initialSetpoint,
+      objectiveTarget: target,
       initialAt,
       inRangeAt: initialAt,
       timeToRangeMs: 0,
       reachedRange: true,
+      endValue: initialValue,
+      trend: 'stable',
     };
   }
 
   for (let i = firstIdx + 1; i < prepared.length; i++) {
     const p = prepared[i]!;
     const v = getValue(p);
-    const sp = getSetpoint(p);
-    if (v == null || sp == null) continue;
-    if (gasReadingInRange(v, sp, tolerance)) {
+    if (v == null) continue;
+    if (gasReadingInRange(v, target, tolerance)) {
       const t0 = new Date(initialAt).getTime();
       const t1 = new Date(p.timestamp).getTime();
       return {
         initialValue,
-        initialSetpoint,
+        objectiveTarget: target,
         initialAt,
         inRangeAt: p.timestamp,
         timeToRangeMs: t1 - t0,
         reachedRange: true,
+        endValue: v,
+        trend: gasTrend(initialValue, v),
       };
+    }
+  }
+
+  const lastIdx = prepared.length - 1;
+  let lastValue: number | null = null;
+  for (let i = lastIdx; i >= firstIdx; i--) {
+    const v = getValue(prepared[i]!);
+    if (v != null) {
+      lastValue = v;
+      break;
     }
   }
 
   return {
     initialValue,
-    initialSetpoint,
+    objectiveTarget: target,
     initialAt,
     inRangeAt: null,
     timeToRangeMs: null,
     reachedRange: false,
+    endValue: lastValue,
+    trend: lastValue != null ? gasTrend(initialValue, lastValue) : null,
   };
 }
 
-export function buildCaGasInitialStabilization(prepared: CaPreparedPoint[]): {
-  co2: CaGasStabilizationResult;
-  o2: CaGasStabilizationResult;
-} {
-  return {
-    co2: {
-      gas: 'co2',
-      ...analyzeGasStabilization(
-        prepared,
-        (p) => p.co2,
-        (p) => p.set_point_co2,
-        CA_CO2_TOLERANCE_PCT
-      ),
-    },
-    o2: {
-      gas: 'o2',
-      ...analyzeGasStabilization(
-        prepared,
-        (p) => p.o2,
-        (p) => p.set_point_o2,
-        CA_O2_TOLERANCE_PCT
-      ),
-    },
+function resolveStabilizationWindow(
+  prepared: CaPreparedPoint[],
+  startIdx: number,
+  co2: CaGasStabilizationResult,
+  o2: CaGasStabilizationResult
+): { startAt: string | null; endAt: string | null; endIdx: number } {
+  if (startIdx < 0 || !prepared[startIdx]) {
+    return { startAt: null, endAt: null, endIdx: -1 };
+  }
+
+  const startAt = prepared[startIdx]!.timestamp;
+  const startMs = new Date(startAt).getTime();
+  const rangeEnds = [co2.inRangeAt, o2.inRangeAt]
+    .filter((v): v is string => Boolean(v))
+    .map((iso) => new Date(iso).getTime());
+
+  let endMs: number;
+  if (rangeEnds.length) {
+    endMs = Math.max(...rangeEnds);
+  } else {
+    endMs = startMs + 48 * 3_600_000;
+  }
+
+  let endIdx = startIdx;
+  for (let i = startIdx; i < prepared.length; i++) {
+    const t = new Date(prepared[i]!.timestamp).getTime();
+    if (t > endMs) break;
+    endIdx = i;
+  }
+
+  return { startAt, endAt: prepared[endIdx]!.timestamp, endIdx };
+}
+
+export function buildCaGasStabilizationReport(
+  prepared: CaPreparedPoint[],
+  objectives: { co2: number | null; o2: number | null },
+  maxChartPoints = 48
+): CaGasStabilizationReport {
+  const co2 = {
+    gas: 'co2' as const,
+    ...analyzeGasStabilization(
+      prepared,
+      (p) => p.co2,
+      (p) => p.set_point_co2,
+      CA_CO2_TOLERANCE_PCT,
+      objectives.co2
+    ),
   };
+  const o2 = {
+    gas: 'o2' as const,
+    ...analyzeGasStabilization(
+      prepared,
+      (p) => p.o2,
+      (p) => p.set_point_o2,
+      CA_O2_TOLERANCE_PCT,
+      objectives.o2
+    ),
+  };
+
+  const co2Idx = prepared.findIndex((p) => p.co2 != null);
+  const o2Idx = prepared.findIndex((p) => p.o2 != null);
+  const startIdx =
+    co2Idx < 0 ? o2Idx : o2Idx < 0 ? co2Idx : Math.min(co2Idx, o2Idx);
+
+  const { startAt, endAt, endIdx } = resolveStabilizationWindow(prepared, startIdx, co2, o2);
+  const windowSlice = startIdx >= 0 && endIdx >= startIdx ? prepared.slice(startIdx, endIdx + 1) : [];
+  const chartSlice = downsampleCaPreparedPoints(windowSlice, maxChartPoints);
+
+  return {
+    co2,
+    o2,
+    windowStartAt: startAt,
+    windowEndAt: endAt,
+    chartPoints: chartSlice.map((p) => ({
+      timestamp: p.timestamp,
+      co2: p.co2,
+      o2: p.o2,
+      co2Objective: co2.objectiveTarget,
+      o2Objective: o2.objectiveTarget,
+    })),
+  };
+}
+
+/** @deprecated Use buildCaGasStabilizationReport */
+export function buildCaGasInitialStabilization(prepared: CaPreparedPoint[]): CaGasStabilizationReport {
+  const co2Sp = prepared.find((p) => p.set_point_co2 != null)?.set_point_co2 ?? null;
+  const o2Sp = prepared.find((p) => p.set_point_o2 != null)?.set_point_o2 ?? null;
+  return buildCaGasStabilizationReport(prepared, { co2: co2Sp, o2: o2Sp });
 }

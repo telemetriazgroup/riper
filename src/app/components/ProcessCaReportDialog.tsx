@@ -5,6 +5,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -34,7 +35,7 @@ import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import {
   buildCaPdfIndicators,
   buildCaProcessSummary,
-  buildCaGasInitialStabilization,
+  buildCaGasStabilizationReport,
   buildDailyCaAnalysis,
   CA_CO2_TOLERANCE_PCT,
   CA_O2_TOLERANCE_PCT,
@@ -66,6 +67,7 @@ import {
 import {
   buildCaReportPhaseTargetRows,
   buildCaReportTelemetrySetpointRows,
+  getCaReportInitialGasObjectives,
   hasCaReportProcessTargets,
 } from '@/app/lib/caReportProcessTargets';
 import {
@@ -539,7 +541,7 @@ function buildGasStabilizationRows(
     return [
       label,
       `${formatUiDecimal(row.initialValue)} %`,
-      row.initialSetpoint != null ? `${formatUiDecimal(row.initialSetpoint)} %` : '—',
+      row.objectiveTarget != null ? `${formatUiDecimal(row.objectiveTarget)} %` : '—',
       formatDateTime(row.initialAt),
       row.reachedRange && row.inRangeAt ? formatDateTime(row.inRangeAt) : t('ca_report_pdf_s31_not_reached'),
       formatGasStabilizationDuration(t, row.timeToRangeMs, row.reachedRange),
@@ -547,6 +549,46 @@ function buildGasStabilizationRows(
   };
 
   return [formatRow('CO₂', gasStab.co2), formatRow('O₂', gasStab.o2)];
+}
+
+function buildGasStabilizationGasAnalysis(
+  t: (k: string, p?: Record<string, string>) => string,
+  formatDateTime: (iso: string) => string,
+  row: CaGasStabilizationResult,
+  tol: number,
+  gasPrefix: 'co2' | 'o2'
+): string {
+  if (row.initialValue == null || row.initialAt == null) {
+    return t(`ca_report_pdf_s31_${gasPrefix}_analysis_no_data`);
+  }
+  const params = {
+    initial: formatUiDecimal(row.initialValue),
+    objective: row.objectiveTarget != null ? formatUiDecimal(row.objectiveTarget) : '—',
+    tol: String(tol),
+    inRangeAt: row.inRangeAt ? formatDateTime(row.inRangeAt) : '—',
+    duration: formatGasStabilizationDuration(t, row.timeToRangeMs, row.reachedRange),
+    end: row.endValue != null ? formatUiDecimal(row.endValue) : '—',
+  };
+  if (!row.reachedRange) {
+    return t(`ca_report_pdf_s31_${gasPrefix}_analysis_not_reached`, params);
+  }
+  if (row.timeToRangeMs === 0) {
+    return t(`ca_report_pdf_s31_${gasPrefix}_analysis_immediate`, params);
+  }
+  const trend = row.trend ?? 'stable';
+  const key =
+    gasPrefix === 'co2'
+      ? trend === 'up'
+        ? 'ca_report_pdf_s31_co2_analysis_rise'
+        : trend === 'down'
+          ? 'ca_report_pdf_s31_co2_analysis_fall'
+          : 'ca_report_pdf_s31_co2_analysis_stable'
+      : trend === 'down'
+        ? 'ca_report_pdf_s31_o2_analysis_fall'
+        : trend === 'up'
+          ? 'ca_report_pdf_s31_o2_analysis_rise'
+          : 'ca_report_pdf_s31_o2_analysis_stable';
+  return t(key, params);
 }
 
 export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
@@ -656,7 +698,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     const daily = buildDailyCaAnalysis(prepared, language, deviceId);
     const summary = buildCaProcessSummary(prepared, daily, deviceId);
     const indicators = buildCaPdfIndicators(prepared, deviceId);
-    const gasStabilization = buildCaGasInitialStabilization(prepared);
+    const gasObjectives = getCaReportInitialGasObjectives(view, {
+      co2: prepared.find((p) => p.set_point_co2 != null)?.set_point_co2 ?? null,
+      o2: prepared.find((p) => p.set_point_o2 != null)?.set_point_o2 ?? null,
+    });
+    const gasStabilization = buildCaGasStabilizationReport(prepared, gasObjectives);
 
     const periodStart = formatCaReportPeriodDate(startedAtIso ?? points[0]!.timestamp, language);
     const periodEnd = formatCaReportPeriodDate(rangeEndIso, language);
@@ -693,9 +739,30 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
       tempOk,
       gasStabilization,
       gasStabilizationRows: buildGasStabilizationRows(t, formatDateTime, gasStabilization),
+      gasStabilizationChartRows: gasStabilization.chartPoints.map((p) => ({
+        tick: chartTick(p.timestamp),
+        co2: p.co2,
+        o2: p.o2,
+        co2Objective: p.co2Objective,
+        o2Objective: p.o2Objective,
+      })),
+      gasStabilizationCo2Analysis: buildGasStabilizationGasAnalysis(
+        t,
+        formatDateTime,
+        gasStabilization.co2,
+        CA_CO2_TOLERANCE_PCT,
+        'co2'
+      ),
+      gasStabilizationO2Analysis: buildGasStabilizationGasAnalysis(
+        t,
+        formatDateTime,
+        gasStabilization.o2,
+        CA_O2_TOLERANCE_PCT,
+        'o2'
+      ),
       kpiRows: buildKpiRows(t, summary, indicators, periodStart, periodEnd, formatTemp, convertTemp),
     };
-  }, [data?.points, deviceId, language, convertTemp, formatTemp, formatDateTime, startedAtIso, rangeEndIso, t]);
+  }, [data?.points, deviceId, language, convertTemp, formatTemp, formatDateTime, startedAtIso, rangeEndIso, t, view]);
 
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
@@ -943,7 +1010,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               />
             </CaPdfSection>
 
-            {/* §3.1 — Lectura inicial gases y tiempo hasta rango */}
+            {/* §3.1 — Lectura inicial gases (tabla) */}
             <CaPdfSection section="gas-stabilization" fillPage>
               <CaPdfHeader deviceCode={reportHeaderCode} t={t} />
               <CaSectionTitle n="3.1" title={t('ca_report_pdf_s31_title')} />
@@ -957,7 +1024,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 headers={[
                   t('ca_report_pdf_s31_col_gas'),
                   t('ca_report_pdf_s31_col_initial'),
-                  t('ca_report_pdf_s31_col_setpoint'),
+                  t('ca_report_pdf_s31_col_objective'),
                   t('ca_report_pdf_s31_col_start'),
                   t('ca_report_pdf_s31_col_in_range'),
                   t('ca_report_pdf_s31_col_duration'),
@@ -965,6 +1032,91 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
                 rows={analysis.gasStabilizationRows}
               />
             </CaPdfSection>
+
+            {/* §3.1 — Gráfica y análisis por gas */}
+            {analysis.gasStabilizationChartRows.length > 0 ? (
+              <CaPdfSection section="gas-stabilization-chart" fillPage>
+                <CaPdfHeader deviceCode={reportHeaderCode} t={t} />
+                <CaSubSectionTitle n="3.1.1" title={t('ca_report_pdf_s31_chart_title')} />
+                <CaProse>{t('ca_report_pdf_s31_chart_intro')}</CaProse>
+                <CaChartBox>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={analysis.gasStabilizationChartRows}
+                      margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                      <XAxis
+                        dataKey="tick"
+                        fontSize={9}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                        stroke="#374151"
+                      />
+                      <YAxis
+                        domain={[0, 'auto']}
+                        fontSize={9}
+                        tickFormatter={(v) => formatUiDecimal(Number(v))}
+                        stroke="#374151"
+                        width={36}
+                      />
+                      <Tooltip formatter={(v: number | string) => formatUiDecimal(Number(v))} />
+                      <Legend wrapperStyle={{ fontSize: 10, paddingTop: 4 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="co2"
+                        name={t('ca_report_pdf_s31_chart_co2')}
+                        stroke="#475569"
+                        dot={false}
+                        strokeWidth={2}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="o2"
+                        name={t('ca_report_pdf_s31_chart_o2')}
+                        stroke="#0284c7"
+                        dot={false}
+                        strokeWidth={2}
+                        connectNulls
+                      />
+                      {analysis.gasStabilization.co2.objectiveTarget != null ? (
+                        <ReferenceLine
+                          y={analysis.gasStabilization.co2.objectiveTarget}
+                          stroke="#475569"
+                          strokeDasharray="5 4"
+                          strokeWidth={1.5}
+                          label={{
+                            value: t('ca_report_pdf_s31_chart_co2_objective'),
+                            position: 'insideTopRight',
+                            fontSize: 9,
+                            fill: '#475569',
+                          }}
+                        />
+                      ) : null}
+                      {analysis.gasStabilization.o2.objectiveTarget != null ? (
+                        <ReferenceLine
+                          y={analysis.gasStabilization.o2.objectiveTarget}
+                          stroke="#0284c7"
+                          strokeDasharray="5 4"
+                          strokeWidth={1.5}
+                          label={{
+                            value: t('ca_report_pdf_s31_chart_o2_objective'),
+                            position: 'insideBottomRight',
+                            fontSize: 9,
+                            fill: '#0284c7',
+                          }}
+                        />
+                      ) : null}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CaChartBox>
+                <CaSubSectionTitle n="3.1.2" title={t('ca_report_pdf_s31_co2_title')} />
+                <CaProse>{analysis.gasStabilizationCo2Analysis}</CaProse>
+                <CaSubSectionTitle n="3.1.3" title={t('ca_report_pdf_s31_o2_title')} />
+                <CaProse>{analysis.gasStabilizationO2Analysis}</CaProse>
+              </CaPdfSection>
+            ) : null}
 
             {/* §4.1 — Gases */}
             <CaPdfSection section="gases">
