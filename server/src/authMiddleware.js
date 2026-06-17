@@ -34,6 +34,12 @@ export function requireSuperAdmin(req, res, next) {
   return res.status(403).json({ error: 'forbidden', message: 'superadmin only' });
 }
 
+/** Superusuario: rol superadmin o flag is_superuser */
+export function requireSuperUser(req, res, next) {
+  if (req.user?.role === 'superadmin' || req.user?.is_superuser) return next();
+  return res.status(403).json({ error: 'forbidden', message: 'superuser required' });
+}
+
 /** Operador, admin o superadmin (uso legacy; nuevas rutas preferir requireOperatorPlus) */
 export function requireStaff(req, res, next) {
   const r = req.user?.role;

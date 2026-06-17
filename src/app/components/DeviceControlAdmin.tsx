@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Activity, Loader2, RefreshCw, Ban, Pencil, Archive, Eye, RotateCcw } from 'lucide-react';
+import { Activity, Loader2, RefreshCw, Ban, Pencil, Archive, Eye, RotateCcw, Download } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import {
   Dialog,
@@ -10,7 +10,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
-import { canDeleteDeviceControlRecord } from '@/app/lib/permissions';
+import { canDeleteDeviceControlRecord, canExportControlLogic } from '@/app/lib/permissions';
 import { useControlSessionsList, revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import {
   cancelControlProcess,
@@ -29,6 +29,8 @@ import {
   type ProcessEventRow,
 } from '@/app/lib/controlProcessDisplay';
 import { ProcessTechnicalDetailsDialog } from '@/app/components/ProcessTechnicalDetailsDialog';
+import { fetchControlLogicExport } from '@/app/lib/controlLogicExportApi';
+import { downloadJsonFile } from '@/app/lib/downloadJsonFile';
 const STATUS_ES: Record<string, string> = {
   active: 'Activo',
   cancelled: 'Cancelado',
@@ -47,6 +49,8 @@ export const DeviceControlAdmin: React.FC = () => {
   const { t, formatDateTime, formatTemp } = useSettings();
   const role = getStoredUser()?.role;
   const isSuperAdmin = role === 'superadmin';
+  const canExportLogic = canExportControlLogic();
+  const [exportLogicBusy, setExportLogicBusy] = useState(false);
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const includeArchived = Boolean(isSuperAdmin && showArchivedSessions);
   const { sessions: rows, isLoading, isError } = useControlSessionsList(includeArchived);
@@ -63,6 +67,21 @@ export const DeviceControlAdmin: React.FC = () => {
   const canHardDeleteDb = canDeleteDeviceControlRecord();
 
   const load = useCallback(() => revalidateControlSessionsList(), []);
+
+  const exportControlLogic = async () => {
+    if (!canExportLogic) return;
+    setExportLogicBusy(true);
+    try {
+      const data = await fetchControlLogicExport();
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadJsonFile(data, `control_logica_tunel_tk_${stamp}.json`);
+      toast.success(t('control_logic_export_success'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('control_logic_export_error'));
+    } finally {
+      setExportLogicBusy(false);
+    }
+  };
 
   const onCancel = async (r: DeviceControlSessionRow) => {
     if (r.status !== 'active') return;
@@ -205,6 +224,23 @@ export const DeviceControlAdmin: React.FC = () => {
               {t('catalog_show_archived_sessions')}
             </label>
           )}
+          {canExportLogic ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1"
+              disabled={exportLogicBusy}
+              onClick={() => void exportControlLogic()}
+            >
+              {exportLogicBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              {t('control_logic_export_json')}
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" size="sm" onClick={() => void load()}>
             <RefreshCw className="h-4 w-4 mr-1" />
             {t('refresh') || 'Actualizar'}

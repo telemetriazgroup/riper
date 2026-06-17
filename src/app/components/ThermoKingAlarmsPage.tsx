@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Loader2, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Loader2, Pencil, Plus, RotateCcw, Search, Trash2, Download } from 'lucide-react';
 import { Button } from './ui/Button';
 import {
   Dialog,
@@ -29,6 +29,7 @@ import {
   setAlarmCatalog,
 } from '@/app/lib/thermoKingAlarms';
 import { clsx } from 'clsx';
+import { downloadJsonFile } from '@/app/lib/downloadJsonFile';
 
 const emptyForm = (): AlarmCodePayload => ({
   code: 0,
@@ -146,6 +147,32 @@ export const ThermoKingAlarmsPage: React.FC = () => {
     }
   };
 
+  const exportJson = () => {
+    const activeRows = rows.filter((r) => !r.archived || includeArchived);
+    const payload = {
+      meta: {
+        exportedAt: new Date().toISOString(),
+        source: 'riper-alarm-catalog',
+        model: 'MP4000',
+        count: activeRows.length,
+        includeArchived: Boolean(isSuperAdmin && includeArchived),
+      },
+      alarms: activeRows.map((r) => ({
+        code: r.code,
+        titleEs: r.titleEs,
+        titleEn: r.titleEn,
+        descriptionEs: r.descriptionEs,
+        descriptionEn: r.descriptionEn,
+        correctiveActionEs: r.correctiveActionEs,
+        correctiveActionEn: r.correctiveActionEn,
+        model: r.model,
+        archived: Boolean(r.archived),
+      })),
+    };
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadJsonFile(payload, `alarmas_tk_mp4000_${stamp}.json`);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -173,6 +200,16 @@ export const ThermoKingAlarmsPage: React.FC = () => {
               {t('tk_alarms_add')}
             </Button>
           ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 shrink-0"
+            disabled={loading || rows.length === 0}
+            onClick={exportJson}
+          >
+            <Download className="h-4 w-4" />
+            {t('tk_alarms_export_json')}
+          </Button>
         </div>
       </div>
 

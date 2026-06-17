@@ -7,6 +7,16 @@ export function getAppRole(): string | undefined {
   return getStoredUser()?.role;
 }
 
+/** Superusuario: rol superadmin o flag is_superuser en la cuenta. */
+export function isSuperUser(): boolean {
+  const u = getStoredUser();
+  return u?.role === 'superadmin' || Boolean(u?.is_superuser);
+}
+
+export function canExportControlLogic(): boolean {
+  return isSuperUser();
+}
+
 export function isViewer(): boolean {
   return getAppRole() === 'viewer';
 }

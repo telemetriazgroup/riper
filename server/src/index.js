@@ -30,6 +30,7 @@ import { auditRouter } from './routes/audit.js';
 import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
 import { alarmCodesRouter } from './routes/alarmCodes.js';
+import { controlLogicRouter } from './routes/controlLogic.js';
 import { emailNotificationsRouter } from './routes/emailNotifications.js';
 import {
   finalizeDueRipeningProcesses,
@@ -96,6 +97,7 @@ async function main() {
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/companies', authMiddleware, companiesRouter);
   app.use('/api/v1/alarm-codes', authMiddleware, alarmCodesRouter);
+  app.use('/api/v1/control-logic', authMiddleware, controlLogicRouter);
   app.use('/api/v1/tunnel-commands', authMiddleware, tunnelCommandsRouter);
   app.use('/api/v1/email-notifications', authMiddleware, emailNotificationsRouter);
 
