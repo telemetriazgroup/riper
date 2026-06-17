@@ -2,6 +2,10 @@ import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import type { CaPdfIndicators } from '@/app/lib/caReportAnalysis';
 import type { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { phaseDurationHoursFromStored } from '@/app/lib/ripeningProcessMappers';
+import {
+  CA_REPORT_PRUEBA_CA_INITIAL_GAS_OBJECTIVE_PCT,
+  isCaReportPruebaCaRecipe,
+} from '@/app/lib/caReportProcessTracking';
 
 type PhaseRaw = Record<string, unknown>;
 
@@ -111,6 +115,13 @@ export function getCaReportInitialGasObjectives(
   view: ReturnType<typeof mapRowToProcessView>,
   fallback: { co2: number | null; o2: number | null }
 ): { co2: number | null; o2: number | null } {
+  if (isCaReportPruebaCaRecipe(view.recipe?.name)) {
+    return {
+      co2: CA_REPORT_PRUEBA_CA_INITIAL_GAS_OBJECTIVE_PCT,
+      o2: CA_REPORT_PRUEBA_CA_INITIAL_GAS_OBJECTIVE_PCT,
+    };
+  }
+
   const phases = (view.recipe?.phases ?? []).filter(
     (p): p is PhaseRaw => Boolean(p) && (p as { enabled?: boolean }).enabled !== false
   );

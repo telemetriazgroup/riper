@@ -5,6 +5,8 @@ import { formatCaReportDeviceCode, formatCaReportTrackingName } from '@/app/lib/
 
 export const CA_REPORT_PRUEBA_CA_RECIPE_MATCH = 'PRUEBA CA 19/05/2026';
 export const CA_REPORT_PRUEBA_CA_MACHINE_SERIAL = 'CIM1086751';
+/** Objetivo inicial CO₂/O₂ en §3.1 del informe CA para la receta demo PRUEBA CA. */
+export const CA_REPORT_PRUEBA_CA_INITIAL_GAS_OBJECTIVE_PCT = 5;
 
 const AVOCADO_RE = /\b(aguacate|palta|avocado)\b/i;
 
