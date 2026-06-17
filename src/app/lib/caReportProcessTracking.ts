@@ -1,7 +1,7 @@
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import type { mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { processReportRangeEndMs } from '@/app/lib/trackingIntegralReport';
-import { formatCaReportTrackingName } from '@/app/lib/caReportDisplay';
+import { formatCaReportDeviceCode, formatCaReportTrackingName } from '@/app/lib/caReportDisplay';
 
 export const CA_REPORT_PRUEBA_CA_RECIPE_MATCH = 'PRUEBA CA 19/05/2026';
 export const CA_REPORT_PRUEBA_CA_MACHINE_SERIAL = 'CIM1086751';
@@ -131,4 +131,15 @@ export function buildCaReportProcessTrackingInfo(
     showAvocadoVariety: Boolean(variety),
     showMachineSerial: isCaReportPruebaCaRecipe(recipeName),
   };
+}
+
+/** Código mostrado en encabezado del informe (serie de máquina si receta PRUEBA CA). */
+export function formatCaReportHeaderCode(
+  deviceId: string | null | undefined,
+  recipeName: string | null | undefined
+): string {
+  if (isCaReportPruebaCaRecipe(recipeName)) {
+    return CA_REPORT_PRUEBA_CA_MACHINE_SERIAL;
+  }
+  return formatCaReportDeviceCode(deviceId);
 }
