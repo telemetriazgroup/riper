@@ -543,6 +543,21 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_criteria_note':
       'Criterio de conformidad CO₂ y O₂: lectura en rango si está a ±{{co2Tol}} % del setpoint de cada momento. Temperatura: ±{{tempTol}} °C respecto al setpoint. Día conforme: ≥85 % de lecturas en rango en todos los parámetros evaluados.',
     'ca_report_pdf_s3_title': 'Resumen',
+    'ca_report_pdf_s31_title': 'Lectura inicial de gases y estabilización',
+    'ca_report_pdf_s31_intro':
+      'Primera lectura disponible de CO₂ y O₂ al inicio del seguimiento, con la hora en que cada gas alcanzó el rango de tolerancia (±{{co2Tol}} % para CO₂ y ±{{o2Tol}} % para O₂ respecto al setpoint vigente).',
+    'ca_report_pdf_s31_col_gas': 'Gas',
+    'ca_report_pdf_s31_col_initial': 'Lectura inicial',
+    'ca_report_pdf_s31_col_setpoint': 'Setpoint inicial',
+    'ca_report_pdf_s31_col_start': 'Hora inicio',
+    'ca_report_pdf_s31_col_in_range': 'Hora en rango',
+    'ca_report_pdf_s31_col_duration': 'Tiempo hasta rango',
+    'ca_report_pdf_s31_no_data': 'Sin lecturas',
+    'ca_report_pdf_s31_not_reached': 'No alcanzó rango',
+    'ca_report_pdf_s31_immediate': 'Inmediato',
+    'ca_report_pdf_s31_duration_min': '{{min}} min',
+    'ca_report_pdf_s31_duration_h': '{{h}} h',
+    'ca_report_pdf_s31_duration_hm': '{{h}} h {{min}} min',
     'ca_report_pdf_s3_intro':
       'Durante el período analizado se procesaron {{total}} registros de telemetría. La gráfica utiliza {{shown}} puntos representativos (mín/máx, cambios relevantes y anclas diarias). {{daysOk}} de {{daysTotal}} días cumplieron todos los criterios de conformidad.',
     'ca_report_pdf_col_indicator': 'Indicador',
@@ -2006,6 +2021,21 @@ const translations: Record<Language, Record<string, string>> = {
     'ca_report_pdf_criteria_note':
       'CO₂ and O₂ compliance: reading in range if within ±{{co2Tol}}% of the setpoint at that time. Temperature: ±{{tempTol}} °C vs setpoint. Compliant day: ≥85% of readings in range for all evaluated parameters.',
     'ca_report_pdf_s3_title': 'Summary',
+    'ca_report_pdf_s31_title': 'Initial gas reading and stabilization',
+    'ca_report_pdf_s31_intro':
+      'First available CO₂ and O₂ readings at the start of monitoring, with the time each gas reached the tolerance band (±{{co2Tol}} % for CO₂ and ±{{o2Tol}} % for O₂ vs. the active setpoint).',
+    'ca_report_pdf_s31_col_gas': 'Gas',
+    'ca_report_pdf_s31_col_initial': 'Initial reading',
+    'ca_report_pdf_s31_col_setpoint': 'Initial setpoint',
+    'ca_report_pdf_s31_col_start': 'Start time',
+    'ca_report_pdf_s31_col_in_range': 'In-range time',
+    'ca_report_pdf_s31_col_duration': 'Time to range',
+    'ca_report_pdf_s31_no_data': 'No readings',
+    'ca_report_pdf_s31_not_reached': 'Did not reach range',
+    'ca_report_pdf_s31_immediate': 'Immediate',
+    'ca_report_pdf_s31_duration_min': '{{min}} min',
+    'ca_report_pdf_s31_duration_h': '{{h}} h',
+    'ca_report_pdf_s31_duration_hm': '{{h}} h {{min}} min',
     'ca_report_pdf_s3_intro':
       '{{total}} telemetry records were processed. Charts use {{shown}} representative points (min/max, significant changes and daily anchors). {{daysOk}} of {{daysTotal}} days met all conformity criteria.',
     'ca_report_pdf_col_indicator': 'Indicator',

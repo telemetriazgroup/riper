@@ -34,6 +34,7 @@ import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
 import {
   buildCaPdfIndicators,
   buildCaProcessSummary,
+  buildCaGasInitialStabilization,
   buildDailyCaAnalysis,
   CA_CO2_TOLERANCE_PCT,
   CA_O2_TOLERANCE_PCT,
@@ -43,6 +44,7 @@ import {
   formatCaReportPeriodDate,
   prepareCaHistoryPoints,
   type CaPdfIndicators,
+  type CaGasStabilizationResult,
   type DailyCaAnalysis,
 } from '@/app/lib/caReportAnalysis';
 import { mergeCaReportWithAttachmentPdfs, triggerPdfDownload } from '@/app/lib/caReportPdfMerge';
@@ -510,6 +512,43 @@ function buildKpiRows(
   ];
 }
 
+function formatGasStabilizationDuration(
+  t: (k: string, p?: Record<string, string>) => string,
+  timeToRangeMs: number | null,
+  reachedRange: boolean
+): string {
+  if (!reachedRange || timeToRangeMs == null) return t('ca_report_pdf_s31_not_reached');
+  if (timeToRangeMs === 0) return t('ca_report_pdf_s31_immediate');
+  const totalMin = Math.round(timeToRangeMs / 60000);
+  if (totalMin < 60) return t('ca_report_pdf_s31_duration_min', { min: String(totalMin) });
+  const h = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (min === 0) return t('ca_report_pdf_s31_duration_h', { h: String(h) });
+  return t('ca_report_pdf_s31_duration_hm', { h: String(h), min: String(min) });
+}
+
+function buildGasStabilizationRows(
+  t: (k: string, p?: Record<string, string>) => string,
+  formatDateTime: (iso: string) => string,
+  gasStab: { co2: CaGasStabilizationResult; o2: CaGasStabilizationResult }
+): string[][] {
+  const formatRow = (label: string, row: CaGasStabilizationResult): string[] => {
+    if (row.initialValue == null || row.initialAt == null) {
+      return [label, t('ca_report_pdf_s31_no_data'), '—', '—', '—', '—'];
+    }
+    return [
+      label,
+      `${formatUiDecimal(row.initialValue)} %`,
+      row.initialSetpoint != null ? `${formatUiDecimal(row.initialSetpoint)} %` : '—',
+      formatDateTime(row.initialAt),
+      row.reachedRange && row.inRangeAt ? formatDateTime(row.inRangeAt) : t('ca_report_pdf_s31_not_reached'),
+      formatGasStabilizationDuration(t, row.timeToRangeMs, row.reachedRange),
+    ];
+  };
+
+  return [formatRow('CO₂', gasStab.co2), formatRow('O₂', gasStab.o2)];
+}
+
 export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, view }) => {
   const { t, formatDateTime, formatFileTimestamp, language, tempUnit, convertTemp, formatTemp } = useSettings();
   const printRef = useRef<HTMLDivElement>(null);
@@ -617,6 +656,7 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
     const daily = buildDailyCaAnalysis(prepared, language, deviceId);
     const summary = buildCaProcessSummary(prepared, daily, deviceId);
     const indicators = buildCaPdfIndicators(prepared, deviceId);
+    const gasStabilization = buildCaGasInitialStabilization(prepared);
 
     const periodStart = formatCaReportPeriodDate(startedAtIso ?? points[0]!.timestamp, language);
     const periodEnd = formatCaReportPeriodDate(rangeEndIso, language);
@@ -651,9 +691,11 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
       periodEnd,
       gasesOk,
       tempOk,
+      gasStabilization,
+      gasStabilizationRows: buildGasStabilizationRows(t, formatDateTime, gasStabilization),
       kpiRows: buildKpiRows(t, summary, indicators, periodStart, periodEnd, formatTemp, convertTemp),
     };
-  }, [data?.points, deviceId, language, convertTemp, formatTemp, startedAtIso, rangeEndIso, t]);
+  }, [data?.points, deviceId, language, convertTemp, formatTemp, formatDateTime, startedAtIso, rangeEndIso, t]);
 
   const ethDomain: [number, number] = [0, CHART_ETHYLENE_MAX_PPM];
 
@@ -898,6 +940,29 @@ export const ProcessCaReportDialog: React.FC<Props> = ({ open, onOpenChange, vie
               <CaTechTable
                 headers={[t('ca_report_pdf_col_indicator'), t('ca_report_pdf_col_value')]}
                 rows={analysis.kpiRows}
+              />
+            </CaPdfSection>
+
+            {/* §3.1 — Lectura inicial gases y tiempo hasta rango */}
+            <CaPdfSection section="gas-stabilization" fillPage>
+              <CaPdfHeader deviceCode={reportHeaderCode} t={t} />
+              <CaSectionTitle n="3.1" title={t('ca_report_pdf_s31_title')} />
+              <CaProse>
+                {t('ca_report_pdf_s31_intro', {
+                  co2Tol: String(CA_CO2_TOLERANCE_PCT),
+                  o2Tol: String(CA_O2_TOLERANCE_PCT),
+                })}
+              </CaProse>
+              <CaTechTable
+                headers={[
+                  t('ca_report_pdf_s31_col_gas'),
+                  t('ca_report_pdf_s31_col_initial'),
+                  t('ca_report_pdf_s31_col_setpoint'),
+                  t('ca_report_pdf_s31_col_start'),
+                  t('ca_report_pdf_s31_col_in_range'),
+                  t('ca_report_pdf_s31_col_duration'),
+                ]}
+                rows={analysis.gasStabilizationRows}
               />
             </CaPdfSection>
 
