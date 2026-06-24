@@ -144,8 +144,8 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       activeTracking.summary?.progress != null && Number.isFinite(activeTracking.summary.progress)
         ? activeTracking.summary.progress
         : view.progress;
-    return inferCurrentNextPhase(activeTracking.process.payload, pct);
-  }, [activeTracking, view]);
+    return inferCurrentNextPhase(activeTracking.process.payload, pct, t);
+  }, [activeTracking, view, t]);
 
   const trackingDeviceId = useMemo(() => {
     const p = activeTracking?.process?.payload as { deviceId?: string } | undefined;

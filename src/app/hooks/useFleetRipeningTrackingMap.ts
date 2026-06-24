@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import useSWR from 'swr';
+import useSWR, { mutate as swrMutate } from 'swr';
 import { fetchRipeningProcesses, type RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getUltraorganicsPanelForImei, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 import { isGourmetTunnelGroupImei } from '@/app/lib/gourmetTunnelFleet';
@@ -7,6 +7,10 @@ import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 
 /** Una sola petición: procesos de seguimiento (pestaña Seguimiento) indexados por equipo (`payload.deviceId`). */
 export const RIPENING_PROCESSES_FLEET_SWR_KEY = 'ripening-processes-fleet-map';
+
+export function revalidateFleetRipeningTrackingMap() {
+  return swrMutate(RIPENING_PROCESSES_FLEET_SWR_KEY);
+}
 
 export function useFleetRipeningTrackingMap() {
   const { data, error, isLoading, mutate } = useSWR(RIPENING_PROCESSES_FLEET_SWR_KEY, fetchRipeningProcesses, {

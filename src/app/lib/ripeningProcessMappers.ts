@@ -3,13 +3,48 @@ import { progressFromTrackingPayload } from '@/app/lib/ripeningSchedule';
 import { formatStoredCelsius, type TempDisplayOpts } from '@/app/lib/temperatureUnits';
 
 function inferPhase(payload: RipeningProcessRow['payload']): string {
-  const raw = (payload.recipe as { phases?: { enabled?: boolean; name?: string; type?: string }[] } | undefined)
-    ?.phases;
-  const phases = Array.isArray(raw) ? raw.filter((p) => p && p.enabled !== false) : [];
+  const raw = (payload.recipe as { phases?: Record<string, unknown>[] } | undefined)?.phases;
+  const phases = Array.isArray(raw) ? raw.filter((p) => p && (p as { enabled?: boolean }).enabled !== false) : [];
   if (phases.length) {
-    return phases[0].name || 'En curso';
+    return resolveRecipePhaseLabel(phases[0] as Record<string, unknown>, 0);
   }
   return 'En curso';
+}
+
+export function isHomogenizationMeatControlPhase(raw: Record<string, unknown>): boolean {
+  return String(raw.type ?? '') === 'homogenization' && raw.meatControl === true;
+}
+
+/** Etiqueta de fase para listados, seguimiento y detalle de dispositivo. */
+export function resolveRecipePhaseLabel(
+  pr: Record<string, unknown>,
+  idx: number,
+  t?: (key: string, replacements?: Record<string, string> | string) => string
+): string {
+  const name = String(pr.name ?? '').trim();
+  if (name) return name;
+  if (isHomogenizationMeatControlPhase(pr)) {
+    return t ? t('phase_homogenization_meats') : 'Homogenización - Carnes';
+  }
+  const type = String(pr.type ?? '');
+  const key =
+    type === 'homogenization'
+      ? 'phase_homogenization'
+      : type === 'ripening'
+        ? 'phase_ripening'
+        : type === 'venting'
+          ? 'phase_venting'
+          : type === 'cooling'
+            ? 'phase_cooling'
+            : null;
+  if (key && t) return t(key);
+  const fallbacks: Record<string, string> = {
+    homogenization: 'Homogeneización',
+    ripening: 'Maduración',
+    venting: 'Ventilación',
+    cooling: 'Enfriamiento',
+  };
+  return fallbacks[type] ?? (t ? t('tracking_recipe_phase_n', { n: String(idx + 1) }) : `Fase ${idx + 1}`);
 }
 
 function computeProgress(
@@ -305,7 +340,8 @@ export type CurrentNextPhaseInfo = {
  */
 export function inferCurrentNextPhase(
   payload: RipeningProcessRow['payload'],
-  progressPct: number
+  progressPct: number,
+  t?: (key: string, replacements?: Record<string, string> | string) => string
 ): CurrentNextPhaseInfo {
   const raw = (payload.recipe as { phases?: Record<string, unknown>[] } | undefined)?.phases;
   const phases = Array.isArray(raw)
@@ -335,11 +371,9 @@ export function inferCurrentNextPhase(
       duration?: number;
       enabled?: boolean;
       name?: string;
+      meatControl?: boolean;
     };
-    const label =
-      String(pr.name ?? '').trim() ||
-      labels[idx] ||
-      String(pr.type ?? '—');
+    const label = resolveRecipePhaseLabel(p as Record<string, unknown>, idx, t);
     return {
       label,
       hours: phaseDurationHoursFromStored(pr),
@@ -411,6 +445,18 @@ export function formatRecipePhaseParamLines(
   if (raw.tempType != null && String(raw.tempType).trim()) {
     lines.push(`${t('recipe_modal_temp_type')}: ${String(raw.tempType)}`);
   }
+  if (isHomogenizationMeatControlPhase(raw)) {
+    if (raw.airExchangeMinutes != null && Number.isFinite(Number(raw.airExchangeMinutes))) {
+      lines.push(
+        `${t('homogenization_air_exchange')}: ${Math.round(Number(raw.airExchangeMinutes))} ${t('unit_minutes')}`
+      );
+    }
+    if (raw.airRenewalHours != null && Number.isFinite(Number(raw.airRenewalHours))) {
+      lines.push(
+        `${t('homogenization_air_renewal')}: ${Number(raw.airRenewalHours)} ${t('unit_hours')}`
+      );
+    }
+  }
   return lines;
 }
 
@@ -419,20 +465,7 @@ function phaseRowLabel(
   idx: number,
   t: (key: string, replacements?: Record<string, string> | string) => string
 ): string {
-  const name = String(pr.name ?? '').trim();
-  if (name) return name;
-  const type = String(pr.type ?? '');
-  const key =
-    type === 'homogenization'
-      ? 'phase_homogenization'
-      : type === 'ripening'
-        ? 'phase_ripening'
-        : type === 'venting'
-          ? 'phase_venting'
-          : type === 'cooling'
-            ? 'phase_cooling'
-            : null;
-  return key ? t(key) : t('tracking_recipe_phase_n', { n: String(idx + 1) });
+  return resolveRecipePhaseLabel(pr, idx, t);
 }
 
 export type RecipeModalPhaseRow = {

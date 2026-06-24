@@ -1,6 +1,38 @@
 import type { HistoryPoint } from '@/app/lib/api';
+import { getStoredUser } from '@/app/lib/auth';
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
+import { progressFromTrackingPayload } from '@/app/lib/ripeningSchedule';
 import seedsJson from '@/app/data/fleetSimulationSeeds.json';
+
+type SimControlSessionRow = {
+  id: string;
+  user_id: string;
+  device_id: string;
+  process_type: string;
+  display_label: string;
+  params: Record<string, unknown>;
+  status: 'active' | 'cancelled' | 'completed';
+  started_at: string;
+  estimated_end_at: string;
+  duration_hours: string | number;
+  created_at: string;
+  updated_at: string;
+  user_name?: string;
+  user_email?: string;
+  cancelled_at?: string | null;
+  cancelled_by_user_id?: string | null;
+  cancelled_by_name?: string | null;
+  cancelled_by_email?: string | null;
+};
+
+type SimStartControlBody = {
+  deviceId: string;
+  processType: string;
+  displayLabel: string;
+  params: Record<string, unknown>;
+  durationHours: number;
+  startedAt?: string;
+};
 
 type FleetUnitSeed = (typeof seedsJson.units)[number];
 
@@ -12,9 +44,9 @@ export const SIM_FLEET_AVL_MAX_CFM = 220;
 
 export type SimInkapackingDeviceId = (typeof SIM_INKAPACKING_DEVICE_IDS)[number];
 
-/** Desactivado: el panel usa solo datos reales upstream (lista Madurador). Las rutas legacy sim pueden reactivarse con env futuro si hiciera falta. */
+/** Solo superadmin: tres equipos demo Inkapacking con telemetría autogenerada. */
 export function shouldShowSimulatedInkapackingFleet(): boolean {
-  return false;
+  return getStoredUser()?.role === 'superadmin';
 }
 
 export function isSimulatedInkapackingDevice(id: string): boolean {
@@ -79,6 +111,122 @@ export interface SimPhysics {
   powerState: 0 | 1;
   iCtrlRip: 0 | 1;
   procesoLabel: string;
+}
+
+export type SimPhysicsOverrides = {
+  forcePhase: SimProcessPhase;
+  phaseElapsedH: number;
+  ripElapsedH?: number;
+  homogH?: number;
+  setPoint: number;
+  humiditySp: number;
+  co2Target?: number;
+  ethTarget?: number;
+  procesoLabel: string;
+};
+
+export type SimDeviceScenario =
+  | { kind: 'idle' }
+  | { kind: 'panel'; session: SimControlSessionRow }
+  | { kind: 'tracking' };
+
+function panelProcessPhase(processType: string): SimProcessPhase {
+  return String(processType || '').trim() === 'Ripening' ? 'ripening' : 'homogenization';
+}
+
+function panelProcesoApiLabel(processType: string): string {
+  const pt = String(processType || '').trim();
+  if (pt === 'Ripening') return 'maduracion';
+  if (pt === 'Ventilation') return 'ventilacion';
+  if (pt === 'Cooling') return 'enfriamiento';
+  return 'homogenizacion';
+}
+
+function paramNum(params: Record<string, unknown>, ...keys: string[]): number | null {
+  for (const key of keys) {
+    const n = Number(params[key]);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+export function resolveSimDeviceScenario(deviceId: SimInkapackingDeviceId): SimDeviceScenario {
+  const panel = fetchSimulatedActiveControlSession(deviceId);
+  if (panel) return { kind: 'panel', session: panel };
+
+  const tracking = buildSimulatedRipeningProcessRow(deviceId);
+  if (isSimulatedRipeningTrackingActive(tracking.status)) return { kind: 'tracking' };
+
+  return { kind: 'idle' };
+}
+
+function computeSimIdlePhysics(nowMs: number, unitIndex: number): SimPhysics {
+  const seed = seedForUnit(unitIndex);
+  const entry = seed.behavior.entryCargoTempC;
+  const n = detNoise01(nowMs, unitIndex);
+  const base = entry + 0.4 + (n - 0.5) * 0.25;
+  return {
+    phase: 'homogenization',
+    phaseElapsedH: 0,
+    totalElapsedH: 0,
+    setPoint: round1(base),
+    humiditySp: 90,
+    setCo2: 0.1,
+    spEthylene: 0,
+    supply: round1(base - 0.4),
+    ret: round1(base + 0.2),
+    cargo1: round1(base),
+    cargo2: round1(base + 0.3),
+    cargo3: round1(base + 0.5),
+    cargo4: round1(base + 0.7),
+    rh: round1(88 + (n - 0.5) * 2),
+    co2: 0.08,
+    ethPpm: round1(0.05 + n * 0.08),
+    evap: round1(8 + unitIndex),
+    cond: round1(34 + unitIndex),
+    comp: round1(42 + unitIndex * 0.5),
+    amb: round1(21 + unitIndex * 0.2),
+    avl: 16 + unitIndex * 2,
+    powerState: 1,
+    iCtrlRip: 0,
+    procesoLabel: 'manual',
+  };
+}
+
+function computeSimPanelPhysics(nowMs: number, unitIndex: number, session: SimControlSessionRow): SimPhysics {
+  const seed = seedForUnit(unitIndex);
+  const params = session.params ?? {};
+  const phase = panelProcessPhase(session.process_type);
+  const startedMs = new Date(session.started_at).getTime();
+  const endMs = new Date(session.estimated_end_at).getTime();
+  const durH = Math.max(0.05, (endMs - startedMs) / 3_600_000);
+  const elapsedH = Math.max(0, Math.min(durH, (nowMs - startedMs) / 3_600_000));
+  const setPoint =
+    paramNum(params, 'setPoint', 'set_point') ??
+    (phase === 'homogenization' ? seed.homogenization.tempC : seed.ripening.tempC);
+  const humiditySp =
+    paramNum(params, 'humiditySetPoint', 'humidity_set_point') ??
+    (phase === 'homogenization' ? seed.homogenization.humidityPct : seed.ripening.humidityPct);
+
+  return computeSimInkapackingPhysics(nowMs, unitIndex, {
+    forcePhase: phase,
+    phaseElapsedH: elapsedH,
+    ripElapsedH: phase === 'ripening' ? elapsedH : 0,
+    homogH: durH,
+    setPoint,
+    humiditySp,
+    co2Target: paramNum(params, 'co2', 'co2_limit') ?? seed.ripening.co2Pct,
+    ethTarget: paramNum(params, 'ethylene') ?? seed.ripening.ethylenePpm,
+    procesoLabel: panelProcesoApiLabel(session.process_type),
+  });
+}
+
+export function computeSimPhysicsForDevice(nowMs: number, unitIndex: number): SimPhysics {
+  const deviceId = SIM_INKAPACKING_DEVICE_IDS[unitIndex]!;
+  const scenario = resolveSimDeviceScenario(deviceId);
+  if (scenario.kind === 'idle') return computeSimIdlePhysics(nowMs, unitIndex);
+  if (scenario.kind === 'panel') return computeSimPanelPhysics(nowMs, unitIndex, scenario.session);
+  return computeSimInkapackingPhysics(nowMs, unitIndex);
 }
 
 /**
@@ -331,47 +479,80 @@ function computeCo2Ripening(re: number, co2LagH: number, co2Target: number, unit
   return Math.min(co2Target * 1.03, Math.max(0, co2));
 }
 
-export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): SimPhysics {
+export function computeSimInkapackingPhysics(
+  nowMs: number,
+  unitIndex: number,
+  overrides?: SimPhysicsOverrides
+): SimPhysics {
   const seed = seedForUnit(unitIndex);
   const homogH = seed.homogenization.hours;
   const ripH = seed.ripening.hours;
   const totalH = homogH + ripH;
   const co2LagH = seed.behavior.co2ResponseHoursAfterRipeningStart;
 
-  const startMs = nowMs - startedHoursAgo(unitIndex, seed) * 3600_000;
-  const totalElapsedH = Math.max(0, (nowMs - startMs) / 3600_000);
-  const cappedTotal = Math.min(totalH, totalElapsedH);
-
   let phase: SimProcessPhase;
   let phaseElapsedH: number;
   let ripElapsedH = 0;
-  if (cappedTotal < homogH) {
-    phase = 'homogenization';
-    phaseElapsedH = cappedTotal;
+  let cappedTotal: number;
+  let totalElapsedH: number;
+  let startMs: number;
+  let setPoint: number;
+  let humiditySp: number;
+  let co2Target: number;
+  let ethTarget: number;
+  let procesoLabel: string;
+
+  if (overrides) {
+    phase = overrides.forcePhase;
+    phaseElapsedH = overrides.phaseElapsedH;
+    ripElapsedH = overrides.ripElapsedH ?? (phase === 'ripening' ? phaseElapsedH : 0);
+    cappedTotal = phaseElapsedH;
+    totalElapsedH = cappedTotal;
+    const homogHoursForStart = overrides.homogH ?? homogH;
+    startMs =
+      nowMs -
+      (phase === 'ripening'
+        ? (homogHoursForStart + ripElapsedH) * 3600_000
+        : phaseElapsedH * 3600_000);
+    setPoint = overrides.setPoint;
+    humiditySp = overrides.humiditySp;
+    co2Target = overrides.co2Target ?? seed.ripening.co2Pct;
+    ethTarget = overrides.ethTarget ?? seed.ripening.ethylenePpm;
+    procesoLabel = overrides.procesoLabel;
   } else {
-    phase = 'ripening';
-    phaseElapsedH = cappedTotal - homogH;
-    ripElapsedH = phaseElapsedH;
+    startMs = nowMs - startedHoursAgo(unitIndex, seed) * 3600_000;
+    totalElapsedH = Math.max(0, (nowMs - startMs) / 3600_000);
+    cappedTotal = Math.min(totalH, totalElapsedH);
+
+    if (cappedTotal < homogH) {
+      phase = 'homogenization';
+      phaseElapsedH = cappedTotal;
+    } else {
+      phase = 'ripening';
+      phaseElapsedH = cappedTotal - homogH;
+      ripElapsedH = phaseElapsedH;
+    }
+    setPoint = phase === 'homogenization' ? seed.homogenization.tempC : seed.ripening.tempC;
+    humiditySp = phase === 'homogenization' ? seed.homogenization.humidityPct : seed.ripening.humidityPct;
+    co2Target = seed.ripening.co2Pct;
+    ethTarget = seed.ripening.ethylenePpm;
+    procesoLabel = phase === 'homogenization' ? 'homogenizacion' : 'maduracion';
   }
 
   const entry = seed.behavior.entryCargoTempC;
-  const tHom = seed.homogenization.tempC;
-  const tRip = seed.ripening.tempC;
-  const rhHom = seed.homogenization.humidityPct;
-  const rhRip = seed.ripening.humidityPct;
-  const co2Target = seed.ripening.co2Pct;
-  const ethTarget = seed.ripening.ethylenePpm;
+  const tHom = phase === 'homogenization' && overrides ? setPoint : seed.homogenization.tempC;
+  const tRip = phase === 'ripening' && overrides ? setPoint : seed.ripening.tempC;
+  const rhHom = phase === 'homogenization' && overrides ? humiditySp : seed.homogenization.humidityPct;
+  const rhRip = phase === 'ripening' && overrides ? humiditySp : seed.ripening.humidityPct;
 
-  let setPoint: number;
-  let humiditySp: number;
   let rh: number;
   let co2: number;
   let ethPpm: number;
   let avl: number;
   let iCtrlRip: 0 | 1;
-  let procesoLabel: string;
 
-  const idealCargo = smoothCargoTarget(phase, phaseElapsedH, homogH, entry, tHom, tRip, ripElapsedH);
+  const homogHoursForTarget = overrides?.homogH ?? homogH;
+  const idealCargo = smoothCargoTarget(phase, phaseElapsedH, homogHoursForTarget, entry, tHom, tRip, ripElapsedH);
   const therm = applyReeferThermalCycle(nowMs, idealCargo, seed, unitIndex, phase, phaseElapsedH);
 
   let cargo1 = therm.cargo1;
@@ -381,8 +562,8 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
   let evap = therm.evap;
 
   if (phase === 'homogenization') {
-    setPoint = tHom;
     humiditySp = rhHom;
+    setPoint = tHom;
     const cycleMin = seed.behavior.reeferCycleMinutes ?? 22;
     const periodMs = cycleMin * 60 * 1000;
     const thetaRh = (nowMs / periodMs) * 2 * Math.PI;
@@ -390,7 +571,7 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
     rh =
       rhHom -
       1.2 +
-      smoothstep(phaseElapsedH / homogH) * 1.4 +
+      smoothstep(phaseElapsedH / Math.max(0.01, homogHoursForTarget)) * 1.4 +
       rhOsc +
       (detNoise01(nowMs, unitIndex) - 0.5) * 0.9;
     co2 = round1(Math.max(0.1, Math.min(0.22, co2Target * 0.92 + 0.04 * Math.sin(phaseElapsedH * 0.48 + unitIndex))));
@@ -407,7 +588,7 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
       therm.coolingIntensity
     );
     iCtrlRip = 0;
-    procesoLabel = 'homogenizacion';
+    if (!overrides) procesoLabel = 'homogenizacion';
   } else {
     const re = ripElapsedH;
     setPoint = tRip;
@@ -438,7 +619,7 @@ export function computeSimInkapackingPhysics(nowMs: number, unitIndex: number): 
       unitIndex,
       therm.coolingIntensity
     );
-    procesoLabel = 'maduracion';
+    if (!overrides) procesoLabel = 'maduracion';
   }
 
   const door = doorOpenDelta(phase, homogH, ripElapsedH, nowMs, startMs, unitIndex);
@@ -498,13 +679,40 @@ function iso(d: Date): string {
 
 export function buildSimulatedMaduradorListRow(unitIndex: number, now: Date = new Date()): Record<string, unknown> {
   const seed = seedForUnit(unitIndex);
-  const imei = SIM_INKAPACKING_DEVICE_IDS[unitIndex];
+  const imei = SIM_INKAPACKING_DEVICE_IDS[unitIndex]!;
   const nowMs = now.getTime();
-  const phy = computeSimInkapackingPhysics(nowMs, unitIndex);
-  const startMs = nowMs - startedHoursAgo(unitIndex, seed) * 3600_000;
-  const endMs = startMs + (seed.homogenization.hours + seed.ripening.hours) * 3600_000;
-  const startIso = new Date(startMs).toISOString();
-  const endIso = new Date(endMs).toISOString();
+  const scenario = resolveSimDeviceScenario(imei);
+  const phy =
+    scenario.kind === 'idle'
+      ? computeSimIdlePhysics(nowMs, unitIndex)
+      : scenario.kind === 'panel'
+        ? computeSimPanelPhysics(nowMs, unitIndex, scenario.session)
+        : computeSimInkapackingPhysics(nowMs, unitIndex);
+
+  let startIso: string | null;
+  let endIso: string | null;
+  let idProceso: number | null;
+  let procesoField: string;
+
+  if (scenario.kind === 'panel') {
+    startIso = scenario.session.started_at;
+    endIso = scenario.session.estimated_end_at;
+    idProceso = null;
+    procesoField = phy.procesoLabel;
+  } else if (scenario.kind === 'tracking') {
+    const startMs = nowMs - startedHoursAgo(unitIndex, seed) * 3600_000;
+    const endMs = startMs + (seed.homogenization.hours + seed.ripening.hours) * 3600_000;
+    startIso = new Date(startMs).toISOString();
+    endIso = new Date(endMs).toISOString();
+    idProceso = 9100001 + unitIndex;
+    procesoField = phy.procesoLabel;
+  } else {
+    startIso = null;
+    endIso = null;
+    idProceso = null;
+    procesoField = 'Manual';
+  }
+
   const fechaUlt = new Date(nowMs).toISOString();
 
   const lineV = 440 + unitIndex * 3;
@@ -567,22 +775,32 @@ export function buildSimulatedMaduradorListRow(unitIndex: number, now: Date = ne
     ip: `10.99.${10 + unitIndex}.${seed.ipSuffix}`,
   };
 
-  const homogEnd = iso(new Date(startMs + seed.homogenization.hours * 3600_000));
+  const homogEnd =
+    startIso != null
+      ? iso(new Date(new Date(startIso).getTime() + seed.homogenization.hours * 3600_000))
+      : null;
 
   return {
     imei,
     estado: 1,
     identificador: String(7001 + unitIndex),
-    proceso: phy.procesoLabel,
-    id_proceso: 9100001 + unitIndex,
+    proceso: procesoField,
+    id_proceso: idProceso,
     fecha_inicio: startIso,
     hasta: endIso,
     fecha_procesada: fechaUlt,
-    ultima_fecha_encendido: new Date(startMs + 30 * 60_000).toISOString(),
+    ultima_fecha_encendido: startIso ?? fechaUlt,
     ultima_fecha_apagado: null,
     ultimo_power_state: 1,
     sp_etileno: phy.spEthylene,
-    historial_sp_etileno: [{ valor: phy.spEthylene, desde: startIso, hasta: endIso, estado: 'activo' }],
+    historial_sp_etileno: [
+      {
+        valor: phy.spEthylene,
+        desde: startIso ?? fechaUlt,
+        hasta: endIso ?? fechaUlt,
+        estado: 'activo',
+      },
+    ],
     ultimo_dato,
     fresh_air_ex_mode: {
       modo_actual: 2,
@@ -596,16 +814,28 @@ export function buildSimulatedMaduradorListRow(unitIndex: number, now: Date = ne
       fecha_ultimo_critico: null,
       fecha_ultimo_normal: fechaUlt,
     },
-    historico_set_point: [
-      { valor: seed.homogenization.tempC, desde: startIso, hasta: homogEnd },
-      { valor: seed.ripening.tempC, desde: homogEnd, hasta: endIso },
-    ],
-    historial_humidity_set_point: [
-      { valor: seed.homogenization.humidityPct, desde: startIso, hasta: homogEnd },
-      { valor: seed.ripening.humidityPct, desde: homogEnd, hasta: endIso },
-    ],
-    historial_set_point_co2: [{ valor: seed.ripening.co2Pct, desde: homogEnd, hasta: endIso }],
-    historial_power_state: [{ valor: 1, estado: 'encendido', desde: startIso, hasta: endIso }],
+    historico_set_point:
+      startIso && homogEnd && endIso
+        ? [
+            { valor: seed.homogenization.tempC, desde: startIso, hasta: homogEnd },
+            { valor: seed.ripening.tempC, desde: homogEnd, hasta: endIso },
+          ]
+        : [{ valor: phy.setPoint, desde: fechaUlt, hasta: fechaUlt }],
+    historial_humidity_set_point:
+      startIso && homogEnd && endIso
+        ? [
+            { valor: seed.homogenization.humidityPct, desde: startIso, hasta: homogEnd },
+            { valor: seed.ripening.humidityPct, desde: homogEnd, hasta: endIso },
+          ]
+        : [{ valor: phy.humiditySp, desde: fechaUlt, hasta: fechaUlt }],
+    historial_set_point_co2:
+      homogEnd && endIso
+        ? [{ valor: seed.ripening.co2Pct, desde: homogEnd, hasta: endIso }]
+        : [{ valor: phy.setCo2, desde: fechaUlt, hasta: fechaUlt }],
+    historial_power_state:
+      startIso && endIso
+        ? [{ valor: 1, estado: 'encendido', desde: startIso, hasta: endIso }]
+        : [{ valor: 1, estado: 'encendido', desde: fechaUlt, hasta: fechaUlt }],
   };
 }
 
@@ -619,7 +849,7 @@ export function buildSimulatedHistoryPoints(imei: string, fechaInicio: string, f
   const stepMs = 5 * 60 * 1000;
   const pts: HistoryPoint[] = [];
   for (let t = start; t <= end; t += stepMs) {
-    const phy = computeSimInkapackingPhysics(t, unitIndex);
+    const phy = computeSimPhysicsForDevice(t, unitIndex);
     const avl_pct = Math.min(100, Math.round((phy.avl / SIM_FLEET_AVL_MAX_CFM) * 100));
     pts.push({
       timestamp: new Date(t).toISOString(),
@@ -656,6 +886,263 @@ export function buildSimulatedHistoryPoints(imei: string, fechaInicio: string, f
 }
 
 const SIM_RIPENING_SAMPLING_STORAGE_PREFIX = 'ztrack:sim-ripening-sampling:';
+const SIM_RIPENING_STATE_STORAGE_PREFIX = 'ztrack:sim-ripening-state:';
+const SIM_CONTROL_SESSION_STORAGE_PREFIX = 'ztrack:sim-control-session:';
+
+type SimRipeningStoredState = {
+  status?: string;
+  display_name?: string;
+  payloadPatch?: Record<string, unknown>;
+  cancelledMeta?: NonNullable<RipeningProcessRow['payload']['_cancelledMeta']>;
+  pauseState?: NonNullable<RipeningProcessRow['payload']['pauseState']>;
+  pauseIntervals?: NonNullable<RipeningProcessRow['payload']['pauseIntervals']>;
+  deletedAt?: string;
+  updatedAt?: string;
+};
+
+export function isSimulatedRipeningTrackingActive(status: string): boolean {
+  const st = String(status || '').toLowerCase();
+  return st === 'active' || st === 'paused';
+}
+
+function readSimRipeningState(deviceId: SimInkapackingDeviceId): SimRipeningStoredState | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SIM_RIPENING_STATE_STORAGE_PREFIX + deviceId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SimRipeningStoredState;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSimRipeningState(deviceId: SimInkapackingDeviceId, state: SimRipeningStoredState | null): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const key = SIM_RIPENING_STATE_STORAGE_PREFIX + deviceId;
+    if (!state) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    /* quota / modo privado */
+  }
+}
+
+function readSimControlSession(deviceId: string): SimControlSessionRow | null {
+  if (typeof localStorage === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SIM_CONTROL_SESSION_STORAGE_PREFIX + deviceId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DeviceControlSessionRow;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSimControlSession(deviceId: string, session: SimControlSessionRow | null): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const key = SIM_CONTROL_SESSION_STORAGE_PREFIX + deviceId;
+    if (!session) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(session));
+  } catch {
+    /* quota / modo privado */
+  }
+}
+
+export function simControlSessionId(deviceId: string): string {
+  return `sim-control-${deviceId}`;
+}
+
+export function isSimulatedControlSessionId(sessionId: string): boolean {
+  return String(sessionId || '').startsWith('sim-control-');
+}
+
+export function simulatedDeviceIdFromControlSessionId(sessionId: string): SimInkapackingDeviceId | null {
+  if (!isSimulatedControlSessionId(sessionId)) return null;
+  const deviceId = sessionId.slice('sim-control-'.length);
+  return isSimulatedInkapackingDevice(deviceId) ? (deviceId as SimInkapackingDeviceId) : null;
+}
+
+export function fetchSimulatedActiveControlSession(deviceId: string): SimControlSessionRow | null {
+  if (!isSimulatedInkapackingDevice(deviceId) || !shouldShowSimulatedInkapackingFleet()) return null;
+  const session = readSimControlSession(deviceId);
+  if (!session || session.status !== 'active') return null;
+  return session;
+}
+
+export function startSimulatedControlProcess(body: SimStartControlBody): SimControlSessionRow {
+  const deviceId = String(body.deviceId || '').trim();
+  if (!isSimulatedInkapackingDevice(deviceId)) throw new Error('Dispositivo simulado no reconocido');
+  const user = getStoredUser();
+  const now = new Date();
+  const end = new Date(now.getTime() + body.durationHours * 3600_000);
+  const session: SimControlSessionRow = {
+    id: simControlSessionId(deviceId),
+    user_id: user?.id ?? 'sim-user',
+    device_id: deviceId,
+    process_type: body.processType,
+    display_label: body.displayLabel,
+    params: body.params ?? {},
+    status: 'active',
+    started_at: (body.startedAt ? new Date(body.startedAt) : now).toISOString(),
+    estimated_end_at: end.toISOString(),
+    duration_hours: body.durationHours,
+    created_at: now.toISOString(),
+    updated_at: now.toISOString(),
+    user_name: user?.name,
+    user_email: user?.email,
+  };
+  writeSimControlSession(deviceId, session);
+  return session;
+}
+
+export function listSimulatedControlSessions(): SimControlSessionRow[] {
+  if (!shouldShowSimulatedInkapackingFleet()) return [];
+  const rows: SimControlSessionRow[] = [];
+  for (const deviceId of SIM_INKAPACKING_DEVICE_IDS) {
+    const session = readSimControlSession(deviceId);
+    if (session) rows.push(session);
+  }
+  return rows;
+}
+
+export function cancelSimulatedControlSession(sessionId: string): SimControlSessionRow {
+  const deviceId = simulatedDeviceIdFromControlSessionId(sessionId);
+  if (!deviceId) throw new Error('Sesión simulada no reconocida');
+  const prev = readSimControlSession(deviceId);
+  if (!prev) throw new Error('No hay proceso activo');
+  const user = getStoredUser();
+  const now = new Date().toISOString();
+  const next: SimControlSessionRow = {
+    ...prev,
+    status: 'cancelled',
+    cancelled_at: now,
+    cancelled_by_user_id: user?.id ?? null,
+    cancelled_by_name: user?.name ?? null,
+    cancelled_by_email: user?.email ?? null,
+    updated_at: now,
+  };
+  writeSimControlSession(deviceId, next);
+  return next;
+}
+
+export function completeSimulatedControlSession(sessionId: string): SimControlSessionRow {
+  const deviceId = simulatedDeviceIdFromControlSessionId(sessionId);
+  if (!deviceId) throw new Error('Sesión simulada no reconocida');
+  const prev = readSimControlSession(deviceId);
+  if (!prev) throw new Error('No hay proceso activo');
+  const now = new Date().toISOString();
+  const next: SimControlSessionRow = {
+    ...prev,
+    status: 'completed',
+    updated_at: now,
+  };
+  writeSimControlSession(deviceId, next);
+  return next;
+}
+
+function actorMeta() {
+  const user = getStoredUser();
+  return {
+    byUserId: user?.id ?? null,
+    byEmail: user?.email ?? null,
+    byName: user?.name ?? null,
+  };
+}
+
+export function applySimulatedRipeningPatch(
+  processId: string,
+  body: Partial<Pick<RipeningProcessRow, 'status' | 'display_name'>> & { payload?: Record<string, unknown> }
+): RipeningProcessRow {
+  const deviceId = simulatedDeviceIdFromRipeningProcessId(processId);
+  if (!deviceId) throw new Error('Proceso simulado no reconocido');
+
+  const prev = readSimRipeningState(deviceId) ?? {};
+  const now = new Date().toISOString();
+  const next: SimRipeningStoredState = { ...prev, updatedAt: now };
+
+  if (body.status != null) {
+    const st = String(body.status).toLowerCase();
+    next.status = st;
+    if (st === 'cancelled') {
+      next.cancelledMeta = { at: now, ...actorMeta() };
+    }
+  }
+  if (body.display_name != null) next.display_name = body.display_name;
+  if (body.payload && typeof body.payload === 'object') {
+    next.payloadPatch = { ...(prev.payloadPatch ?? {}), ...body.payload };
+  }
+
+  writeSimRipeningState(deviceId, next);
+  return buildSimulatedRipeningProcessRow(deviceId);
+}
+
+export function applySimulatedRipeningPause(processId: string): RipeningProcessRow {
+  const deviceId = simulatedDeviceIdFromRipeningProcessId(processId);
+  if (!deviceId) throw new Error('Proceso simulado no reconocido');
+
+  const row = buildSimulatedRipeningProcessRow(deviceId);
+  const now = new Date().toISOString();
+  const progress = progressFromTrackingPayload(row.payload, row.status);
+  const prev = readSimRipeningState(deviceId) ?? {};
+  const intervals = [...(prev.pauseIntervals ?? [])];
+  intervals.push({ from: now, byUserId: getStoredUser()?.id ?? null });
+
+  writeSimRipeningState(deviceId, {
+    ...prev,
+    status: 'paused',
+    pauseState: { pausedAt: now, progressAtPause: progress },
+    pauseIntervals: intervals,
+    updatedAt: now,
+  });
+  return buildSimulatedRipeningProcessRow(deviceId);
+}
+
+export function applySimulatedRipeningResume(processId: string): RipeningProcessRow {
+  const deviceId = simulatedDeviceIdFromRipeningProcessId(processId);
+  if (!deviceId) throw new Error('Proceso simulado no reconocido');
+
+  const prev = readSimRipeningState(deviceId) ?? {};
+  const now = new Date().toISOString();
+  const intervals = [...(prev.pauseIntervals ?? [])];
+  const last = intervals[intervals.length - 1];
+  if (last && !last.to) last.to = now;
+
+  const next: SimRipeningStoredState = {
+    ...prev,
+    status: 'active',
+    pauseIntervals: intervals,
+    updatedAt: now,
+  };
+  delete next.pauseState;
+  writeSimRipeningState(deviceId, next);
+  return buildSimulatedRipeningProcessRow(deviceId);
+}
+
+export function applySimulatedRipeningDelete(processId: string): void {
+  const deviceId = simulatedDeviceIdFromRipeningProcessId(processId);
+  if (!deviceId) throw new Error('Proceso simulado no reconocido');
+  const now = new Date().toISOString();
+  writeSimRipeningState(deviceId, {
+    deletedAt: now,
+    status: 'cancelled',
+    cancelledMeta: { at: now, ...actorMeta() },
+    updatedAt: now,
+  });
+}
+
+/** @deprecated use isSimulatedRipeningTrackingActive */
+export function isSimulatedRipeningActiveStatus(status: string): boolean {
+  return isSimulatedRipeningTrackingActive(status);
+}
 
 /** `rp-process-9100001` … alineados con `SIM_INKAPACKING_DEVICE_IDS`. */
 export function isSimulatedRipeningProcessId(processId: string): boolean {
@@ -764,7 +1251,7 @@ export function buildSimulatedRipeningProcessRow(deviceId: SimInkapackingDeviceI
 
   const clientLine = `${seed.client.name} — ${seed.client.location}`;
 
-  return {
+  const row: RipeningProcessRow = {
     id: processId,
     user_id: `usr-fleet-700${unitIndex + 1}`,
     status: 'active',
@@ -819,17 +1306,47 @@ export function buildSimulatedRipeningProcessRow(deviceId: SimInkapackingDeviceI
     created_at: startIso,
     updated_at: now.toISOString(),
   };
+
+  const stored = readSimRipeningState(deviceId);
+  if (!stored) return row;
+
+  if (stored.deletedAt) {
+    return {
+      ...row,
+      status: 'cancelled',
+      deleted_at: stored.deletedAt,
+      updated_at: stored.updatedAt ?? stored.deletedAt,
+      payload: {
+        ...row.payload,
+        _cancelledMeta: stored.cancelledMeta ?? { at: stored.deletedAt, ...actorMeta() },
+      },
+    };
+  }
+
+  const payload: RipeningProcessRow['payload'] = {
+    ...row.payload,
+    ...(stored.payloadPatch ?? {}),
+  };
+  if (stored.cancelledMeta) payload._cancelledMeta = stored.cancelledMeta;
+  if (stored.pauseState) payload.pauseState = stored.pauseState;
+  if (stored.pauseIntervals) payload.pauseIntervals = stored.pauseIntervals;
+
+  return {
+    ...row,
+    status: stored.status ?? row.status,
+    display_name: stored.display_name ?? row.display_name,
+    payload,
+    updated_at: stored.updatedAt ?? row.updated_at,
+  };
 }
 
 export function appendSimulatedInkapackingDevices<T extends { id: string }>(devices: T[], mapRow: (r: Record<string, unknown>) => T): T[] {
   if (!shouldShowSimulatedInkapackingFleet()) return devices;
-  const existing = new Set(devices.map((d) => d.id));
   const now = new Date();
-  const extra: T[] = [];
+  const byId = new Map(devices.map((d) => [d.id, d]));
   for (let i = 0; i < SIM_INKAPACKING_DEVICE_IDS.length; i++) {
-    const id = SIM_INKAPACKING_DEVICE_IDS[i];
-    if (existing.has(id)) continue;
-    extra.push(mapRow(buildSimulatedMaduradorListRow(i, now)));
+    const id = SIM_INKAPACKING_DEVICE_IDS[i]!;
+    byId.set(id, mapRow(buildSimulatedMaduradorListRow(i, now)));
   }
-  return [...devices, ...extra];
+  return Array.from(byId.values());
 }

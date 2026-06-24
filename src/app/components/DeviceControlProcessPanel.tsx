@@ -57,8 +57,8 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   const trackingPhase = useMemo(() => {
     if (!trackingPayload || !activeTracking?.summary) return null;
     const pct = activeTracking.summary.progress ?? 0;
-    return inferCurrentNextPhase(trackingPayload, pct);
-  }, [trackingPayload, activeTracking?.summary]);
+    return inferCurrentNextPhase(trackingPayload, pct, t);
+  }, [trackingPayload, activeTracking?.summary, t]);
 
   const trackingAutomation = trackingPayload?.controlAutomation as Record<string, unknown> | null | undefined;
   const trackingLastAction = useMemo(

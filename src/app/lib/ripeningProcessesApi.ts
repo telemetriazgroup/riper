@@ -2,14 +2,22 @@ import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth, getToken } from '@/app/lib/auth';
 import { getThermoKingPinnedImei, isThermoKingSession, getGreenyardPinnedImeis, isGreenyardSession, getUltraorganicsAllImeis, isUltraorganicsSession } from '@/app/lib/fleetDemo';
 import { getGourmetTradingFleetDeviceIds, isGourmetSession } from '@/app/lib/gourmet';
+import { progressFromTrackingPayload } from '@/app/lib/ripeningSchedule';
 import {
   SIM_INKAPACKING_DEVICE_IDS,
+  applySimulatedRipeningDelete,
+  applySimulatedRipeningPatch,
+  applySimulatedRipeningPause,
+  applySimulatedRipeningResume,
   applySimulatedRipeningSampling,
   buildSimulatedRipeningProcessRow,
+  isSimulatedInkapackingDevice,
+  isSimulatedRipeningTrackingActive,
   isSimulatedRipeningProcessId,
   shouldShowSimulatedInkapackingFleet,
   simulatedDeviceIdFromRipeningProcessId,
 } from '@/app/lib/simulatedInkapackingFleet';
+import { revalidateSimDemoFleetViews } from '@/app/lib/simDemoFleetRevalidation';
 
 function base() {
   return `${RIPENER_API_URL.replace(/\/$/, '')}/api/v1/ripening-processes`;
@@ -148,15 +156,13 @@ export async function fetchRipeningProcesses(opts?: {
     rows = rows.filter((r) => allow.has(String((r.payload as { deviceId?: string })?.deviceId ?? '').trim()));
   }
   if (shouldShowSimulatedInkapackingFleet()) {
-    const seen = new Set(
-      rows
-        .map((r) => String((r.payload as { deviceId?: string })?.deviceId ?? '').trim())
-        .filter(Boolean)
+    rows = rows.filter(
+      (r) => !isSimulatedInkapackingDevice(String((r.payload as { deviceId?: string })?.deviceId ?? '').trim())
     );
     for (const id of SIM_INKAPACKING_DEVICE_IDS) {
-      if (!seen.has(id)) {
-        rows = [...rows, buildSimulatedRipeningProcessRow(id)];
-      }
+      const row = buildSimulatedRipeningProcessRow(id);
+      if (row.deleted_at && !opts?.includeArchived) continue;
+      rows = [...rows, row];
     }
   }
   return rows;
@@ -196,6 +202,28 @@ export async function fetchActiveProcessForDevice(
   signal?: AbortSignal
 ): Promise<{ process: RipeningProcessRow; summary: ActiveDeviceSummary } | null> {
   if (!deviceId) return null;
+  if (isSimulatedInkapackingDevice(deviceId) && shouldShowSimulatedInkapackingFleet()) {
+    const row = buildSimulatedRipeningProcessRow(deviceId as (typeof SIM_INKAPACKING_DEVICE_IDS)[number]);
+    if (!isSimulatedRipeningTrackingActive(row.status)) return null;
+    const p = row.payload;
+    const b = p.batch as Record<string, unknown> | undefined;
+    const sched = p.scheduleSummary as { startedAt?: string; estimatedEndAt?: string | null } | undefined;
+    return {
+      process: row,
+      summary: {
+        id: row.id,
+        display_name: row.display_name,
+        client: String((p.client as { name?: string })?.name ?? ''),
+        product: String(b?.product ?? 'Mango'),
+        deviceId,
+        progress: progressFromTrackingPayload(p, row.status),
+        startedAt: sched?.startedAt ? String(sched.startedAt) : null,
+        estimatedEndAt: sched?.estimatedEndAt != null ? String(sched.estimatedEndAt) : null,
+        status: row.status,
+        paused: row.status === 'paused',
+      },
+    };
+  }
   const u = `${base()}/active-for-device?deviceId=${encodeURIComponent(deviceId)}`;
   const res = await fetch(u, { headers: authHeaders(), signal });
   const json = await handle<{
@@ -263,6 +291,12 @@ export async function patchRipeningProcess(
   id: string,
   body: Partial<Pick<RipeningProcessRow, 'status' | 'display_name'>> & { payload?: Record<string, unknown> }
 ): Promise<RipeningProcessRow> {
+  if (isSimulatedRipeningProcessId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    const row = applySimulatedRipeningPatch(id, body);
+    revalidateSimDemoFleetViews(simulatedDeviceIdFromRipeningProcessId(id) ?? undefined);
+    return row;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -274,11 +308,23 @@ export async function patchRipeningProcess(
 }
 
 export async function deleteRipeningProcess(id: string): Promise<void> {
+  if (isSimulatedRipeningProcessId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    applySimulatedRipeningDelete(id);
+    revalidateSimDemoFleetViews(simulatedDeviceIdFromRipeningProcessId(id) ?? undefined);
+    return;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders() });
   await handle<{ ok: boolean }>(res);
 }
 
 export async function pauseRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  if (isSimulatedRipeningProcessId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    const row = applySimulatedRipeningPause(id);
+    revalidateSimDemoFleetViews(simulatedDeviceIdFromRipeningProcessId(id) ?? undefined);
+    return row;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}/pause`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -289,6 +335,12 @@ export async function pauseRipeningProcess(id: string): Promise<RipeningProcessR
 }
 
 export async function resumeRipeningProcess(id: string): Promise<RipeningProcessRow> {
+  if (isSimulatedRipeningProcessId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    const row = applySimulatedRipeningResume(id);
+    revalidateSimDemoFleetViews(simulatedDeviceIdFromRipeningProcessId(id) ?? undefined);
+    return row;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}/resume`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),

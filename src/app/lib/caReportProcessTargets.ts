@@ -12,6 +12,9 @@ type PhaseRaw = Record<string, unknown>;
 function phaseLabel(raw: PhaseRaw, idx: number, t: (k: string, p?: Record<string, string>) => string): string {
   const name = String(raw.name ?? '').trim();
   if (name) return name;
+  if (String(raw.type ?? '') === 'homogenization' && raw.meatControl === true) {
+    return t('phase_homogenization_meats');
+  }
   const type = String(raw.type ?? '').trim();
   const key =
     type === 'homogenization'

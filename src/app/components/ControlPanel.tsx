@@ -847,18 +847,29 @@ const HomogenizationControl = ({
   const [temp, setTemp] = useState(18);
   const [humidity, setHumidity] = useState(95);
   const [duration, setDuration] = useState(6);
+  const [meatControl, setMeatControl] = useState(false);
+  const [airExchangeMinutes, setAirExchangeMinutes] = useState(5);
+  const [airRenewalHours, setAirRenewalHours] = useState(12);
 
   const handleStart = () => {
     if (!deviceId) return;
+    const label = meatControl ? t('phase_homogenization_meats') : t('homogenization');
     onBeginStart({
       processType: 'Homogenization',
-      displayLabel: t('homogenization'),
+      displayLabel: label,
       params: {
         setPoint: temp,
         humiditySetPoint: humidity,
         durationHours: duration,
-        name: t('homogenization'),
+        name: label,
         tempUnit: tempUnitKey,
+        ...(meatControl
+          ? {
+              meatControl: true,
+              airExchangeMinutes,
+              airRenewalHours,
+            }
+          : {}),
       },
       durationHours: duration,
     });
@@ -904,18 +915,64 @@ const HomogenizationControl = ({
           step={1}
         />
         <RangeControl label={t('estimated_duration')} value={duration} unit={t('unit_hours')} min={1} max={24} onChange={setDuration} disabled={disabled} decimals={0} />
+        <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer pt-1">
+          <input
+            type="checkbox"
+            checked={meatControl}
+            onChange={(e) => setMeatControl(e.target.checked)}
+            disabled={disabled}
+            className="mt-0.5 rounded border-border text-blue-600"
+          />
+          <span>{t('homogenization_meat_control')}</span>
+        </label>
+        {meatControl ? (
+          <>
+            <RangeControl
+              label={t('homogenization_air_exchange')}
+              value={airExchangeMinutes}
+              unit={t('unit_minutes')}
+              min={1}
+              max={120}
+              onChange={(v) => setAirExchangeMinutes(Math.round(clamp(v, 1, 120)))}
+              disabled={disabled}
+              decimals={0}
+              step={1}
+            />
+            <RangeControl
+              label={t('homogenization_air_renewal')}
+              value={airRenewalHours}
+              unit={t('unit_hours')}
+              min={1}
+              max={48}
+              onChange={(v) => setAirRenewalHours(Math.round(clamp(v, 1, 48)))}
+              disabled={disabled}
+              decimals={0}
+              step={1}
+            />
+          </>
+        ) : null}
       </ControlGroup>
 
       <div className="p-4 border border-dashed border-border rounded-lg text-center bg-muted/30">
         <p className="text-sm text-muted-foreground mb-1">{t('preview')}</p>
         <p className="font-medium text-foreground">
-          {t('homogenization_control_preview', {
-            tempFrom: formatUiDecimal(convertTemp(8)),
-            tempTo: formatUiDecimal(convertTemp(temp)),
-            unit: tempUnit,
-            humidity: String(humidity),
-            hours: String(duration),
-          })}
+          {meatControl
+            ? t('homogenization_meat_control_preview', {
+                tempFrom: formatUiDecimal(convertTemp(8)),
+                tempTo: formatUiDecimal(convertTemp(temp)),
+                unit: tempUnit,
+                humidity: String(humidity),
+                hours: String(duration),
+                airExchange: String(airExchangeMinutes),
+                airRenewal: String(airRenewalHours),
+              })
+            : t('homogenization_control_preview', {
+                tempFrom: formatUiDecimal(convertTemp(8)),
+                tempTo: formatUiDecimal(convertTemp(temp)),
+                unit: tempUnit,
+                humidity: String(humidity),
+                hours: String(duration),
+              })}
         </p>
       </div>
 

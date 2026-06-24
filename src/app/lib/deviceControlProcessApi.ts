@@ -1,6 +1,17 @@
 import { RIPENER_API_URL } from '@/app/config';
 import { authHeaders, clearAuth } from '@/app/lib/auth';
 import { getUltraorganicsAllImeis, isUltraorganicsSession } from '@/app/lib/fleetDemo';
+import {
+  cancelSimulatedControlSession,
+  completeSimulatedControlSession,
+  fetchSimulatedActiveControlSession,
+  isSimulatedControlSessionId,
+  isSimulatedInkapackingDevice,
+  listSimulatedControlSessions,
+  shouldShowSimulatedInkapackingFleet,
+  startSimulatedControlProcess,
+} from '@/app/lib/simulatedInkapackingFleet';
+import { revalidateSimDemoFleetViews } from '@/app/lib/simDemoFleetRevalidation';
 
 function base() {
   return `${RIPENER_API_URL.replace(/\/$/, '')}/api/v1/device-control`;
@@ -71,6 +82,9 @@ export async function fetchActiveControlSession(
   signal?: AbortSignal
 ): Promise<DeviceControlSessionRow | null> {
   if (!deviceId) return null;
+  if (isSimulatedInkapackingDevice(deviceId) && shouldShowSimulatedInkapackingFleet()) {
+    return fetchSimulatedActiveControlSession(deviceId) as DeviceControlSessionRow | null;
+  }
   const u = `${base()}/active?deviceId=${encodeURIComponent(deviceId)}`;
   const res = await fetch(u, { headers: authHeaders(), signal });
   const json = await handle<{ data: DeviceControlSessionRow | null }>(res);
@@ -89,6 +103,11 @@ export type StartControlProcessBody = {
 };
 
 export async function startControlProcess(body: StartControlProcessBody): Promise<DeviceControlSessionRow> {
+  if (isSimulatedInkapackingDevice(body.deviceId) && shouldShowSimulatedInkapackingFleet()) {
+    const row = startSimulatedControlProcess(body) as DeviceControlSessionRow;
+    revalidateSimDemoFleetViews(body.deviceId);
+    return row;
+  }
   const res = await fetch(`${base()}/start`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
@@ -100,6 +119,12 @@ export async function startControlProcess(body: StartControlProcessBody): Promis
 }
 
 export async function cancelControlProcess(id: string): Promise<DeviceControlSessionRow> {
+  if (isSimulatedControlSessionId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    const row = cancelSimulatedControlSession(id) as DeviceControlSessionRow;
+    revalidateSimDemoFleetViews(row.device_id);
+    return row;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     headers: authHeaders(),
@@ -110,6 +135,12 @@ export async function cancelControlProcess(id: string): Promise<DeviceControlSes
 }
 
 export async function completeControlProcess(id: string): Promise<DeviceControlSessionRow> {
+  if (isSimulatedControlSessionId(id)) {
+    if (!shouldShowSimulatedInkapackingFleet()) throw new Error('No permitido');
+    const row = completeSimulatedControlSession(id) as DeviceControlSessionRow;
+    revalidateSimDemoFleetViews(row.device_id);
+    return row;
+  }
   const res = await fetch(`${base()}/${encodeURIComponent(id)}/complete`, {
     method: 'POST',
     headers: authHeaders(),
@@ -131,6 +162,10 @@ export async function listControlSessions(opts?: { includeArchived?: boolean }):
   if (isUltraorganicsSession()) {
     const allow = new Set(getUltraorganicsAllImeis());
     rows = rows.filter((r) => allow.has(String(r.device_id ?? '').trim()));
+  }
+  if (shouldShowSimulatedInkapackingFleet()) {
+    rows = rows.filter((r) => !isSimulatedInkapackingDevice(String(r.device_id ?? '').trim()));
+    rows = [...rows, ...listSimulatedControlSessions()];
   }
   return rows;
 }

@@ -207,6 +207,22 @@ export function programmedFieldsFromSession(
     });
   }
 
+  const meatControl = p.meatControl === true || p.meat_control === true;
+  const airEx = paramNum(p, 'airExchangeMinutes', 'air_exchange_minutes');
+  if (meatControl && airEx != null && pt === 'Homogenization') {
+    fields.push({
+      label: t('homogenization_air_exchange'),
+      value: `${Math.round(airEx)} ${t('unit_minutes')}`,
+    });
+  }
+  const airRen = paramNum(p, 'airRenewalHours', 'air_renewal_hours');
+  if (meatControl && airRen != null && pt === 'Homogenization') {
+    fields.push({
+      label: t('homogenization_air_renewal'),
+      value: `${formatUiDecimal(airRen)} ${t('unit_hours')}`,
+    });
+  }
+
   return fields;
 }
 

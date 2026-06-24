@@ -7,6 +7,7 @@ import {
 import {
   buildSimulatedRipeningProcessRow,
   isSimulatedInkapackingDevice,
+  isSimulatedRipeningTrackingActive,
   shouldShowSimulatedInkapackingFleet,
   type SimInkapackingDeviceId,
 } from '@/app/lib/simulatedInkapackingFleet';
@@ -20,6 +21,7 @@ export function useRipeningActiveForDevice(deviceId: string | undefined) {
       if (!deviceId) return null;
       if (isSimulatedInkapackingDevice(deviceId) && shouldShowSimulatedInkapackingFleet()) {
         const row = buildSimulatedRipeningProcessRow(deviceId as SimInkapackingDeviceId);
+        if (!isSimulatedRipeningTrackingActive(row.status)) return null;
         const p = row.payload;
         const b = p.batch as Record<string, unknown> | undefined;
         const product = String(b?.product ?? 'Mango');

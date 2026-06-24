@@ -49,8 +49,8 @@ export const DeviceRipeningTrackingOverview: React.FC<DeviceRipeningTrackingOver
       activeTracking.summary?.progress != null && Number.isFinite(activeTracking.summary.progress)
         ? activeTracking.summary.progress
         : view.progress;
-    return inferCurrentNextPhase(activeTracking.process.payload, pct);
-  }, [activeTracking?.process, activeTracking?.summary?.progress, view]);
+    return inferCurrentNextPhase(activeTracking.process.payload, pct, t);
+  }, [activeTracking?.process, activeTracking?.summary?.progress, view, t]);
 
   const totalHoursPlanned = useMemo(() => {
     if (!activeTracking?.process || !view) return null;

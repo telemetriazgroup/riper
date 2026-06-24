@@ -41,6 +41,10 @@ export interface PhaseConfig {
   co2Limit?: number;
   humidity?: number;
   tempType?: 'air' | 'product'; // For cooling distinction
+  /** Homogenización con control de carnes (intercambio y renovación de aire). */
+  meatControl?: boolean;
+  airExchangeMinutes?: number;
+  airRenewalHours?: number;
 }
 
 export interface Recipe {
@@ -149,6 +153,9 @@ const getPhaseConfig = (phases: PhaseConfig[], type: PhaseType): PhaseConfig => 
 
   if (type === 'homogenization') {
     defaults.humidity = 95;
+    defaults.meatControl = false;
+    defaults.airExchangeMinutes = 5;
+    defaults.airRenewalHours = 12;
   }
   if (type === 'ripening') {
     defaults.ethylene = 100;
@@ -582,6 +589,64 @@ export const RecipeBuilder: React.FC<RecipeBuilderProps> = ({
                             <InputGroup label={t('set_time')} icon={Clock} unit={t('unit_hours')}>
                               <input type="number" step="1" disabled={readOnly} value={config.duration} onChange={e => handlePhaseChange(def.type, { duration: Number(e.target.value) })} className="w-full text-center font-bold outline-none bg-transparent" />
                             </InputGroup>
+                            <div className="lg:col-span-4 flex flex-col gap-3 pt-1">
+                              <label className="flex items-center gap-2 text-sm font-medium text-gray-800 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  disabled={readOnly}
+                                  checked={config.meatControl === true}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked;
+                                    handlePhaseChange(def.type, {
+                                      meatControl: checked,
+                                      ...(checked && config.airExchangeMinutes == null
+                                        ? { airExchangeMinutes: 5 }
+                                        : {}),
+                                      ...(checked && config.airRenewalHours == null
+                                        ? { airRenewalHours: 12 }
+                                        : {}),
+                                    });
+                                  }}
+                                  className="h-4 w-4 rounded border-gray-300"
+                                />
+                                {t('homogenization_meat_control')}
+                              </label>
+                              {config.meatControl ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-xl">
+                                  <InputGroup label={t('homogenization_air_exchange')} icon={Wind} unit={t('unit_minutes')}>
+                                    <input
+                                      type="number"
+                                      step="1"
+                                      min={1}
+                                      disabled={readOnly}
+                                      value={config.airExchangeMinutes ?? 5}
+                                      onChange={(e) =>
+                                        handlePhaseChange(def.type, {
+                                          airExchangeMinutes: Number(e.target.value),
+                                        })
+                                      }
+                                      className="w-full text-center font-bold outline-none bg-transparent"
+                                    />
+                                  </InputGroup>
+                                  <InputGroup label={t('homogenization_air_renewal')} icon={Clock} unit={t('unit_hours')}>
+                                    <input
+                                      type="number"
+                                      step="1"
+                                      min={1}
+                                      max={48}
+                                      disabled={readOnly}
+                                      value={config.airRenewalHours ?? 12}
+                                      onChange={(e) =>
+                                        handlePhaseChange(def.type, {
+                                          airRenewalHours: Number(e.target.value),
+                                        })
+                                      }
+                                      className="w-full text-center font-bold outline-none bg-transparent"
+                                    />
+                                  </InputGroup>
+                                </div>
+                              ) : null}
+                            </div>
                           </>
                         )}
 

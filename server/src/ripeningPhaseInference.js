@@ -19,6 +19,23 @@ export function enabledRecipePhases(payload) {
   return raw.filter((p) => p && p.enabled !== false);
 }
 
+const PHASE_TYPE_LABELS = {
+  homogenization: 'Homogenization',
+  ripening: 'Ripening',
+  venting: 'Ventilation',
+  cooling: 'Cooling',
+};
+
+function phaseDisplayLabel(pr, idx) {
+  const name = String(pr.name ?? '').trim();
+  if (name) return name;
+  const type = String(pr.type ?? '').trim();
+  if (type === 'homogenization' && pr.meatControl === true) {
+    return 'Homogenización - Carnes';
+  }
+  return PHASE_TYPE_LABELS[type] || type || `phase-${idx + 1}`;
+}
+
 /**
  * @returns {{
  *   currentIndex: number,
@@ -37,7 +54,7 @@ export function inferCurrentTrackingPhase(payload, progressPct) {
   const phasesMeta = phases.map((p, idx) => {
     const pr = p && typeof p === 'object' ? p : {};
     const type = String(pr.type ?? '').trim();
-    const label = String(pr.name ?? '').trim() || type || `phase-${idx + 1}`;
+    const label = phaseDisplayLabel(pr, idx);
     return {
       type,
       label,
@@ -114,6 +131,13 @@ export function controlParamsFromPhaseRaw(phaseRaw, processType) {
   if (Number.isFinite(dur) && dur > 0) {
     if (processType === 'Ventilation') out.durationMin = dur;
     else out.durationHours = dur;
+  }
+  if (p.meatControl === true) {
+    out.meatControl = true;
+    const airEx = Number(p.airExchangeMinutes);
+    if (Number.isFinite(airEx) && airEx > 0) out.airExchangeMinutes = airEx;
+    const airRen = Number(p.airRenewalHours);
+    if (Number.isFinite(airRen) && airRen > 0) out.airRenewalHours = airRen;
   }
   out.trackingPhaseType = String(p.type ?? '');
   return out;

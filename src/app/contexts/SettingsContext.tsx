@@ -1380,10 +1380,16 @@ const translations: Record<Language, Record<string, string>> = {
     // Phases
     'phase_homogenization': '1. Homogeneización',
     'phase_homogenization_desc': 'Uniformizar temperatura de la pulpa.',
+    'phase_homogenization_meats': 'Homogenización - Carnes',
+    'homogenization_meat_control': 'Control carnes',
+    'homogenization_air_exchange': 'Intercambio de aire',
+    'homogenization_air_renewal': 'Renovación de aire',
     'homogenization_control_desc':
       'La homogenización eleva gradualmente la temperatura del producto para prepararlo para la maduración. Mantenga humedad alta (90–98%). Típico: {{tempMin}}°{{unit}} a {{tempMax}}°{{unit}}.',
     'homogenization_control_preview':
       'De ~{{tempFrom}}°{{unit}} a {{tempTo}}°{{unit}}, humedad {{humidity}}%, en {{hours}} h',
+    'homogenization_meat_control_preview':
+      'Homogenización - Carnes: de ~{{tempFrom}}°{{unit}} a {{tempTo}}°{{unit}}, humedad {{humidity}}%, {{hours}} h · intercambio {{airExchange}} min · renovación {{airRenewal}} h',
     'ventilation_control_desc':
       'Evacuación rápida de gases (Etileno/CO₂) post-maduración.',
     'cooling_control_desc':
@@ -2889,10 +2895,16 @@ const translations: Record<Language, Record<string, string>> = {
     // Phases
     'phase_homogenization': '1. Homogenization',
     'phase_homogenization_desc': 'Uniformize pulp temperature.',
+    'phase_homogenization_meats': 'Homogenization - Meats',
+    'homogenization_meat_control': 'Meat control',
+    'homogenization_air_exchange': 'Air exchange',
+    'homogenization_air_renewal': 'Air renewal',
     'homogenization_control_desc':
       'Homogenization gradually raises product temperature to prepare it for ripening. Keep humidity high (90–98%). Typical: {{tempMin}}°{{unit}} to {{tempMax}}°{{unit}}.',
     'homogenization_control_preview':
       'From ~{{tempFrom}}°{{unit}} to {{tempTo}}°{{unit}}, humidity {{humidity}}%, in {{hours}} h',
+    'homogenization_meat_control_preview':
+      'Homogenization - Meats: from ~{{tempFrom}}°{{unit}} to {{tempTo}}°{{unit}}, humidity {{humidity}}%, {{hours}} h · exchange {{airExchange}} min · renewal {{airRenewal}} h',
     'ventilation_control_desc':
       'Rapid evacuation of gases (ethylene/CO₂) after ripening.',
     'cooling_control_desc':
