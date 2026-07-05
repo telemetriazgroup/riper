@@ -31,6 +31,7 @@ import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
 import { alarmCodesRouter } from './routes/alarmCodes.js';
 import { controlLogicRouter } from './routes/controlLogic.js';
+import { emailNotificationsRouter } from './routes/emailNotifications.js';
 import { controlAutomationRouter } from './routes/controlAutomation.js';
 import { deviceEthyleneConfigRouter } from './routes/deviceEthyleneConfig.js';
 import {
