@@ -1,0 +1,6 @@
+#Vamos a actualizar la logica de enfriamiento , el objetivo es modificar dinamicamente el set_point de la maquina para llegar al objetivo lo mas pronto posible .
+
+tenemos en esta logica la evaluacion de los parametros de cargo_1_temp ,cargo_2_temp ,cargo_3_temp , cargo_4_temp , temp_supply_1 , return_air , evaporation_coil .
+
+
+los cargo_1_temp , cargo_2_temp , cargo_3_temp , cargo_4_temp , son los sensores de temperatura interna , para que sean validos teienen que estar entre -20 y 40 grados centigrados . se saca un promedio de los sensores que esten operativos , a un decimal ejemplo si solos tenemos tres ensores con datos validos 20,21y 19 > el promedio sera 20 y si solo hay uno se toma ese uno , y sino hay ninguno se toma el valor de return_air como sensor de tmeperatura interna . entonces en el caso que se requiera enfriar el equipo a 6 grados centigrados , se valida el promedio de los sensores de temperatura interna y si son mayores a 5 grados del objetivo se cambia el set  a obejtivo , en este caso a 6 GRADOS C , y luego de 30 minutos de haber hecho ese cambio y comporbar que el equipo esta a 6 Cº , se guarda en la trazabilidad del efrimaineto ese promedio calculado , despues de media hora se compara con el nuevo promedio 

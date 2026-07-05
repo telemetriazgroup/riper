@@ -31,7 +31,8 @@ import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
 import { alarmCodesRouter } from './routes/alarmCodes.js';
 import { controlLogicRouter } from './routes/controlLogic.js';
-import { emailNotificationsRouter } from './routes/emailNotifications.js';
+import { controlAutomationRouter } from './routes/controlAutomation.js';
+import { deviceEthyleneConfigRouter } from './routes/deviceEthyleneConfig.js';
 import {
   finalizeDueRipeningProcesses,
   finalizeDueDeviceControlSessions,
@@ -100,6 +101,8 @@ async function main() {
   app.use('/api/v1/control-logic', authMiddleware, controlLogicRouter);
   app.use('/api/v1/tunnel-commands', authMiddleware, tunnelCommandsRouter);
   app.use('/api/v1/email-notifications', authMiddleware, emailNotificationsRouter);
+  app.use('/api/v1/control-automation', authMiddleware, controlAutomationRouter);
+  app.use('/api/v1/device-ethylene-config', authMiddleware, deviceEthyleneConfigRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);

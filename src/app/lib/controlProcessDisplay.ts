@@ -3,6 +3,10 @@ import type { EventKind, LogEvent } from '@/app/data/eventLog';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 import { shouldShowClientSafeProcessEvents } from '@/app/lib/ethyleneDisplayPolicy';
+import {
+  applyGourmetFleetEthyleneZeroGuard,
+  modulateGourmetEthyleneDisplayPpm,
+} from '@/app/lib/gourmetEthyleneDisplay';
 
 /** Clave para ver detalle técnico del proceso (Gourmet). */
 export const GOURMET_PROCESS_DEBUG_PASSWORD = 'lpmp2018';
@@ -267,6 +271,7 @@ const CO2_ACTIONS = new Set([
   'check_co2_setpoint',
   'send_co2_limit',
   'send_co2_ventilation',
+  'send_co2_ventilation_skipped',
   'co2_skip_after_max_attempts',
 ]);
 const ETH_ACTIONS = new Set([
@@ -329,6 +334,10 @@ export function eventKindFromProcessEvent(ev: ProcessEventRow): EventKind {
 export type ProcessEventDisplayOpts = {
   /** Ocultar ppm reales de sensor en eventos de etileno (usuarios normales). */
   clientSafe?: boolean;
+  /** Bitácora: aplicar modulación Gourmet en columnas de telemetría. */
+  clientFacingLog?: boolean;
+  programmedEthyleneTarget?: number | null;
+  deviceId?: string;
 };
 
 function useClientSafeEventDisplay(opts?: ProcessEventDisplayOpts): boolean {
@@ -342,6 +351,100 @@ export type ProcessEventSummary = {
   reason?: string;
   kind: EventKind;
 };
+
+export type ProcessEventTelemetry = {
+  temp?: number;
+  humidity?: number;
+  ethylene?: number;
+  co2?: number;
+};
+
+function parseTelemetryNumber(v: unknown): number | undefined {
+  if (v == null || v === '' || v === '—') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function firstResultActual(results: unknown): number | undefined {
+  if (!Array.isArray(results) || results.length === 0) return undefined;
+  for (const row of results) {
+    const actual = parseTelemetryNumber((row as { actual?: unknown }).actual);
+    if (actual != null) return actual;
+  }
+  return undefined;
+}
+
+const ETHYLENE_READ_ACTIONS = new Set([
+  'ethylene_read',
+  'ethylene_read_ignored_zero',
+  'read_ethylene_poll',
+  'read_ethylene',
+  'ethylene_skip_dose',
+]);
+
+function injectionDatoForDisplay(ev: ProcessEventRow, detail: Record<string, unknown>): string {
+  const logical = ev.doseLogical ?? detail.doseLogical;
+  if (logical != null && logical !== '') return String(logical);
+  return String(ev.dato ?? detail.dato ?? '—');
+}
+
+function modulateEthyleneForClientLog(
+  raw: number | undefined,
+  displayOpts?: ProcessEventDisplayOpts
+): number | undefined {
+  if (raw == null) return undefined;
+  if (displayOpts?.clientFacingLog !== true) return raw;
+  const target = displayOpts.programmedEthyleneTarget;
+  if (target == null || !Number.isFinite(target) || target <= 0) return undefined;
+  const modulated = modulateGourmetEthyleneDisplayPpm(raw, target);
+  if (modulated == null) return undefined;
+  const deviceId = displayOpts.deviceId;
+  if (deviceId) {
+    return applyGourmetFleetEthyleneZeroGuard(deviceId, raw, modulated) ?? modulated;
+  }
+  return modulated;
+}
+
+/** Extrae T°/HR/etileno/CO₂ de un evento de túnel para columnas de bitácora. */
+export function extractProcessEventTelemetry(
+  ev: ProcessEventRow,
+  displayOpts?: ProcessEventDisplayOpts
+): ProcessEventTelemetry {
+  const action = String(ev.action ?? '');
+  const detail = (ev.detail ?? {}) as Record<string, unknown>;
+  const results = ev.results ?? detail.unitResults ?? detail.results ?? detail.checks;
+  const clientSafe = useClientSafeEventDisplay(displayOpts);
+  const clientFacingLog = displayOpts?.clientFacingLog === true;
+  const out: ProcessEventTelemetry = {};
+
+  if (TEMP_ACTIONS.has(action)) {
+    out.temp = firstResultActual(results) ?? parseTelemetryNumber(ev.actual ?? detail.actual);
+  }
+
+  if (HUM_ACTIONS.has(action)) {
+    out.humidity = firstResultActual(results) ?? parseTelemetryNumber(ev.actual ?? detail.actual);
+  }
+
+  if (CO2_ACTIONS.has(action)) {
+    out.co2 = parseTelemetryNumber(
+      ev.co2Reading ?? detail.co2Reading ?? ev.actual ?? detail.actual
+    );
+  }
+
+  if (ETHYLENE_READ_ACTIONS.has(action)) {
+    const rawEthylene =
+      parseTelemetryNumber(ev.effective ?? detail.effective) ??
+      parseTelemetryNumber(ev.value ?? detail.value) ??
+      parseTelemetryNumber(ev.baseline ?? detail.baseline);
+    if (clientFacingLog) {
+      out.ethylene = modulateEthyleneForClientLog(rawEthylene, displayOpts);
+    } else if (!clientSafe) {
+      out.ethylene = rawEthylene;
+    }
+  }
+
+  return out;
+}
 
 /** Resumen legible con motivo del ajuste automático o manual. */
 export function summarizeProcessEventParts(
@@ -524,6 +627,16 @@ export function summarizeProcessEventParts(
       }),
     };
   }
+  if (action === 'send_co2_ventilation_skipped') {
+    return {
+      kind: 'control_ventilation',
+      description: t('log_ctrl_co2_ventilation_skipped'),
+      reason: t('log_ctrl_reason_co2_ventilation_disabled', {
+        co2: String(ev.co2Reading ?? detail.co2Reading ?? '—'),
+        avl: String(ev.avlRaw ?? detail.avlRaw ?? '—'),
+      }),
+    };
+  }
   if (action === 'check_ventilation_avl') {
     return {
       kind,
@@ -585,7 +698,7 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_tipo5_initial' || action === 'send_tipo5') {
-    const dato = String(ev.dato ?? detail.dato ?? 2);
+    const dato = injectionDatoForDisplay(ev, detail);
     if (clientSafe) {
       return {
         kind,
@@ -602,7 +715,7 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_tipo5_proportional' || action === 'send_tipo5_proportional') {
-    const dato = String(ev.dato ?? detail.dato ?? '—');
+    const dato = injectionDatoForDisplay(ev, detail);
     if (clientSafe) {
       return {
         kind,
@@ -623,7 +736,7 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_tipo5_fallback') {
-    const dato = String(ev.dato ?? detail.dato ?? '—');
+    const dato = injectionDatoForDisplay(ev, detail);
     if (clientSafe) {
       return {
         kind,
@@ -862,7 +975,8 @@ export function processActionLogEntriesForDevice(
   deviceId: string,
   sessions: DeviceControlSessionRow[],
   t: (key: string, replacements?: Record<string, string>) => string,
-  formatTemp: (c: number) => string = (c) => String(c)
+  formatTemp: (c: number) => string = (c) => String(c),
+  displayOpts?: ProcessEventDisplayOpts
 ): LogEvent[] {
   const id = String(deviceId).trim();
   const entries: LogEvent[] = [];
@@ -876,7 +990,11 @@ export function processActionLogEntriesForDevice(
 
     events.forEach((ev, i) => {
       if (!ev.at) return;
-      const parts = summarizeProcessEventParts(ev, t);
+      const parts = summarizeProcessEventParts(ev, t, displayOpts);
+      const telemetry = extractProcessEventTelemetry(ev, {
+        ...displayOpts,
+        deviceId: displayOpts?.deviceId ?? id,
+      });
       entries.push({
         id: `proc-${session.id}-${i}-${String(ev.key ?? i)}`,
         type: 'event',
@@ -885,6 +1003,7 @@ export function processActionLogEntriesForDevice(
         description: parts.description,
         detail: parts.reason ?? processLabel,
         phase: processLabel,
+        ...telemetry,
       });
     });
   }
@@ -899,7 +1018,8 @@ export function processActionLogEntriesFromTracking(
   deviceId: string,
   tracking: { id: string; payload?: Record<string, unknown>; display_label?: string; display_name?: string } | null | undefined,
   t: (key: string, replacements?: Record<string, string>) => string,
-  formatTemp: (c: number) => string = (c) => String(c)
+  formatTemp: (c: number) => string = (c) => String(c),
+  displayOpts?: ProcessEventDisplayOpts
 ): LogEvent[] {
   if (!tracking?.payload) return [];
   const payloadDevice = String(tracking.payload.deviceId ?? '').trim();
@@ -912,7 +1032,11 @@ export function processActionLogEntriesFromTracking(
   return events
     .filter((ev) => ev.at)
     .map((ev, i) => {
-      const parts = summarizeProcessEventParts(ev, t);
+      const parts = summarizeProcessEventParts(ev, t, displayOpts);
+      const telemetry = extractProcessEventTelemetry(ev, {
+        ...displayOpts,
+        deviceId: displayOpts?.deviceId ?? String(deviceId).trim(),
+      });
       return {
         id: `track-${tracking.id}-${i}`,
         type: 'event' as const,
@@ -921,6 +1045,7 @@ export function processActionLogEntriesFromTracking(
         description: parts.description,
         detail: parts.reason ?? label,
         phase: label,
+        ...telemetry,
       };
     })
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());

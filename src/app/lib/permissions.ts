@@ -74,3 +74,13 @@ export function canHardDeleteRipeningRow(): boolean {
 export function canDeleteDeviceControlRecord(): boolean {
   return canEditRecipesAndCatalog();
 }
+
+/** Config global automatización (ventilación 220 en maduración, etc.). */
+export function canManageControlAutomation(): boolean {
+  return canEditRecipesAndCatalog();
+}
+
+/** Multiplicador de inyección etileno por IMEI (solo superadmin). */
+export function canManageDeviceEthyleneConfig(): boolean {
+  return getAppRole() === 'superadmin';
+}

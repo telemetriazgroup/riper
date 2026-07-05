@@ -17,6 +17,7 @@ import {
   SIM_FLEET_AVL_MAX_CFM,
   appendSimulatedInkapackingDevices,
   buildSimulatedHistoryPoints,
+  buildSimulatedInkapackingDeviceList,
   isSimulatedInkapackingDevice,
   shouldShowSimulatedInkapackingFleet,
 } from '@/app/lib/simulatedInkapackingFleet';
@@ -502,7 +503,14 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   if (!res.ok) throw new Error(`madurador: ${res.status}`);
   const body = (await res.json()) as { data?: unknown };
   const raw = Array.isArray(body.data) ? body.data : [];
-  const list = raw.map((r) => mapMaduradorRowToDevice(r as Record<string, unknown>));
+  const list: Device[] = [];
+  for (const r of raw) {
+    try {
+      list.push(mapMaduradorRowToDevice(r as Record<string, unknown>));
+    } catch (e) {
+      console.warn('[madurador] map row failed', e);
+    }
+  }
   const withSim = appendSimulatedInkapackingDevices(list, mapMaduradorRowToDevice);
   if (isUltraorganicsSession()) {
     return filterDevicesToUltraorganicsPanel(withSim);
@@ -532,9 +540,25 @@ export async function getMaduradorDevicesCached(): Promise<Device[]> {
   if (list && now - at < MADURADOR_LIST_TTL_MS) {
     return list;
   }
-  const fresh = await fetchMaduradorDevicesFromApi();
-  setMaduradorListCache(fresh, now);
-  return fresh;
+  try {
+    const fresh = await fetchMaduradorDevicesFromApi();
+    setMaduradorListCache(fresh, now);
+    return fresh;
+  } catch (e) {
+    if (list?.length) {
+      console.warn('[madurador] refresh failed, using stale cache', e);
+      return list;
+    }
+    if (shouldShowSimulatedInkapackingFleet()) {
+      const simOnly = buildSimulatedInkapackingDeviceList(mapMaduradorRowToDevice);
+      if (simOnly.length) {
+        console.warn('[madurador] refresh failed, using sim fleet only', e);
+        setMaduradorListCache(simOnly, now);
+        return simOnly;
+      }
+    }
+    throw e;
+  }
 }
 
 export function buildMaduradorHistoryFromDevice(

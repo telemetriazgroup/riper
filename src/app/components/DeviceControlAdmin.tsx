@@ -1,6 +1,7 @@
-import React, { useState, useCallback } from 'react';
-import { Activity, Loader2, RefreshCw, Ban, Pencil, Archive, Eye, RotateCcw, Download } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Activity, Loader2, RefreshCw, Ban, Pencil, Archive, Eye, RotateCcw, Download, Settings2 } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +11,7 @@ import {
 } from '@/app/components/ui/dialog';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { getStoredUser } from '@/app/lib/auth';
-import { canDeleteDeviceControlRecord, canExportControlLogic } from '@/app/lib/permissions';
+import { canDeleteDeviceControlRecord, canExportControlLogic, canManageControlAutomation, canManageDeviceEthyleneConfig } from '@/app/lib/permissions';
 import { useControlSessionsList, revalidateControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import {
   cancelControlProcess,
@@ -31,6 +32,17 @@ import {
 import { ProcessTechnicalDetailsDialog } from '@/app/components/ProcessTechnicalDetailsDialog';
 import { fetchControlLogicExport } from '@/app/lib/controlLogicExportApi';
 import { downloadJsonFile } from '@/app/lib/downloadJsonFile';
+import { Switch } from '@/app/components/ui/switch';
+import {
+  fetchControlAutomationConfig,
+  updateControlAutomationConfig,
+} from '@/app/lib/controlAutomationConfigApi';
+import {
+  deleteDeviceEthyleneConfig,
+  fetchDeviceEthyleneConfigs,
+  upsertDeviceEthyleneConfig,
+  type DeviceEthyleneConfigRow,
+} from '@/app/lib/deviceEthyleneConfigApi';
 const STATUS_ES: Record<string, string> = {
   active: 'Activo',
   cancelled: 'Cancelado',
@@ -50,7 +62,17 @@ export const DeviceControlAdmin: React.FC = () => {
   const role = getStoredUser()?.role;
   const isSuperAdmin = role === 'superadmin';
   const canExportLogic = canExportControlLogic();
+  const canManageAutomation = canManageControlAutomation();
+  const canManageEthyleneConfig = canManageDeviceEthyleneConfig();
   const [exportLogicBusy, setExportLogicBusy] = useState(false);
+  const [automationLoading, setAutomationLoading] = useState(canManageAutomation);
+  const [ripeningVent220, setRipeningVent220] = useState(false);
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [ethyleneConfigs, setEthyleneConfigs] = useState<DeviceEthyleneConfigRow[]>([]);
+  const [ethyleneConfigLoading, setEthyleneConfigLoading] = useState(canManageEthyleneConfig);
+  const [ethyleneDeviceId, setEthyleneDeviceId] = useState('');
+  const [ethyleneMultiplier, setEthyleneMultiplier] = useState('1');
+  const [ethyleneConfigSaving, setEthyleneConfigSaving] = useState(false);
   const [showArchivedSessions, setShowArchivedSessions] = useState(false);
   const includeArchived = Boolean(isSuperAdmin && showArchivedSessions);
   const { sessions: rows, isLoading, isError } = useControlSessionsList(includeArchived);
@@ -67,6 +89,97 @@ export const DeviceControlAdmin: React.FC = () => {
   const canHardDeleteDb = canDeleteDeviceControlRecord();
 
   const load = useCallback(() => revalidateControlSessionsList(), []);
+
+  useEffect(() => {
+    if (!canManageAutomation) return;
+    let cancelled = false;
+    void (async () => {
+      setAutomationLoading(true);
+      try {
+        const cfg = await fetchControlAutomationConfig();
+        if (!cancelled) setRipeningVent220(Boolean(cfg.ripening_co2_ventilation_220));
+      } catch {
+        if (!cancelled) toast.error(t('error') || 'Error');
+      } finally {
+        if (!cancelled) setAutomationLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageAutomation, t]);
+
+  useEffect(() => {
+    if (!canManageEthyleneConfig) return;
+    let cancelled = false;
+    void (async () => {
+      setEthyleneConfigLoading(true);
+      try {
+        const rows = await fetchDeviceEthyleneConfigs();
+        if (!cancelled) setEthyleneConfigs(rows);
+      } catch {
+        if (!cancelled) toast.error(t('error') || 'Error');
+      } finally {
+        if (!cancelled) setEthyleneConfigLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageEthyleneConfig, t]);
+
+  const saveEthyleneDeviceConfig = async () => {
+    const deviceId = ethyleneDeviceId.trim();
+    const multiplier = Number(ethyleneMultiplier);
+    if (!deviceId) {
+      toast.error(t('device_ethylene_config_device_required'));
+      return;
+    }
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      toast.error(t('device_ethylene_config_multiplier_invalid'));
+      return;
+    }
+    setEthyleneConfigSaving(true);
+    try {
+      const row = await upsertDeviceEthyleneConfig(deviceId, multiplier);
+      setEthyleneConfigs((prev) => {
+        const next = prev.filter((r) => r.device_id !== row.device_id);
+        return [...next, row].sort((a, b) => a.device_id.localeCompare(b.device_id));
+      });
+      toast.success(t('device_ethylene_config_saved'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'));
+    } finally {
+      setEthyleneConfigSaving(false);
+    }
+  };
+
+  const removeEthyleneDeviceConfig = async (deviceId: string) => {
+    if (!window.confirm(t('device_ethylene_config_delete_confirm'))) return;
+    setEthyleneConfigSaving(true);
+    try {
+      await deleteDeviceEthyleneConfig(deviceId);
+      setEthyleneConfigs((prev) => prev.filter((r) => r.device_id !== deviceId));
+      toast.success(t('device_ethylene_config_deleted'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'));
+    } finally {
+      setEthyleneConfigSaving(false);
+    }
+  };
+
+  const saveAutomationConfig = async (enabled: boolean) => {
+    setAutomationSaving(true);
+    try {
+      const cfg = await updateControlAutomationConfig({ ripening_co2_ventilation_220: enabled });
+      setRipeningVent220(Boolean(cfg.ripening_co2_ventilation_220));
+      toast.success(t('control_automation_saved'));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t('error'));
+    } finally {
+      setAutomationSaving(false);
+    }
+  };
 
   const exportControlLogic = async () => {
     if (!canExportLogic) return;
@@ -251,6 +364,145 @@ export const DeviceControlAdmin: React.FC = () => {
       <p className="text-sm text-muted-foreground">
         {t('control_sessions_hint_fleet') || 'Abra un dispositivo desde el panel principal para iniciar un proceso; los confirmados aparecen aquí.'}
       </p>
+
+      {canManageAutomation ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              {t('control_automation_settings_title')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t('control_automation_settings_hint')}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border px-4 py-3">
+              <label htmlFor="ripening-vent-220" className="text-sm font-medium text-foreground cursor-pointer">
+                {t('control_automation_ripening_vent_220')}
+              </label>
+              {automationLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Switch
+                  id="ripening-vent-220"
+                  checked={ripeningVent220}
+                  disabled={automationSaving}
+                  onCheckedChange={(checked) => void saveAutomationConfig(checked)}
+                />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canManageEthyleneConfig ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              {t('device_ethylene_config_title')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('device_ethylene_config_hint')}</p>
+            <div className="grid gap-3 sm:grid-cols-[1fr_140px_auto] items-end">
+              <div>
+                <label htmlFor="ethylene-device-id" className="text-xs font-medium text-muted-foreground">
+                  IMEI
+                </label>
+                <input
+                  id="ethylene-device-id"
+                  value={ethyleneDeviceId}
+                  onChange={(e) => setEthyleneDeviceId(e.target.value.toUpperCase())}
+                  placeholder="MEX1001"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label htmlFor="ethylene-multiplier" className="text-xs font-medium text-muted-foreground">
+                  {t('device_ethylene_config_multiplier')}
+                </label>
+                <input
+                  id="ethylene-multiplier"
+                  type="number"
+                  min={0.1}
+                  max={20}
+                  step={0.1}
+                  value={ethyleneMultiplier}
+                  onChange={(e) => setEthyleneMultiplier(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                disabled={ethyleneConfigSaving}
+                onClick={() => void saveEthyleneDeviceConfig()}
+              >
+                {ethyleneConfigSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : t('save')}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">{t('device_ethylene_config_example')}</p>
+            {ethyleneConfigLoading ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {t('loading')}
+              </div>
+            ) : ethyleneConfigs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('device_ethylene_config_empty')}</p>
+            ) : (
+              <div className="overflow-x-auto border border-border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/60 border-b border-border">
+                    <tr>
+                      <th className="p-2 text-left font-semibold">IMEI</th>
+                      <th className="p-2 text-left font-semibold">{t('device_ethylene_config_multiplier')}</th>
+                      <th className="p-2 text-left font-semibold">{t('device_ethylene_config_updated')}</th>
+                      <th className="p-2 text-right font-semibold">{t('actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ethyleneConfigs.map((row) => (
+                      <tr key={row.device_id} className="border-b border-border last:border-0">
+                        <td className="p-2 font-mono text-xs">{row.device_id}</td>
+                        <td className="p-2">×{row.injection_multiplier}</td>
+                        <td className="p-2 text-muted-foreground whitespace-nowrap">
+                          {row.updated_at ? formatDateTime(row.updated_at) : '—'}
+                        </td>
+                        <td className="p-2 text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={ethyleneConfigSaving}
+                            onClick={() => {
+                              setEthyleneDeviceId(row.device_id);
+                              setEthyleneMultiplier(String(row.injection_multiplier));
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            {t('edit')}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600"
+                            disabled={ethyleneConfigSaving}
+                            onClick={() => void removeEthyleneDeviceConfig(row.device_id)}
+                          >
+                            <Ban className="h-3.5 w-3.5 mr-1" />
+                            {t('delete')}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="overflow-x-auto border border-border rounded-xl bg-card shadow-sm">
         <table className="w-full text-sm text-left min-w-[1100px] text-foreground">

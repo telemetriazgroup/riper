@@ -1346,7 +1346,19 @@ export function appendSimulatedInkapackingDevices<T extends { id: string }>(devi
   const byId = new Map(devices.map((d) => [d.id, d]));
   for (let i = 0; i < SIM_INKAPACKING_DEVICE_IDS.length; i++) {
     const id = SIM_INKAPACKING_DEVICE_IDS[i]!;
-    byId.set(id, mapRow(buildSimulatedMaduradorListRow(i, now)));
+    try {
+      byId.set(id, mapRow(buildSimulatedMaduradorListRow(i, now)));
+    } catch (e) {
+      console.warn('[sim-fleet] failed to build row', id, e);
+    }
   }
   return Array.from(byId.values());
+}
+
+/** Lista solo equipos demo (fallback si falla el upstream Madurador). */
+export function buildSimulatedInkapackingDeviceList<T>(
+  mapRow: (r: Record<string, unknown>) => T
+): T[] {
+  if (!shouldShowSimulatedInkapackingFleet()) return [];
+  return appendSimulatedInkapackingDevices([] as T[], mapRow);
 }

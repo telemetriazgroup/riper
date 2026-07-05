@@ -265,6 +265,25 @@ CREATE TABLE IF NOT EXISTS app_email_group_devices (
 CREATE INDEX IF NOT EXISTS idx_app_email_group_devices_device ON app_email_group_devices (device_id);
 `;
 
+const SQL_CONTROL_AUTOMATION_CONFIG = `
+CREATE TABLE IF NOT EXISTS app_control_automation_config (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  ripening_co2_ventilation_220 BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO app_control_automation_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+`;
+
+const SQL_DEVICE_ETHYLENE_CONFIG = `
+CREATE TABLE IF NOT EXISTS app_device_ethylene_config (
+  device_id TEXT PRIMARY KEY,
+  injection_multiplier NUMERIC(6,2) NOT NULL DEFAULT 1 CHECK (injection_multiplier > 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by INTEGER REFERENCES app_users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_app_device_ethylene_config_updated ON app_device_ethylene_config (updated_at DESC);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -299,6 +318,8 @@ export async function runMigrate() {
     await client.query(SQL_COMPANIES);
     await client.query(SQL_ALARM_CODES);
     await client.query(SQL_EMAIL_NOTIFICATIONS);
+    await client.query(SQL_CONTROL_AUTOMATION_CONFIG);
+    await client.query(SQL_DEVICE_ETHYLENE_CONFIG);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

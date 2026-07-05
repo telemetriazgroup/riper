@@ -8,11 +8,11 @@ import {
 } from './gourmetFleet.js';
 import { syncControlSessionForTunnelBatch } from './tunnelControlHistory.js';
 import {
-  sendEthyleneDoseCommand,
   sendEthyleneInjectionCommand,
   sendEthylenePollCommand,
   sendTunnelControlCommand,
 } from './tunelControlClient.js';
+import { sendEthyleneDoseWithDeviceConfig } from './ethyleneDeviceConfig.js';
 import { fetchDeviceRowByImei, readTelemetryField } from './tunnelCommandTelemetry.js';
 import {
   ETHYLENE_MAX_READING,
@@ -292,15 +292,18 @@ async function dispatchTunnelEthylene(job) {
 
     if (baseline != null && baseline < target && resolved.canInject) {
       const dose = computeInitialEthyleneDose(baseline, target);
-      const sent = await sendEthyleneDoseCommand(imei, dose);
-      lastTipo5Dato = sent.ppm;
+      const sent = await sendEthyleneDoseWithDeviceConfig(imei, dose);
+      lastTipo5Dato = sent.doseLogical ?? sent.ppm;
       steps = appendStep(steps, {
         action: 'send_tipo5',
-        dato: sent.ppm,
+        dato: sent.doseLogical ?? sent.ppm,
+        doseLogical: sent.doseLogical ?? sent.ppm,
+        datoSent: sent.injectionMultiplier > 1 ? sent.datoSent : undefined,
+        injectionMultiplier: sent.injectionMultiplier > 1 ? sent.injectionMultiplier : undefined,
         baselineBeforeDose: baseline,
         url: sent.step.url,
       });
-      meta = recordEthyleneDose({ ...meta, baselineBeforeDose: baseline }, sent.ppm, baseline);
+      meta = recordEthyleneDose({ ...meta, baselineBeforeDose: baseline }, sent.doseLogical ?? sent.ppm, baseline);
     } else if (baseline == null) {
       await updateJob(job.id, {
         status: 'waiting',
@@ -661,13 +664,16 @@ async function verifyTunnelEthyleneJob(job) {
   try {
     const previousBaseline = Number(meta.baselineBeforeDose ?? lastReading);
     const observedIncrement = lastReading - previousBaseline;
-    const sent = await sendEthyleneDoseCommand(imei, nextDose);
-    meta = recordEthyleneDose({ ...meta, baselineBeforeDose: lastReading }, sent.ppm, lastReading);
+    const sent = await sendEthyleneDoseWithDeviceConfig(imei, nextDose);
+    meta = recordEthyleneDose({ ...meta, baselineBeforeDose: lastReading }, sent.doseLogical ?? sent.ppm, lastReading);
     meta.readings = [];
     meta.nonZeroReadings = [];
     steps = appendStep(steps, {
       action: 'send_tipo5_proportional',
-      dato: sent.ppm,
+      dato: sent.doseLogical ?? sent.ppm,
+      doseLogical: sent.doseLogical ?? sent.ppm,
+      datoSent: sent.injectionMultiplier > 1 ? sent.datoSent : undefined,
+      injectionMultiplier: sent.injectionMultiplier > 1 ? sent.injectionMultiplier : undefined,
       baselineBeforeDose: previousBaseline,
       lastReading,
       observedIncrement,

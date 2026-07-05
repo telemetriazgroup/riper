@@ -208,25 +208,24 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const pinEmpresaId = superadminPinnedEmpresaIdentificador();
       const pinImei = superadminPinnedDeviceImei();
 
-      const listWide = await fetchMaduradorDispositivosList(base, wideId, ctrl);
-      if (listWide === null) {
-        console.error('[madurador] superadmin wide empresa upstream failed', wideId);
-        return res.status(502).json({ error: 'madurador_upstream', message: `upstream wide ${wideId}` });
-      }
+    const listWide = await fetchMaduradorDispositivosList(base, wideId, ctrl);
+    if (listWide === null) {
+      console.error('[madurador] superadmin wide empresa upstream failed', wideId, '(continuing with partial merge)');
+    }
 
-      let listPinned = [];
-      if (pinEmpresaId !== wideId) {
-        const rawPin = await fetchMaduradorDispositivosList(base, pinEmpresaId, ctrl);
-        if (rawPin === null) {
-          console.error('[madurador] superadmin pinned empresa upstream failed', pinEmpresaId);
-          return res.status(502).json({ error: 'madurador_upstream', message: `upstream pin ${pinEmpresaId}` });
-        }
+    let listPinned = [];
+    if (pinEmpresaId !== wideId) {
+      const rawPin = await fetchMaduradorDispositivosList(base, pinEmpresaId, ctrl);
+      if (rawPin === null) {
+        console.error('[madurador] superadmin pinned empresa upstream failed', pinEmpresaId, '(continuing with partial merge)');
+      } else {
         listPinned = pinImei ? filterRowsByImeiExact(rawPin, pinImei) : rawPin;
-      } else if (pinImei) {
-        listPinned = filterRowsByImeiExact(listWide, pinImei);
       }
+    } else if (pinImei && listWide) {
+      listPinned = filterRowsByImeiExact(listWide, pinImei);
+    }
 
-      const mergedBase = mergeDispositivosRows(listWide, listPinned);
+    const mergedBase = mergeDispositivosRows(listWide ?? [], listPinned);
 
       const gySuperId = superadminGreenyardEmpresaIdentificador();
       let merged = mergedBase;

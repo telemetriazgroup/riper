@@ -18,6 +18,7 @@ import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { processActionLogEntriesForDevice, processActionLogEntriesFromTracking } from '@/app/lib/controlProcessDisplay';
+import { resolveEthyleneDisplayTargetPpm } from '@/app/lib/ethyleneDisplayPolicy';
 
 interface EventLogProps {
   deviceId: string;
@@ -38,6 +39,30 @@ const CONTROL_KINDS = new Set<EventKind>([
 
 function isControlKind(kind: EventKind): boolean {
   return CONTROL_KINDS.has(kind);
+}
+
+function logEntryTemp(entry: LogEntry, formatTemp: (c: number) => string): string {
+  if (entry.type === 'sampling') return formatTemp(entry.temp);
+  const v = (entry as LogEvent).temp;
+  return v != null && Number.isFinite(v) ? formatTemp(v) : '—';
+}
+
+function logEntryHumidity(entry: LogEntry): string {
+  if (entry.type === 'sampling') return formatUiPercent(entry.humidity);
+  const v = (entry as LogEvent).humidity;
+  return v != null && Number.isFinite(v) ? formatUiPercent(v) : '—';
+}
+
+function logEntryEthylene(entry: LogEntry): string {
+  if (entry.type === 'sampling') return `${formatUiDecimal(entry.ethylene)} ppm`;
+  const v = (entry as LogEvent).ethylene;
+  return v != null && Number.isFinite(v) ? `${formatUiDecimal(v)} ppm` : '—';
+}
+
+function logEntryCo2(entry: LogEntry): string {
+  if (entry.type === 'sampling') return formatUiPercent(entry.co2);
+  const v = (entry as LogEvent).co2;
+  return v != null && Number.isFinite(v) ? formatUiPercent(v) : '—';
 }
 
 function controlKindLabel(kind: EventKind, t: (k: string) => string): string {
@@ -87,14 +112,47 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
   const { sessions } = useControlSessionsList(false);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
 
+  const panelActiveSession = useMemo(
+    () => sessions.find((s) => s.device_id === deviceId && s.status === 'active') ?? null,
+    [sessions, deviceId]
+  );
+
+  const programmedEthyleneTarget = useMemo(
+    () =>
+      resolveEthyleneDisplayTargetPpm({
+        deviceId,
+        trackingProcess: activeTracking?.process ?? null,
+        panelActiveSession,
+        sessions,
+      }),
+    [deviceId, activeTracking?.process, panelActiveSession, sessions]
+  );
+
+  const clientLogDisplayOpts = useMemo(
+    () => ({
+      clientSafe: true,
+      clientFacingLog: true,
+      programmedEthyleneTarget,
+      deviceId,
+    }),
+    [programmedEthyleneTarget, deviceId]
+  );
+
   const processActions = useMemo(
-    () => processActionLogEntriesForDevice(deviceId, sessions, t, formatTemp),
-    [deviceId, sessions, t, formatTemp]
+    () => processActionLogEntriesForDevice(deviceId, sessions, t, formatTemp, clientLogDisplayOpts),
+    [deviceId, sessions, t, formatTemp, clientLogDisplayOpts]
   );
 
   const trackingActions = useMemo(
-    () => processActionLogEntriesFromTracking(deviceId, activeTracking?.process ?? null, t, formatTemp),
-    [deviceId, activeTracking?.process, t, formatTemp]
+    () =>
+      processActionLogEntriesFromTracking(
+        deviceId,
+        activeTracking?.process ?? null,
+        t,
+        formatTemp,
+        clientLogDisplayOpts
+      ),
+    [deviceId, activeTracking?.process, t, formatTemp, clientLogDisplayOpts]
   );
 
   const rawLog = useMemo(() => {
@@ -202,16 +260,16 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">
-                    {entry.type === 'sampling' ? formatTemp(entry.temp) : '—'}
+                    {logEntryTemp(entry, formatTemp)}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">
-                    {entry.type === 'sampling' ? formatUiPercent(entry.humidity) : '—'}
+                    {logEntryHumidity(entry)}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700">
-                    {entry.type === 'sampling' ? `${formatUiDecimal(entry.ethylene)} ppm` : '—'}
+                    {logEntryEthylene(entry)}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-gray-700 pr-4">
-                    {entry.type === 'sampling' ? formatUiPercent(entry.co2) : '—'}
+                    {logEntryCo2(entry)}
                   </td>
                 </tr>
               ))}

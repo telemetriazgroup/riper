@@ -37,6 +37,11 @@ export interface LogEvent {
   detail?: string;
   phase?: string;
   recipe?: string;
+  /** Lecturas opcionales para columnas de trazabilidad (eventos de control). */
+  temp?: number;
+  humidity?: number;
+  ethylene?: number;
+  co2?: number;
 }
 
 export interface LogSampling {

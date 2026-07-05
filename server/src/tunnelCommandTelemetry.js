@@ -1,4 +1,5 @@
 import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
+import { greenyardEmpresaIdentificador, isGreenyardDeviceId } from './greenyardFleet.js';
 import {
   identificadorForUltraorganicsImei,
   ultraorganicsDeviceGroupsMap,
@@ -6,6 +7,33 @@ import {
   ultraorganicsUpstreamIdentificadores,
 } from './ultraorganicsFleet.js';
 import { maduradorApiBase } from './tunelControlClient.js';
+
+const dispositivosListCache = new Map();
+const DISPOSITIVOS_LIST_CACHE_MS = 20_000;
+
+async function fetchDispositivosList(identificador) {
+  const ident = String(identificador || '').trim();
+  if (!ident) return null;
+  const cached = dispositivosListCache.get(ident);
+  if (cached && Date.now() - cached.at < DISPOSITIVOS_LIST_CACHE_MS) {
+    return cached.rows;
+  }
+  const base = maduradorApiBase();
+  const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(ident)}`;
+  const ctrl =
+    typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined;
+  const r = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl });
+  if (!r.ok) return null;
+  const text = await r.text();
+  try {
+    const json = text ? JSON.parse(text) : [];
+    const rows = Array.isArray(json) ? json : [];
+    dispositivosListCache.set(ident, { at: Date.now(), rows });
+    return rows;
+  } catch {
+    return null;
+  }
+}
 
 function flatMaduradorRow(row) {
   if (!row || typeof row !== 'object') return {};
@@ -48,22 +76,6 @@ function toNum(v) {
   return nestedValor(v);
 }
 
-async function fetchDispositivosList(identificador) {
-  const base = maduradorApiBase();
-  const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(identificador)}`;
-  const ctrl =
-    typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined;
-  const r = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl });
-  if (!r.ok) return null;
-  const text = await r.text();
-  try {
-    const json = text ? JSON.parse(text) : [];
-    return Array.isArray(json) ? json : [];
-  } catch {
-    return null;
-  }
-}
-
 /** Última telemetría del dispositivo por IMEI (empresa Gourmet 5001 por defecto). */
 export async function fetchDeviceRowByImei(imei, identificador = gourmetTradingEmpresaIdentificador()) {
   const want = String(imei || '').trim();
@@ -84,6 +96,9 @@ export async function fetchDeviceRowByImei(imei, identificador = gourmetTradingE
   if (want.startsWith('MEX')) {
     idents.add(identificadorForUltraorganicsImei(want));
     for (const id of ultraorganicsUpstreamIdentificadores()) idents.add(id);
+  }
+  if (isGreenyardDeviceId(want) || want.startsWith('NEWY')) {
+    idents.add(greenyardEmpresaIdentificador());
   }
 
   for (const ident of idents) {

@@ -24,6 +24,7 @@ import {
   sendEthylenePollCommand,
   sendTunnelControlCommand,
 } from './tunelControlClient.js';
+import { sendEthyleneDoseWithDeviceConfig } from './ethyleneDeviceConfig.js';
 import {
   sendTermoKingControlCommand,
   sendTermoKingEthyleneDoseCommand,
@@ -68,7 +69,7 @@ export function resolveProcessControlAdapter(deviceId) {
         return sendEthylenePollCommand(unitId);
       },
       sendEthyleneDose(unitId, ppm) {
-        return sendEthyleneDoseCommand(unitId, ppm);
+        return sendEthyleneDoseWithDeviceConfig(unitId, ppm, sendEthyleneDoseCommand);
       },
     };
   }
@@ -90,7 +91,7 @@ export function resolveProcessControlAdapter(deviceId) {
         return sendTermoKingEthylenePollCommand(unitId);
       },
       sendEthyleneDose(unitId, ppm) {
-        return sendTermoKingEthyleneDoseCommand(unitId, ppm);
+        return sendEthyleneDoseWithDeviceConfig(unitId, ppm, sendTermoKingEthyleneDoseCommand);
       },
     };
   }
@@ -121,7 +122,7 @@ export function resolveProcessControlAdapter(deviceId) {
         return sendTermoKingEthylenePollCommand(unitId);
       },
       sendEthyleneDose(unitId, ppm) {
-        return sendTermoKingEthyleneDoseCommand(unitId, ppm);
+        return sendEthyleneDoseWithDeviceConfig(unitId, ppm, sendTermoKingEthyleneDoseCommand);
       },
     };
   }

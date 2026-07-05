@@ -14,9 +14,11 @@ import {
   fetchMaduradorRangoHistoryForImei,
   getMaduradorDevicesCached,
   hasMaduradorIdentificador,
+  mapMaduradorRowToDevice,
   shouldUseMaduradorDispositivosApi,
   shouldUseMaduradorRangoHistory,
 } from '@/app/lib/madurador';
+import { buildSimulatedInkapackingDeviceList, shouldShowSimulatedInkapackingFleet } from '@/app/lib/simulatedInkapackingFleet';
 import {
   GOURMET_TUNEL_DEVICE_ID,
   getCachedGourmetTunnelDevice,
@@ -154,6 +156,12 @@ export async function fetchDevices(): Promise<Device[]> {
         : finalizeClientFleetEthylene(named);
     } catch (e) {
       console.warn('Madurador dispositivos failed:', e);
+      if (shouldShowSimulatedInkapackingFleet()) {
+        const simOnly = buildSimulatedInkapackingDeviceList(mapMaduradorRowToDevice);
+        if (simOnly.length) {
+          return finalizeClientFleetEthylene(await mergeSavedDisplayNames(simOnly));
+        }
+      }
       if (isGourmetSession() && !isGourmetMaduradorFleetSession()) {
         const tun = await refreshGourmetTunnelDevice();
         return finalizeGourmetClientFleet([tun]);

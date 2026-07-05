@@ -88,8 +88,11 @@ const MANUAL_COMMAND_KINDS = {
   ethylene: { tunnelTipo: 5, verifyField: 'campo_1', tolerance: 0.5 },
 };
 
-export function buildControlLogicExport() {
+import { loadControlAutomationConfig } from './controlAutomationConfig.js';
+
+export async function buildControlLogicExport() {
   const base = maduradorApiBase();
+  const automationCfg = await loadControlAutomationConfig();
   return {
     meta: {
       schemaVersion: '1.0.0',
@@ -181,6 +184,15 @@ export function buildControlLogicExport() {
         maxDosePerCommandPpm: ETHYLENE_MAX_DOSE,
         co2FailureFallback:
           'Si CO₂ no se ajusta en 3 intentos durante maduración, continuar con control de etileno (núcleo del proceso).',
+        co2HighVentilation220: {
+          enabledByDefault: false,
+          currentAdminSetting: Boolean(automationCfg.ripening_co2_ventilation_220),
+          avlTargetCfm: 220,
+          avlTriggerMaxCfm: 30,
+          co2ExcessPct: 0.5,
+          rule:
+            'Tras ajustar límite CO₂, si lectura > objetivo + 0.5 % y AVL < 30, enviar tipo 6 dato 220 (solo si admin lo activó).',
+        },
       },
     },
     ethyleneReading: {

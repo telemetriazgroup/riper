@@ -5,7 +5,12 @@ import { buildControlLogicExport } from '../controlLogicExport.js';
 export const controlLogicRouter = Router();
 
 /** Export JSON de la lógica TUNEL / TermoKing — solo superusuario. */
-controlLogicRouter.get('/export', requireSuperUser, (_req, res) => {
-  const data = buildControlLogicExport();
-  res.json({ ok: true, data });
+controlLogicRouter.get('/export', requireSuperUser, async (_req, res) => {
+  try {
+    const data = await buildControlLogicExport();
+    res.json({ ok: true, data });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
 });

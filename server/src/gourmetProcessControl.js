@@ -19,6 +19,7 @@ import {
   resolveEthyleneReading,
 } from './ethyleneReading.js';
 import { appendTunnelEventLog } from './tunnelEventLog.js';
+import { isRipeningCo2Ventilation220Enabled } from './controlAutomationConfig.js';
 import { controlParamNumber, normalizeControlProcessParams, parseSessionParams, effectiveSessionParams } from './controlProcessParams.js';
 import { isAutomatedControlDeviceId, resolveProcessControlAdapter } from './processControlAdapter.js';
 import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
@@ -97,8 +98,33 @@ export const CONTROL_AUTOMATION_PROCESS_TYPES = [...AUTOMATED_PROCESS_TYPES, 'St
 
 const STOP_PLAN_PHASE_FIELDS = ['consumption_ph_1', 'consumption_ph_2', 'consumption_ph_3'];
 
+const telemetryNotFoundWarnAt = new Map();
+
+function warnTelemetryNotFoundOnce(fleet, unitId, ident) {
+  const key = `${fleet}|${unitId}|${ident}`;
+  const now = Date.now();
+  const last = telemetryNotFoundWarnAt.get(key) ?? 0;
+  if (now - last < 5 * 60_000) return;
+  telemetryNotFoundWarnAt.set(key, now);
+  console.warn('[gourmet-process] telemetry not found', fleet, unitId, 'ident', ident);
+}
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+function ethyleneInjectionEventFields(sent, extra = {}) {
+  const fields = {
+    dato: sent.doseLogical ?? sent.ppm,
+    doseLogical: sent.doseLogical ?? sent.ppm,
+    url: sent.step?.url,
+    ...extra,
+  };
+  if (Number(sent.injectionMultiplier) > 1) {
+    fields.injectionMultiplier = sent.injectionMultiplier;
+    fields.datoSent = sent.datoSent ?? sent.ppm;
+  }
+  return fields;
 }
 
 function msFromNow(ms) {
@@ -130,7 +156,7 @@ async function fetchUnitRow(ctx, unitId) {
     gourmetTradingEmpresaIdentificador();
   const row = await fetchDeviceRowByImei(unitId, ident);
   if (!row && (adapter.fleet === 'ultraorganics' || adapter.fleet === 'greenyard')) {
-    console.warn('[gourmet-process] telemetry not found', adapter.fleet, unitId, 'ident', ident);
+    warnTelemetryNotFoundOnce(adapter.fleet, unitId, ident);
   }
   return row;
 }
@@ -495,8 +521,10 @@ async function ensureCo2Limit(ctx, params, auto, opts = {}) {
   const avlRow = await telemetryRow(ctx, 'avl_raw');
   const avlRaw = readTelemetryField(avlRow, 'avl_raw');
   const programmed = controlParamNumber(params, 'co2', 'co2_limit');
+  const vent220Enabled = await isRipeningCo2Ventilation220Enabled();
   if (
     adapter &&
+    vent220Enabled &&
     co2Reading != null &&
     programmed != null &&
     co2Reading > programmed + 0.5 &&
@@ -511,6 +539,23 @@ async function ensureCo2Limit(ctx, params, auto, opts = {}) {
       co2Reading,
       avlRaw,
       urls,
+      dato: AVL_VENT_TARGET,
+    });
+  } else if (
+    adapter &&
+    !vent220Enabled &&
+    co2Reading != null &&
+    programmed != null &&
+    co2Reading > programmed + 0.5 &&
+    avlRaw != null &&
+    avlRaw < AVL_VENT_MAX
+  ) {
+    events.push({
+      action: 'send_co2_ventilation_skipped',
+      reason: 'admin_config_disabled',
+      imei,
+      co2Reading,
+      avlRaw,
       dato: AVL_VENT_TARGET,
     });
   }
@@ -604,18 +649,18 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
   if (dose > 0) {
     try {
       const sent = await adapter.sendEthyleneDose(imei, dose);
-      eth = recordEthyleneDose(eth, sent.ppm, effective);
+      eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, effective);
       events.push({
         action: doseAction,
         imei,
-        dato: sent.ppm,
-        baseline: effective,
-        lastReading: effective,
-        target,
-        url: sent.step.url,
-        reason: doseReason === 'fallback_no_increment' ? 'below_target_no_increment' : 'below_target_steady',
-        doseReason,
-        saturatedRead,
+        ...ethyleneInjectionEventFields(sent, {
+          baseline: effective,
+          lastReading: effective,
+          target,
+          reason: doseReason === 'fallback_no_increment' ? 'below_target_no_increment' : 'below_target_steady',
+          doseReason,
+          saturatedRead,
+        }),
       });
     } catch (e) {
       events.push({ action: 'ethylene_dose_error', message: String(e.message) });
@@ -664,14 +709,14 @@ async function tickEthyleneCycle(ctx, params, auto) {
 
     if (baseline != null && baseline < target - 0.5 && adapter && resolved.canInject) {
       const sent = await adapter.sendEthyleneDose(imei, 2);
-      eth = recordEthyleneDose(eth, sent.ppm, baseline);
+      eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, baseline);
       events.push({
         action: 'ethylene_tipo5_initial',
         imei,
-        dato: sent.ppm,
-        url: sent.step.url,
-        baseline,
-        value: baselineRaw,
+        ...ethyleneInjectionEventFields(sent, {
+          baseline,
+          value: baselineRaw,
+        }),
       });
     } else if (baseline != null && baseline >= target - 0.5) {
       events.push({ action: 'ethylene_skip_dose', reason: 'at_target', baseline, target });
@@ -756,17 +801,17 @@ async function tickEthyleneCycle(ctx, params, auto) {
   const dose = computeProportionalEthyleneDose(eth, target, lastReading);
   if (dose > 0 && lastReading < target - 0.5 && adapter && resolved.canInject) {
     const sent = await adapter.sendEthyleneDose(imei, dose);
-    eth = recordEthyleneDose(eth, sent.ppm, lastReading);
+    eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, lastReading);
     eth.readings = [];
     eth.nonZeroReadings = [];
     eth.pollRound = 0;
     events.push({
       action: 'ethylene_tipo5_proportional',
       imei,
-      dato: sent.ppm,
-      lastReading,
-      target,
-      url: sent.step.url,
+      ...ethyleneInjectionEventFields(sent, {
+        lastReading,
+        target,
+      }),
     });
   }
 
