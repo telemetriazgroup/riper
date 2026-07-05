@@ -279,7 +279,7 @@ CREATE TABLE IF NOT EXISTS app_device_ethylene_config (
   device_id TEXT PRIMARY KEY,
   injection_multiplier NUMERIC(6,2) NOT NULL DEFAULT 1 CHECK (injection_multiplier > 0),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_by INTEGER REFERENCES app_users(id) ON DELETE SET NULL
+  updated_by UUID REFERENCES app_users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_app_device_ethylene_config_updated ON app_device_ethylene_config (updated_at DESC);
 `;

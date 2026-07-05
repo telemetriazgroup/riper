@@ -27,7 +27,7 @@ export type DeviceEthyleneConfigRow = {
   device_id: string;
   injection_multiplier: number;
   updated_at: string | null;
-  updated_by: number | null;
+  updated_by: string | null;
 };
 
 export async function fetchDeviceEthyleneConfigs(): Promise<DeviceEthyleneConfigRow[]> {
