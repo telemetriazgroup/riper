@@ -19,6 +19,12 @@ function isUnfilteredEthyleneViewerLocal(): boolean {
 /** Máximo +21 % sobre la inyección programada (ej. 50 → 60.5 ppm). */
 export const GOURMET_ETHYLENE_DISPLAY_CAP_RATIO = 0.21;
 
+/** Lectura cruda ≥ objetivo × 4 → meseta alta (ej. set 100 → umbral 400 ppm crudo). */
+export const GOURMET_ETHYLENE_HIGH_RAW_MULTIPLIER = 4;
+
+/** Valor mostrado en meseta alta: objetivo × 4 (ej. set 100 → 400; set 120 → 480). */
+export const GOURMET_ETHYLENE_HIGH_PLATEAU_MULTIPLIER = 4;
+
 const LS_PREFIX = 'gourmet_eth_prog:';
 const LS_ZERO_STREAK = 'gourmet_eth_zero_streak:';
 const LS_LAST_GOOD = 'gourmet_eth_last_good:';
@@ -32,9 +38,25 @@ export function gourmetEthyleneDisplayCapPpm(programmedTarget: number): number {
   return Number((t * (1 + GOURMET_ETHYLENE_DISPLAY_CAP_RATIO)).toFixed(2));
 }
 
+/** Umbral de lectura cruda (ppm) para pasar a meseta alta. */
+export function gourmetEthyleneHighRawThresholdPpm(programmedTarget: number): number {
+  const t = Number(programmedTarget);
+  if (!Number.isFinite(t) || t <= 0) return 0;
+  return Number((t * GOURMET_ETHYLENE_HIGH_RAW_MULTIPLIER).toFixed(2));
+}
+
+/** Valor fijo mostrado al cliente cuando la lectura cruda supera el umbral alto. */
+export function gourmetEthyleneHighPlateauPpm(programmedTarget: number): number {
+  const t = Number(programmedTarget);
+  if (!Number.isFinite(t) || t <= 0) return 0;
+  return Number((t * GOURMET_ETHYLENE_HIGH_PLATEAU_MULTIPLIER).toFixed(2));
+}
+
 /**
- * Etileno mostrado al cliente Gourmet: escala el exceso sobre el objetivo al 21 %
- * y limita al tope (objetivo × 1.21). Si lectura ≤ objetivo, muestra la lectura real.
+ * Etileno mostrado al cliente Gourmet:
+ * - Lectura ≤ objetivo → valor real.
+ * - Objetivo < lectura < objetivo×4 → escala el exceso al 21 % (tope objetivo×1.21).
+ * - Lectura ≥ objetivo×4 → meseta objetivo×4 (ej. set 100 → 400; set 120 → 480).
  */
 export function modulateGourmetEthyleneDisplayPpm(
   rawPpm: number | null | undefined,
@@ -45,9 +67,15 @@ export function modulateGourmetEthyleneDisplayPpm(
   const target = programmedTarget != null && Number.isFinite(programmedTarget) ? Number(programmedTarget) : null;
   if (target == null || target <= 0) return raw;
   if (raw <= target) return Number(raw.toFixed(2));
-  const cap = gourmetEthyleneDisplayCapPpm(target);
+
+  const highThreshold = gourmetEthyleneHighRawThresholdPpm(target);
+  if (raw >= highThreshold) {
+    return gourmetEthyleneHighPlateauPpm(target);
+  }
+
+  const softCap = gourmetEthyleneDisplayCapPpm(target);
   const scaled = target + (raw - target) * GOURMET_ETHYLENE_DISPLAY_CAP_RATIO;
-  return Number(Math.min(scaled, cap).toFixed(2));
+  return Number(Math.min(scaled, softCap).toFixed(2));
 }
 
 function readLsInt(key: string): number {
