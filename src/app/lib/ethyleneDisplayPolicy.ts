@@ -292,8 +292,10 @@ export function applyEthyleneDisplayPolicyToHistory(
   });
 
   const idleEligible: boolean[] = [];
+  const timestampsMs: number[] = [];
   const modulated = points.map((p) => {
     const tsMs = new Date(p.timestamp).getTime();
+    timestampsMs.push(Number.isFinite(tsMs) ? tsMs : NaN);
     if (!Number.isFinite(tsMs)) {
       idleEligible.push(true);
       return resolveIdleEthyleneDisplayPpmForClient(p.ethylene);
@@ -305,6 +307,7 @@ export function applyEthyleneDisplayPolicyToHistory(
 
   const withoutIdleSpikes = sanitizeIdleEthyleneAnomalies(modulated, {
     eligible: idleEligible,
+    timestampsMs,
   });
   const smoothed = smoothFilteredEthyleneHistory(withoutIdleSpikes);
 

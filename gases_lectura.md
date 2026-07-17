@@ -205,6 +205,12 @@ Implementado (v2 — R1 + R2 + R5):
 
 Pendiente si aún escapan: R3, R4, R6, R7.
 
+Implementado (v3 — ver `estrateia_lectura_gas_cliente.md`):
+
+- **E1** isla por duración ≤ 12 min (`timestampsMs`)
+- **E2** colapso de ráfagas Δt ≤ 25 s
+- Cableado de timestamps en `applyEthyleneDisplayPolicyToHistory`
+
 ---
 
 ## Observación post-despliegue (gráfica 12 h)
