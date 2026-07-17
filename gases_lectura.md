@@ -189,8 +189,133 @@ function sanitizeIdleEthyleneAnomalies(values):
 
 ## Estado de implementación
 
-Implementado:
+Implementado (v1):
 
 - `src/app/lib/ethyleneIdleAnomalySanitize.ts` → `sanitizeIdleEthyleneAnomalies`
 - Cableado en `applyEthyleneDisplayPolicyToHistory` (`ethyleneDisplayPolicy.ts`), solo índices sin proceso (`eligible`)
 - Superadmin / vista sin filtrar: bypass (no entra a esta política)
+
+Implementado (v2 — R1 + R2 + R5):
+
+| Refuerzo | Cambio |
+|----------|--------|
+| **R1** | `IDLE_ETHYLENE_MAX_ISLAND = 5` |
+| **R2** | Baseline = mediana de últimos `K=5` valores válidos (`resolveIdleBaselineMedian`) |
+| **R5** | Si el tramo termina en salto ≥ `PENDING_END_JUMP_PPM` (50) sin recuperación → ocultar isla pendiente |
+
+Pendiente si aún escapan: R3, R4, R6, R7.
+
+---
+
+## Observación post-despliegue (gráfica 12 h)
+
+Captura de cliente (~00:48–12:27):
+
+| Tramo | Aspecto | ¿Filtrar? |
+|-------|---------|-----------|
+| ~02:00–06:30 | Diente de sierra ~90–105 ppm | **No** — típico de regulación con proceso/set activo |
+| ~06:30–09:30 | Bajada suave ~100 → ~20 ppm | **No** — tendencia real |
+| ~09:30–12:27 | Baseline ~20 ppm + **2 picos verticales a ~100 ppm** (~11:17–12:00) | **Sí** — misma firma esporádica (sube y vuelve) |
+
+Esos dos picos al final son exactamente el patrón v1 (ambient → ~100 → ambient). Si aún se ven en cliente, no es que “falte inventar valores”: o el filtro no corrió en esos puntos, o hay que **endurecer** v1.
+
+### Por qué pueden “escaparse” todavía
+
+1. **Vista superadmin / sin rebuild** — el crudo siempre muestra picos; hace falta rebuild del `app` y entrar como cliente (o “Ver como cliente”).
+2. **Ventana de proceso mal cerrada** — si el seguimiento/panel sigue “activo” en DB hasta después de las 11:xx, `eligible=false` y **v1 no toca** esos puntos (el regulador de proceso asume set; sin set real el cliente ve el crudo modulado o casi crudo).
+3. **Isla > 3 lecturas** — si el sensor se queda en ~100 durante 4–5 muestras (~5–8 min) antes de bajar, `MAX_ISLAND=3` deja pasar el pico.
+4. **Pico al borde del refresh** — opción A: sin lectura de recuperación aún, el pico sigue visible hasta el siguiente poll.
+5. **Baseline solo = punto anterior** — si hay un null o un micro-ruido justo antes, el salto relativo puede no cumplir el umbral (caso raro).
+
+---
+
+## Qué más podemos hacer (refuerzos v2 — solo sin proceso)
+
+Orden sugerido de impacto / riesgo:
+
+### R1 — Subir `MAX_ISLAND` (3 → 5)
+
+- Cubre picos que duran 4–5 lecturas (~5–8 min) y luego vuelven al ambient.
+- Riesgo bajo: una inyección real sin proceso casi nunca es un “rectángulo” de pocos minutos que vuelve solo al mismo baseline.
+
+### R2 — Baseline móvil (mediana de últimos K puntos estables)
+
+En lugar de `base = punto anterior` únicamente:
+
+```
+base = mediana(últimos K valores válidos del tramo idle), K = 5
+```
+
+Un spike se compara contra el **nivel reciente estable**, no contra un solo sample ruidoso. Mejora detección cuando hay huecos/`null` intercalados.
+
+### R3 — Detector simétrico por vecinos (Hampel / flancos bajos)
+
+Además de la isla con recuperación:
+
+```
+si value[i] ≥ mediana(vecinos ±W) + ABS_JUMP
+y ambos flancos (izq/der en ventana de tiempo, p.ej. 8 min) están cerca del ambient
+→ null
+```
+
+Atrapa el “palo vertical” aunque la isla se cuente mal (puntos faltantes, timestamps irregulares).
+
+### R4 — Tope de tasa de subida en idle (ppm / minuto)
+
+Sin proceso, el etileno **no debería saltar** 70+ ppm en un solo intervalo (~1–2 min).
+
+```
+si (v[i] - v[prev]) / Δt_min ≥ RATE_MAX   (p.ej. 40 ppm/min)
+y luego vuelve cerca del baseline en ≤ MAX_ISLAND
+→ null
+```
+
+Complementa el umbral absoluto: un salto 20→100 en 1 min es anómalo aunque la isla tenga forma rara.
+
+### R5 — Opción B suave al final de serie
+
+Si el último tramo es un salto ≥ 50 ppm sobre la mediana idle reciente y **aún no hay recuperación**:
+
+- ocultar provisionalmente esos puntos al cliente, **o**
+- no dibujar el último punto hasta confirmar (flota / punta de la 12 h).
+
+Evita el pico “pegado” al extremo derecho de la gráfica (muy visible). Riesgo: retrasar 1 sample un alza real; aceptable sin proceso.
+
+### R6 — Asegurar `eligible` (proceso realmente cerrado)
+
+Auditoría / fix de ventanas:
+
+- Si no hay fase ripening ni sesión Ripening/Manual con set, **forzar idle** aunque el row de seguimiento siga `status=active` por error.
+- No extender `endMs` a `Date.now()` de procesos “fantasma” sin set de etileno.
+
+Sin esto, R1–R5 no corren en horas donde la UI ya “se ve” idle.
+
+### R7 — Segunda pasada en `sanitizeEthylenePpmSeries` (gráfica)
+
+El saneamiento de chart ya suaviza picos cortos entre vecinos. Reforzar **solo etileno en vista cliente** con la misma lógica de isla (cinturón y tirantes): aunque falle la política de historial, la serie de Recharts no dibuja el palo.
+
+### R8 — No tocar el diente de sierra con proceso
+
+El tramo 02:00–06:30 **no** es anomalía de sensor idle: es regulación. Cualquier refuerzo debe seguir gated por `eligible` / sin target. Suavizar eso haría mentir al cliente sobre el proceso.
+
+---
+
+## Plan recomendado (siguientes pasos)
+
+1. Rebuild `app` y validar gráfica 12 h como cliente (baseline post-09:30 sin palos a 100).
+2. Si aún escapan: **R3 + R4**.
+3. En paralelo revisar **R6** si hay seguimientos “activos” sin set real.
+4. Opcional **R7** como red de seguridad en construcción de la 12 h.
+
+Constantes candidatas v2:
+
+| Constante | v1 | v2 propuesta |
+|-----------|----|--------------|
+| `MAX_ISLAND` | 3 | **5** |
+| `ABS_JUMP_PPM` | 25 | 25 (igual) |
+| `RETURN_TOL_PPM` | 20 | 20 (igual) |
+| `BASELINE_WINDOW_K` | 1 (prev) | **5** (mediana) |
+| `PENDING_END_JUMP_PPM` | — | **50** (opción B suave) |
+| `RATE_MAX_PPM_PER_MIN` | — | **40** (R4, si hace falta) |
+
+Criterio visual de éxito en esta gráfica: baseline post-09:30 **plano ~20 ppm**, sin palos a 100 entre 11:00 y 12:30; el sierra 02:00–06:30 se mantiene si hubo proceso.

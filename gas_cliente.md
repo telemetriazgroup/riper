@@ -8,7 +8,7 @@ Implementación principal: `src/app/lib/gourmetEthyleneDisplay.ts` → `modulate
 
 Histórico por hora: `src/app/lib/ethyleneHistoryPolicy.ts` → ventanas de proceso + `resolveClientEthyleneDisplayAtMs`.
 
-Sin proceso: además se ocultan picos esporádicos (sube y baja en 1–3 lecturas) — ver `gases_lectura.md` y `ethyleneIdleAnomalySanitize.ts`.
+Sin proceso: además se ocultan picos esporádicos (sube y baja en ≤5 lecturas; baseline mediana; pico pendiente al final de serie) — ver `gases_lectura.md` y `ethyleneIdleAnomalySanitize.ts`.
 
 ---
 
