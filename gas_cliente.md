@@ -8,6 +8,8 @@ Implementación principal: `src/app/lib/gourmetEthyleneDisplay.ts` → `modulate
 
 Histórico por hora: `src/app/lib/ethyleneHistoryPolicy.ts` → ventanas de proceso + `resolveClientEthyleneDisplayAtMs`.
 
+Sin proceso: además se ocultan picos esporádicos (sube y baja en 1–3 lecturas) — ver `gases_lectura.md` y `ethyleneIdleAnomalySanitize.ts`.
+
 ---
 
 ## Constantes dinámicas (setpoint `T`)

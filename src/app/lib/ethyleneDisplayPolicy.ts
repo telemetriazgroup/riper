@@ -6,8 +6,10 @@ import { getStoredUser } from '@/app/lib/auth';
 import {
   buildEthyleneProcessWindows,
   resolveClientEthyleneDisplayAtMs,
+  resolveEthyleneTargetAtMs,
   resolveIdleEthyleneDisplayPpmForClient,
 } from '@/app/lib/ethyleneHistoryPolicy';
+import { sanitizeIdleEthyleneAnomalies } from '@/app/lib/ethyleneIdleAnomalySanitize';
 import {
   applyGourmetFleetEthyleneZeroGuard,
   formatGourmetFleetEthyleneLabel,
@@ -289,15 +291,22 @@ export function applyEthyleneDisplayPolicyToHistory(
     device: opts.device,
   });
 
+  const idleEligible: boolean[] = [];
   const modulated = points.map((p) => {
     const tsMs = new Date(p.timestamp).getTime();
     if (!Number.isFinite(tsMs)) {
+      idleEligible.push(true);
       return resolveIdleEthyleneDisplayPpmForClient(p.ethylene);
     }
+    const hasProcess = resolveEthyleneTargetAtMs(tsMs, windows) != null;
+    idleEligible.push(!hasProcess);
     return resolveClientEthyleneDisplayAtMs(p.ethylene, tsMs, windows);
   });
 
-  const smoothed = smoothFilteredEthyleneHistory(modulated);
+  const withoutIdleSpikes = sanitizeIdleEthyleneAnomalies(modulated, {
+    eligible: idleEligible,
+  });
+  const smoothed = smoothFilteredEthyleneHistory(withoutIdleSpikes);
 
   return points.map((p, i) => ({
     ...p,
