@@ -5,8 +5,24 @@
 
 export const CHART_AVL_MAX_CFM = 200;
 
-/** campo_1 (etileno ppm): lecturas mayores no se grafican (telemetría errónea / fuera de rango operativo). */
-export const CHART_ETHYLENE_MAX_PPM = 200;
+/** campo_1 (etileno ppm): omitir lecturas absurdamente altas en gráfica (post-filtro cliente ≤ ~500). */
+export const CHART_ETHYLENE_MAX_PPM = 500;
+
+/** Dominio Y etileno: mínimo 160 (idle 150.1), escala con datos filtrados del cliente. */
+export function resolveEthyleneChartDomain(
+  values: (number | null | undefined)[],
+  opts?: { minTop?: number; cap?: number }
+): [number, number] {
+  const minTop = opts?.minTop ?? 160;
+  const cap = opts?.cap ?? CHART_ETHYLENE_MAX_PPM;
+  let maxVal = 0;
+  for (const v of values) {
+    if (v == null || !Number.isFinite(Number(v))) continue;
+    maxVal = Math.max(maxVal, Number(v));
+  }
+  const top = Math.min(cap, Math.max(minTop, Math.ceil(maxVal * 1.12)));
+  return [0, top];
+}
 
 export function chartNullIfZero(v: unknown): number | null {
   if (v == null || v === '') return null;
@@ -32,11 +48,15 @@ function median3(a: number, b: number, c: number): number {
  * picos que se alejan de vecinos inmediatos y vuelven al rango → reemplazo por tendencia local.
  * Ej. 100,102,202,102 → 100,102,102,102; pasa mediana 3 cuando el centro desentona.
  */
-export function sanitizeEthylenePpmSeries(values: (number | null | undefined)[]): (number | null)[] {
+export function sanitizeEthylenePpmSeries(
+  values: (number | null | undefined)[],
+  opts?: { maxPpm?: number }
+): (number | null)[] {
+  const maxPpm = opts?.maxPpm ?? CHART_ETHYLENE_MAX_PPM;
   const x: (number | null)[] = values.map((v) => {
     if (v == null || v === '' || !Number.isFinite(Number(v))) return null;
     const n = Number(v);
-    if (n > CHART_ETHYLENE_MAX_PPM) return null;
+    if (n > maxPpm) return null;
     return n;
   });
   const n = x.length;
@@ -169,7 +189,7 @@ const TEMP_KEYS_ZERO_NULL = ['set_point', 'return_air', 'temp_supply_1'] as cons
 /** Post-proceso filas del modal histórico (mismas claves que CHART_METRIC_KEYS + avl_raw). */
 export function postProcessHistoricalChartRows(
   rows: Record<string, unknown>[],
-  opts?: { nullZeroCo2O2Readings?: boolean }
+  opts?: { nullZeroCo2O2Readings?: boolean; ethyleneMaxPpm?: number }
 ): void {
   if (!rows.length) return;
   for (const row of rows) {
@@ -183,7 +203,9 @@ export function postProcessHistoricalChartRows(
     row.avl_pct = sanitizeAvlPctForChart(Number(row.avl_pct ?? NaN), Number.isFinite(rawAvl as number) ? rawAvl : null);
   }
 
-  const eth = sanitizeEthylenePpmSeries(rows.map((r) => r.ethylene as number | null));
+  const eth = sanitizeEthylenePpmSeries(rows.map((r) => r.ethylene as number | null), {
+    maxPpm: opts?.ethyleneMaxPpm,
+  });
   const co2 = sanitizeCo2PercentSeries(rows.map((r) => r.co2_reading as number | null));
   rows.forEach((r, i) => {
     r.ethylene = eth[i];
@@ -216,7 +238,8 @@ export function buildLast12hChartData(
     ethylene?: number | null;
     co2_reading?: number | null;
   }[],
-  convertTemp: (c: number) => number
+  convertTemp: (c: number) => number,
+  opts?: { ethyleneMaxPpm?: number }
 ): Last12hChartPoint[] {
   const rawTempC = history.map((h) => {
     const ret = h.return_air;
@@ -232,7 +255,7 @@ export function buildLast12hChartData(
   const ethRaw = history.map((h) => (h.ethylene == null ? null : Number(h.ethylene)));
   const co2Raw = history.map((h) => (h.co2_reading == null ? null : Number(h.co2_reading)));
 
-  const ethylene = sanitizeEthylenePpmSeries(ethRaw);
+  const ethylene = sanitizeEthylenePpmSeries(ethRaw, { maxPpm: opts?.ethyleneMaxPpm });
   const co2 = sanitizeCo2PercentSeries(co2Raw);
 
   return history.map((h, i) => {
@@ -269,7 +292,8 @@ export function buildThermoKingLast12hChartData(
     co2_reading?: number | null;
     o2_reading?: number | null;
   }[],
-  convertTemp: (c: number) => number
+  convertTemp: (c: number) => number,
+  opts?: { ethyleneMaxPpm?: number }
 ): ThermoKingLast12hChartPoint[] {
   const rawReturn = history.map((h) => {
     const ret = h.return_air;
@@ -288,7 +312,7 @@ export function buildThermoKingLast12hChartData(
   const co2Raw = history.map((h) => (h.co2_reading == null ? null : Number(h.co2_reading)));
   const o2Raw = history.map((h) => (h.o2_reading == null ? null : Number(h.o2_reading)));
 
-  const ethylene = sanitizeEthylenePpmSeries(ethRaw);
+  const ethylene = sanitizeEthylenePpmSeries(ethRaw, { maxPpm: opts?.ethyleneMaxPpm });
   const co2San = sanitizeCo2PercentSeries(co2Raw);
   const o2San = sanitizeCo2PercentSeries(o2Raw);
 

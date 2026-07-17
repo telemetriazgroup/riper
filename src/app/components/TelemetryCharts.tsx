@@ -12,6 +12,10 @@ import {
   type TelemetryDisplayContext,
 } from '@/app/lib/telemetryDisplayPolicy';
 import { isUnfilteredEthyleneViewer } from '@/app/lib/ethyleneDisplayPolicy';
+import { fetchRipeningProcesses } from '@/app/lib/ripeningProcessesApi';
+import { showsUnfilteredTelemetry } from '@/app/lib/telemetryViewPolicy';
+import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
+import useSWR from 'swr';
 import { fetchDeviceHistory } from '@/app/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { Button } from './ui/Button';
@@ -33,6 +37,7 @@ import {
   buildLast12hChartData,
   buildThermoKingLast12hChartData,
   postProcessHistoricalChartRows,
+  resolveEthyleneChartDomain,
 } from '@/app/lib/historySeriesSanitize';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 import { CHART_METRIC_KEYS, buildChartMetricLabels } from '@/app/lib/chartMetricLabels';
@@ -224,19 +229,34 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   const { device } = useDevice(deviceId || null);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
   const { session: panelSession } = useDeviceControlSession(deviceId);
-  const { sessions: controlSessions } = useControlSessionsList();
+  const { sessions: controlSessions } = useControlSessionsList(false);
+  const { data: ripeningProcesses = [] } = useSWR('ripening-processes-chart', () => fetchRipeningProcesses());
+
+  const trackingProcessesForDevice = useMemo(() => {
+    if (!deviceId) return [];
+    const id = String(deviceId).trim();
+    return ripeningProcesses.filter(
+      (p) => String((p.payload as { deviceId?: string })?.deviceId ?? '').trim() === id
+    );
+  }, [deviceId, ripeningProcesses]);
+
+  const chartEthyleneMaxPpm = useMemo(() => {
+    if (showsUnfilteredTelemetry({ viewAsClient })) return 1500;
+    return CHART_ETHYLENE_MAX_PPM;
+  }, [viewAsClient]);
 
   const telemetryPolicyCtx = useMemo((): TelemetryDisplayContext | null => {
     if (!deviceId) return null;
     return {
       deviceId,
       trackingProcess: activeTracking?.process ?? null,
+      trackingProcesses: trackingProcessesForDevice,
       panelActiveSession: panelSession?.status === 'active' ? panelSession : null,
       sessions: controlSessions,
       device: device ?? null,
       view: { viewAsClient },
     };
-  }, [deviceId, activeTracking, panelSession, controlSessions, device, viewAsClient]);
+  }, [deviceId, activeTracking, trackingProcessesForDevice, panelSession, controlSessions, device, viewAsClient]);
 
   const policyHistory = useMemo(() => {
     const raw = history ?? [];
@@ -246,13 +266,20 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
 
   const isTkCharts = isThermoKingSession();
   const dataClassic = useMemo(
-    () => buildLast12hChartData(policyHistory, convertTemp),
-    [policyHistory, convertTemp]
+    () => buildLast12hChartData(policyHistory, convertTemp, { ethyleneMaxPpm: chartEthyleneMaxPpm }),
+    [policyHistory, convertTemp, chartEthyleneMaxPpm]
   );
   const dataThermoKing = useMemo(
-    () => buildThermoKingLast12hChartData(policyHistory, convertTemp),
-    [policyHistory, convertTemp]
+    () => buildThermoKingLast12hChartData(policyHistory, convertTemp, { ethyleneMaxPpm: chartEthyleneMaxPpm }),
+    [policyHistory, convertTemp, chartEthyleneMaxPpm]
   );
+
+  const ethyleneChartDomain = useMemo((): [number, number] => {
+    const values = isTkCharts
+      ? dataThermoKing.map((d) => d.ethylene)
+      : dataClassic.map((d) => d.ethylene);
+    return resolveEthyleneChartDomain(values, { cap: chartEthyleneMaxPpm });
+  }, [isTkCharts, dataClassic, dataThermoKing, chartEthyleneMaxPpm]);
 
   if (isLoading) {
     return (
@@ -373,7 +400,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis
                         yAxisId="left"
-                        domain={[0, 250]}
+                        domain={ethyleneChartDomain}
                         stroke="#10b981"
                         fontSize={12}
                         tickLine={false}
@@ -520,7 +547,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                       <XAxis dataKey="time" stroke="#9ca3af" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis
                         yAxisId="left"
-                        domain={[0, 250]}
+                        domain={ethyleneChartDomain}
                         stroke="#10b981"
                         fontSize={12}
                         tickLine={false}
@@ -568,6 +595,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         onClose={() => setIsModalOpen(false)}
         deviceId={deviceId}
         telemetryPolicyCtx={telemetryPolicyCtx}
+        chartEthyleneMaxPpm={chartEthyleneMaxPpm}
         viewAsClient={viewAsClient}
         onViewAsClientChange={setViewAsClient}
         showViewAsClientToggle={showViewAsClientToggle}
@@ -577,6 +605,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         onClose={() => setIsTableModalOpen(false)}
         deviceId={deviceId}
         telemetryPolicyCtx={telemetryPolicyCtx}
+        chartEthyleneMaxPpm={chartEthyleneMaxPpm}
         viewAsClient={viewAsClient}
         onViewAsClientChange={setViewAsClient}
         showViewAsClientToggle={showViewAsClientToggle}
@@ -592,6 +621,7 @@ const HistoricalDataModal = ({
   onClose,
   deviceId,
   telemetryPolicyCtx,
+  chartEthyleneMaxPpm,
   viewAsClient,
   onViewAsClientChange,
   showViewAsClientToggle,
@@ -600,6 +630,7 @@ const HistoricalDataModal = ({
   onClose: () => void;
   deviceId?: string;
   telemetryPolicyCtx?: TelemetryDisplayContext | null;
+  chartEthyleneMaxPpm?: number;
   viewAsClient?: boolean;
   onViewAsClientChange?: (v: boolean) => void;
   showViewAsClientToggle?: boolean;
@@ -716,7 +747,10 @@ const HistoricalDataModal = ({
         row.avl_raw = h.avl_raw ?? null;
         return row;
       });
-      postProcessHistoricalChartRows(data, { nullZeroCo2O2Readings: true });
+      postProcessHistoricalChartRows(data, {
+        nullZeroCo2O2Readings: true,
+        ethyleneMaxPpm: chartEthyleneMaxPpm,
+      });
       setChartData(data);
       setZoomRange({ startIndex: 0, endIndex: data.length - 1 });
     } catch (e) {
@@ -1484,6 +1518,7 @@ const HistoricalDataTableModal = ({
   onClose,
   deviceId,
   telemetryPolicyCtx,
+  chartEthyleneMaxPpm,
   viewAsClient,
   onViewAsClientChange,
   showViewAsClientToggle,
@@ -1492,6 +1527,7 @@ const HistoricalDataTableModal = ({
   onClose: () => void;
   deviceId?: string;
   telemetryPolicyCtx?: TelemetryDisplayContext | null;
+  chartEthyleneMaxPpm?: number;
   viewAsClient?: boolean;
   onViewAsClientChange?: (v: boolean) => void;
   showViewAsClientToggle?: boolean;
@@ -1545,7 +1581,10 @@ const HistoricalDataTableModal = ({
         row.avl_raw = h.avl_raw ?? null;
         return row;
       });
-      postProcessHistoricalChartRows(data);
+      postProcessHistoricalChartRows(data, {
+        nullZeroCo2O2Readings: true,
+        ethyleneMaxPpm: chartEthyleneMaxPpm,
+      });
       const forDisplay = data.map((row: any) => {
         const next = { ...row };
         tempKeysTable.forEach((k) => {

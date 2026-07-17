@@ -4,6 +4,11 @@ import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi'
 import type { RipeningProcessRow } from '@/app/lib/ripeningProcessesApi';
 import { getStoredUser } from '@/app/lib/auth';
 import {
+  buildEthyleneProcessWindows,
+  resolveClientEthyleneDisplayAtMs,
+  resolveIdleEthyleneDisplayPpmForClient,
+} from '@/app/lib/ethyleneHistoryPolicy';
+import {
   applyGourmetFleetEthyleneZeroGuard,
   formatGourmetFleetEthyleneLabel,
   getCachedGourmetProgrammedEthylene,
@@ -15,7 +20,11 @@ import { showsUnfilteredTelemetry, type TelemetryViewOptions } from '@/app/lib/t
 
 export const UNFILTERED_ETHYLENE_VIEWER_EMAIL = 'superadmin@riper.local';
 
-/** Sin proceso activo: solo mostrar etileno si lectura cruda < 40 ppm. */
+/** Sin proceso activo en flota instantánea: real hasta 150 ppm; >150 → 150.1. */
+export const ETHYLENE_IDLE_DISPLAY_MAX_REAL_PPM = 150;
+export const ETHYLENE_IDLE_DISPLAY_CAP_PPM = 150.1;
+
+/** @deprecated usar resolveIdleEthyleneDisplayPpmForClient */
 export const ETHYLENE_IDLE_DISPLAY_MAX_PPM = 40;
 
 /** Solo esta cuenta ve etileno crudo en flota y gráficas. */
@@ -84,10 +93,7 @@ export function shouldShowEthyleneToUser(opts: {
 }
 
 function resolveIdleEthyleneDisplayPpm(raw: number | null | undefined): number | null {
-  if (raw == null || !Number.isFinite(Number(raw))) return null;
-  const n = Number(raw);
-  if (n <= 0 || n >= ETHYLENE_IDLE_DISPLAY_MAX_PPM) return null;
-  return Number(n.toFixed(2));
+  return resolveIdleEthyleneDisplayPpmForClient(raw);
 }
 
 export function resolveEthyleneDisplayTargetPpm(opts: {
@@ -197,6 +203,8 @@ export function formatFleetEthyleneLabel(
 export type EthyleneDisplayPolicyContext = {
   deviceId: string;
   trackingProcess?: RipeningProcessRow | null;
+  /** Historial de seguimientos del equipo (gráficas / histórico). */
+  trackingProcesses?: RipeningProcessRow[] | null;
   panelActiveSession?: DeviceControlSessionRow | null;
   sessions?: DeviceControlSessionRow[] | null;
   device?: Device | null;
@@ -272,24 +280,23 @@ export function applyEthyleneDisplayPolicyToHistory(
   if (!points.length) return points;
   if (showsUnfilteredTelemetry(opts.view)) return points;
 
-  if (
-    !hasActiveEthyleneProcessContext({
-      trackingProcess: opts.trackingProcess,
-      panelActiveSession: opts.panelActiveSession,
-    })
-  ) {
-    return points.map((p) => ({
-      ...p,
-      ethylene: resolveIdleEthyleneDisplayPpm(p.ethylene),
-    }));
-  }
+  const windows = buildEthyleneProcessWindows({
+    deviceId: opts.deviceId,
+    trackingProcesses:
+      opts.trackingProcesses ??
+      (opts.trackingProcess ? [opts.trackingProcess] : []),
+    controlSessions: opts.sessions,
+    device: opts.device,
+  });
 
-  const target = resolveEthyleneDisplayTargetPpm(opts);
-  if (target == null || !Number.isFinite(target) || target <= 0) {
-    return points.map((p) => ({ ...p, ethylene: null }));
-  }
+  const modulated = points.map((p) => {
+    const tsMs = new Date(p.timestamp).getTime();
+    if (!Number.isFinite(tsMs)) {
+      return resolveIdleEthyleneDisplayPpmForClient(p.ethylene);
+    }
+    return resolveClientEthyleneDisplayAtMs(p.ethylene, tsMs, windows);
+  });
 
-  const modulated = points.map((p) => modulateGourmetEthyleneDisplayPpm(p.ethylene, target));
   const smoothed = smoothFilteredEthyleneHistory(modulated);
 
   return points.map((p, i) => ({
