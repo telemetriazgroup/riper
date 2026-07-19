@@ -3,6 +3,8 @@ demo-flota@riper.local
 Contraseña
 DemoFlota2026! (o FLEET_DEMO_PASSWORD en el entorno)
 
+demo-madurador@riper.local / madurador  (empresas Madurador 6001 + 7001)
+
 user : gourmettrading@ztrack.app  
 pass : @gourmet2026!
 http://161.132.53.51:18080/
@@ -32,7 +34,8 @@ greenyard2026!
 `, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`)
 
 - Por defecto (Docker / `.env`): `SUPERUSER_EMAIL` / `SUPERUSER_PASSWORD` (ej. `superadmin@riper.local` / `changeme123`).
-- **Superadmin Madurador**: la API fusiona listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`), empresa pin **3001** con IMEI `PRUEBA_CA000001` si aplica (`SUPERUSER_DEVICE_IMEI`, `*` = todos de esa empresa), **empresa Greenyard** (`SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR`, default `4001`; `NONE` o `0` para no cargar) y **empresa 5001** (`SUPERUSER_MADURADOR_5001_IDENTIFICADOR`, default `5001`; `NONE` o `0` para no cargar). Solo el JWT con rol `superadmin` (p. ej. `superadmin@riper.local`) recibe esa fusión.
+- **Superadmin Madurador**: la API fusiona listados upstream: empresa **amplia** (`SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR`, default `2001`), empresa pin **3001** con IMEI `PRUEBA_CA000001` si aplica (`SUPERUSER_DEVICE_IMEI`, `*` = todos de esa empresa), **empresa Greenyard** (`SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR`, default `4001`; `NONE` o `0` para no cargar), **empresa 5001** (`SUPERUSER_MADURADOR_5001_IDENTIFICADOR`, default `5001`) y **empresas extra 6001+7001** (`SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES`, default `6001,7001`; `NONE` para no cargar). Solo el JWT con rol `superadmin` (p. ej. `superadmin@riper.local`) recibe esa fusión.
+- **Demo Madurador**: `demo-madurador@riper.local` / `madurador` (o `DEMO_MADURADOR_PASSWORD`). Rol **admin**. Ve equipos de empresas upstream **6001** y **7001** (lista completa).
 - **ThermoKing (demo atmósfera controlada)** sembrado en DB: usuario `thermoking@riper.local`, contraseña `thermoking2026!` (o `THERMOKING_PASSWORD`), `identificador` empresa `3001` y la API sirve solo el IMEI `THERMOKING_DEVICE_IMEI` (por defecto `PRUEBA_CA000001`). En el cliente, **Seguimiento** lista solo procesos de ese IMEI y **Recetas** muestra únicamente la(s) receta(s) aplicada(s) en dichos seguimientos (`VITE_THERMOKING_DEVICE_IMEI` debe coincidir).
 - **Greenyard** (`identificador` [4001](http://161.132.53.51:9051/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=4001)): usuario `greenyard@riper.local`, contraseña `greenyard2026!` (o `GREENYARD_PASSWORD`), rol **admin**. Solo ve equipos con IMEI `NEWY2001` y `NEWY1001` (`GREENYARD_DEVICE_IMEIS` / `VITE_GREENYARD_DEVICE_IMEIS`). **Control de dispositivos** y **Seguimiento** filtran por esos IMEI. **Recetas**: las tres estándar (`is_system`) más las creadas bajo su cuenta; puede crear recetas. En detalle de equipo, el panel de control abre la pestaña del proceso en curso (sesión panel → `procesoApi` → telemetría). Opcionalmente, `GREENYARD_FILTER_NORMAL_OPERATION=1` restringe a compresión `normal` sin alarmas activas.
 - **Gourmet Trading** (`gourmettrading@ztrack.app`, contraseña `@gourmet2026!` o `GOURMET_TRADING_PASSWORD='@gourmet2026!'` entre comillas en `.env`): rol **admin**. Upstream identificador **5001**; solo IMEI `867856038562796` y `866262036100104` (`GOURMET_TRADING_DEVICE_IMEIS`). **Control de dispositivos** y **Seguimiento** filtran por esos IMEI. **Recetas**: las tres estándar más las creadas bajo su cuenta; puede crear recetas, seguimientos y procesos manuales en detalle de equipo.

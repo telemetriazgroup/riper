@@ -12,6 +12,7 @@ import {
   seedUltraorganicsTeamUsers,
   seedThermoKingUser,
   seedGreenyardUser,
+  seedDemoMaduradorUser,
 } from './seed.js';
 import { seedCatalog } from './seedCatalog.js';
 import { seedAlarmCodes } from './seedAlarmCodes.js';
@@ -63,6 +64,7 @@ async function main() {
   await seedUltraorganicsTeamUsers();
   await seedThermoKingUser();
   await seedGreenyardUser();
+  await seedDemoMaduradorUser();
   await seedCatalog();
   await seedAlarmCodes();
 

@@ -9,7 +9,16 @@ import type {
 import type { HistoryPoint, FetchHistoryOptions } from '@/app/lib/api';
 import { MADURADOR_DEMO_API_URL, RIPENER_API_URL } from '@/app/config';
 import { authHeaders, getStoredUser } from '@/app/lib/auth';
-import { isFleetDemoSession, isUltraorganicsSession, getUltraorganicsPanelImeis, getThermoKingPinnedImei, isThermoKingSession, isGreenyardSession, getGreenyardPinnedImeis } from '@/app/lib/fleetDemo';
+import {
+  isFleetDemoSession,
+  isDemoMaduradorSession,
+  isUltraorganicsSession,
+  getUltraorganicsPanelImeis,
+  getThermoKingPinnedImei,
+  isThermoKingSession,
+  isGreenyardSession,
+  getGreenyardPinnedImeis,
+} from '@/app/lib/fleetDemo';
 import { isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
 import { getGourmetMaduradorFleetImeis } from '@/app/lib/gourmetTunnelFleet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
@@ -54,6 +63,7 @@ export function shouldUseMaduradorDispositivosApi(): boolean {
     isUltraorganicsSession() ||
     isGreenyardSession() ||
     isFleetDemoSession() ||
+    isDemoMaduradorSession() ||
     (isGourmetSession() && isGourmetMaduradorFleetSession())
   );
 }
@@ -528,7 +538,8 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     const allow = new Set(getGreenyardPinnedImeis());
     return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
   }
-  if (isMaduradorSuperadminFullList()) {
+  /** Demo Madurador / superadmin: lista ya fusionada en API (6001+7001, etc.) sin filtro por sufijo. */
+  if (isDemoMaduradorSession() || isMaduradorSuperadminFullList()) {
     return withSim;
   }
   return filterDevicesToIdentificadorImeiSuffix(withSim, getStoredUser()?.identificador);
@@ -841,6 +852,7 @@ export async function fetchMaduradorRangoHistoryForImei(
 export function shouldUseMaduradorRangoHistory(): boolean {
   return (
     isFleetDemoSession() ||
+    isDemoMaduradorSession() ||
     hasMaduradorIdentificador() ||
     isUltraorganicsSession() ||
     isThermoKingSession() ||

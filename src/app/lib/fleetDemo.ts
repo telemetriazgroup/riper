@@ -4,6 +4,19 @@ import { isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
 /** Cuenta demo: datos desde API Madurador (ver `maduradorFleetDirect.ts`). */
 export const FLEET_DEMO_EMAIL = 'demo-flota@riper.local';
 
+/** Demo Madurador: empresas upstream 6001 + 7001 (lista completa vía /madurador/dispositivos). */
+export const DEMO_MADURADOR_EMAIL = 'demo-madurador@riper.local';
+
+export function isDemoMaduradorSession(): boolean {
+  const email = (getStoredUser()?.email ?? '').trim().toLowerCase();
+  const envEmail =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_DEMO_MADURADOR_EMAIL?: string } }).env
+        ?.VITE_DEMO_MADURADOR_EMAIL)) ||
+    DEMO_MADURADOR_EMAIL;
+  return email === String(envEmail).trim().toLowerCase();
+}
+
 /** Flota ULTRAORGANICS: misma carga vía `identificador` (GET /api/v1/madurador/dispositivos → upstream listar_dispositivos…). */
 export const ULTRAORGANICS_DEMO_EMAIL = 'ultraorganics@riper.local';
 

@@ -246,6 +246,49 @@ export async function seedGreenyardUser() {
   );
 }
 
+/**
+ * Demo Madurador: empresas upstream 6001 + 7001 (lista completa vía email en /madurador/dispositivos).
+ * Email `demo-madurador@riper.local`, contraseña `madurador` (o DEMO_MADURADOR_PASSWORD).
+ */
+export async function seedDemoMaduradorUser() {
+  const email = String(process.env.DEMO_MADURADOR_EMAIL || 'demo-madurador@riper.local')
+    .trim()
+    .toLowerCase();
+  const password = process.env.DEMO_MADURADOR_PASSWORD || 'madurador';
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'admin', $3, 'Demo Madurador', false, true, '6001')`,
+      ['Demo Madurador', email, hash]
+    );
+    console.log(`[seed] Demo Madurador user: ${email} (empresas 6001+7001; set DEMO_MADURADOR_PASSWORD in production)`);
+  } else if (process.env.DEMO_MADURADOR_SYNC_PASSWORD === '1' || /^true$/i.test(String(process.env.DEMO_MADURADOR_SYNC_PASSWORD || '').trim())) {
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `UPDATE app_users SET password_hash = $1, active = true, updated_at = now()
+       WHERE lower(email) = $2 AND deleted_at IS NULL`,
+      [hash, email]
+    );
+    console.log(`[seed] Demo Madurador password synced (${email})`);
+  }
+
+  await pool.query(
+    `UPDATE app_users
+        SET identificador = '6001',
+            role = 'admin',
+            company = 'Demo Madurador',
+            active = true,
+            updated_at = now()
+      WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+}
+
 /** ThermoKing: empresa 3001, un solo IMEI (`THERMOKING_DEVICE_IMEI`, por defecto PRUEBA_CA000001). Contraseña vía THERMOKING_PASSWORD. */
 export async function seedThermoKingUser() {
   const email = String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();

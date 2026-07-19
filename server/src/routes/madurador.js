@@ -18,6 +18,10 @@ import {
   ultraorganicsHumidityImei,
   packageUltraorganicsFleetRow,
 } from '../ultraorganicsFleet.js';
+import {
+  isDemoMaduradorFleetEmail,
+  demoMaduradorEmpresaIdentificadores,
+} from '../demoMaduradorFleet.js';
 
 export const maduradorRouter = express.Router();
 
@@ -65,6 +69,20 @@ function superadminEmpresa5001Identificador() {
   const s = raw != null ? String(raw).trim() : '5001';
   if (!s || s.toUpperCase() === 'NONE' || s === '0') return '';
   return s;
+}
+
+/**
+ * Empresas extra en fusión superadmin (default 6001,7001 — misma flota que demo-madurador).
+ * `SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES=NONE` → no cargar.
+ */
+function superadminExtraEmpresaIdentificadores() {
+  const raw = process.env.SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES;
+  const s = raw != null ? String(raw).trim() : '6001,7001';
+  if (!s || s.toUpperCase() === 'NONE') return [];
+  return s
+    .split(/[,;\s]+/)
+    .map((x) => String(x || '').trim())
+    .filter((x) => x && x.toUpperCase() !== 'NONE' && x !== '0');
 }
 
 /** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
@@ -247,9 +265,38 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
           console.error('[madurador] superadmin empresa 5001 upstream failed', id5001);
         } else {
           merged = mergeDispositivosRows(merged, list5001);
+          superadminExtraIds.add(id5001);
         }
       }
 
+      for (const extraId of superadminExtraEmpresaIdentificadores()) {
+        if (superadminExtraIds.has(extraId)) continue;
+        const listExtra = await fetchMaduradorDispositivosList(base, extraId, ctrl);
+        if (listExtra === null) {
+          console.error('[madurador] superadmin empresa extra upstream failed', extraId);
+        } else {
+          merged = mergeDispositivosRows(merged, listExtra);
+          superadminExtraIds.add(extraId);
+        }
+      }
+
+      return res.json({ data: merged });
+    }
+
+    if (isDemoMaduradorFleetEmail(email)) {
+      const idents = demoMaduradorEmpresaIdentificadores();
+      if (!idents.length) {
+        return res.json({ data: [] });
+      }
+      let merged = [];
+      for (const id of idents) {
+        const list = await fetchMaduradorDispositivosList(base, id, ctrl);
+        if (list === null) {
+          console.error('[madurador] demo-madurador upstream failed', id);
+          continue;
+        }
+        merged = mergeDispositivosRows(merged, list);
+      }
       return res.json({ data: merged });
     }
 

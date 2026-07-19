@@ -163,7 +163,8 @@ Cliente: `src/app/lib/alarmCodesApi.ts`
 
 **Comportamiento por cuenta:**
 
-- **superadmin**: fusiona empresas upstream `2001`, `3001` (pin IMEI), `4001` (Greenyard), `5001` (Gourmet), etc.
+- **superadmin**: fusiona empresas upstream `2001`, `3001` (pin IMEI), `4001` (Greenyard), `5001` (Gourmet), `6001`, `7001`, etc.
+- **demo-madurador@…**: empresas `6001` + `7001` (lista completa)
 - **ultraorganics@…**: identificadores `1001`, `2001`, `3001`; empaqueta panel MEX1001/2001/3001
 - **thermoking@…**: empresa `3001`, IMEI pin
 - **greenyard@…**: empresa `4001`, IMEI `NEWY2001`, `NEWY1001`
@@ -440,6 +441,9 @@ Cuenta demo flota (identificador 2001)
 | `SUPERUSER_MADURADOR_WIDE_EMPRESA_IDENTIFICADOR` | API | Default `2001` |
 | `SUPERUSER_MADURADOR_GREENYARD_IDENTIFICADOR` | API | Default `4001` |
 | `SUPERUSER_MADURADOR_5001_IDENTIFICADOR` | API | Default `5001` |
+| `SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES` | API | Default `6001,7001` |
+| `DEMO_MADURADOR_EMAIL` / `DEMO_MADURADOR_PASSWORD` | API | Default `demo-madurador@riper.local` / `madurador` |
+| `DEMO_MADURADOR_EMPRESA_IDENTIFICADORES` | API | Default `6001,7001` |
 | `GREENYARD_DEVICE_IMEIS` | API | Default `NEWY2001,NEWY1001` |
 | `GOURMET_TRADING_DEVICE_IMEIS` | API | IMEI flota Gourmet |
 | `VITE_RIPENER_API_URL` | Front | Base API Ripener |
