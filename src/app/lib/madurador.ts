@@ -19,6 +19,7 @@ import {
   isGreenyardSession,
   getGreenyardPinnedImeis,
 } from '@/app/lib/fleetDemo';
+import { holdCriticalTempsAgainstZeroGlitch } from '@/app/lib/telemetrySanity';
 import { isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
 import { getGourmetMaduradorFleetImeis } from '@/app/lib/gourmetTunnelFleet';
 import { getMaduradorListCache, MADURADOR_LIST_TTL_MS, setMaduradorListCache } from '@/app/lib/maduradorCache';
@@ -356,22 +357,32 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const power_state = resolvePowerState(flat, rawPs);
 
   const setPointNested = nestedValor(row.set_point);
-  const set_point =
-    inRange(toNum(flat.set_point ?? setPointNested), -40, 40) ?? 18;
+  const set_point_raw = inRange(toNum(flat.set_point ?? setPointNested), -40, 40);
+  const temp_supply_raw = inRange(toNum(flat.temp_supply_1), -40, 120);
+  const return_air_raw = inRange(toNum(flat.return_air), -40, 120);
+  const evap_raw = inRange(toNum(flat.evaporation_coil), -60, 80);
+
+  const held = holdCriticalTempsAgainstZeroGlitch(imei, {
+    set_point: set_point_raw,
+    temp_supply_1: temp_supply_raw,
+    return_air: return_air_raw,
+    evaporation_coil: evap_raw,
+  });
+
+  const set_point = held.set_point ?? 18;
+  const temp_supply_1 = held.temp_supply_1 ?? 0;
+  const return_air = held.return_air ?? 0;
+  const evap = held.evaporation_coil ?? 0;
 
   const humiditySpNested = nestedValor(row.humidity_set_point);
   const humidity_set_point = inRange(toNum(flat.humidity_set_point ?? humiditySpNested), 0, 100);
 
-  const temp_supply_1 = inRange(toNum(flat.temp_supply_1), -40, 120) ?? 0;
-  const return_air = inRange(toNum(flat.return_air), -40, 120) ?? 0;
   const relHum = sanitizeHumidity(flat.relative_humidity);
   const humidityVal = relHum ?? 0;
 
   const ethylene = inRange(toNum(flat.campo_1), 0, 500);
   const co2 = inRange(toNum(flat.co2_reading), 0, 100);
   const o2 = inRange(toNum(flat.o2_reading), 0, 100);
-
-  const evap = inRange(toNum(flat.evaporation_coil), -60, 80) ?? 0;
   const cond = inRange(toNum(flat.condensation_coil), -20, 90) ?? 0;
   const amb = inRange(toNum(flat.ambient_air), -40, 60) ?? 0;
 

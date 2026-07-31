@@ -7,6 +7,7 @@ import {
   ultraorganicsUpstreamIdentificadores,
 } from './ultraorganicsFleet.js';
 import { maduradorApiBase } from './tunelControlClient.js';
+import { sanitizeMaduradorRowAgainstZeroGlitch } from './telemetrySanity.js';
 
 const dispositivosListCache = new Map();
 const DISPOSITIVOS_LIST_CACHE_MS = 20_000;
@@ -109,7 +110,10 @@ export async function fetchDeviceRowByImei(imei, identificador = gourmetTradingE
       const row =
         list.find((r) => rowImeiFromMaduradorRow(r) === tryWant) ??
         list.find((r) => rowImeiFromMaduradorRow(r).toLowerCase() === wantLower);
-      if (row) return row;
+      if (row) {
+        const { row: sanitized } = sanitizeMaduradorRowAgainstZeroGlitch(row, tryWant);
+        return sanitized;
+      }
     }
   }
   return null;

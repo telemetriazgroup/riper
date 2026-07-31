@@ -23,6 +23,12 @@ import { isRipeningCo2Ventilation220Enabled } from './controlAutomationConfig.js
 import { controlParamNumber, normalizeControlProcessParams, parseSessionParams, effectiveSessionParams } from './controlProcessParams.js';
 import { isAutomatedControlDeviceId, resolveProcessControlAdapter } from './processControlAdapter.js';
 import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
+import { sanitizeMaduradorRowAgainstZeroGlitch } from './telemetrySanity.js';
+import { fetchUltimoControl } from './ultimoControlClient.js';
+import {
+  evaluateCoolingDecision,
+  isCoolingDynamicLogicEnabled,
+} from './coolingControlLogic.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
@@ -158,13 +164,17 @@ async function fetchUnitRow(ctx, unitId) {
   if (!row && (adapter.fleet === 'ultraorganics' || adapter.fleet === 'greenyard')) {
     warnTelemetryNotFoundOnce(adapter.fleet, unitId, ident);
   }
-  return row;
+  if (!row) return null;
+  const { row: sanitized } = sanitizeMaduradorRowAgainstZeroGlitch(row, unitId);
+  return sanitized;
 }
 
 function commandImeis(ctx, tipo) {
   const adapter = adapterFor(ctx);
   if (adapter?.commandImeis) return adapter.commandImeis(ctx.device_id, tipo);
-  if (Number(tipo) === 1 || Number(tipo) === 6 || Number(tipo) === 10) return fanOutUnits(ctx);
+  if (Number(tipo) === 1 || Number(tipo) === 6 || Number(tipo) === 8 || Number(tipo) === 10) {
+    return fanOutUnits(ctx);
+  }
   return [sensorUnit(ctx)];
 }
 
@@ -999,11 +1009,145 @@ async function tickRipening(ctx, params, auto) {
 }
 
 async function tickCooling(ctx, params, auto) {
-  const temp = await ensureTemperature(ctx, params, auto, 'Cooling', { allowSkipAfterMaxAttempts: true });
+  if (!isCoolingDynamicLogicEnabled()) {
+    const temp = await ensureTemperature(ctx, params, auto, 'Cooling', {
+      allowSkipAfterMaxAttempts: true,
+    });
+    await patchAutomation(ctx, () => ({
+      ...temp.auto,
+      nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
+      newEvents: temp.events,
+    }));
+    return;
+  }
+
+  const objetivo = controlParamNumber(params, 'setPoint', 'set_point');
+  if (objetivo == null) {
+    await patchAutomation(ctx, () => ({
+      ...auto,
+      nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
+      newEvents: [{ action: 'cooling_skip', reason: 'missing_objetivo' }],
+    }));
+    return;
+  }
+
+  const imei = sensorUnit(ctx);
+  const row = await fetchUnitRow(ctx, imei);
+  const setPoint = readTelemetryField(row, 'set_point');
+  const returnAir = readTelemetryField(row, 'return_air');
+  const tempSupply = readTelemetryField(row, 'temp_supply_1');
+  const evaporationCoil = readTelemetryField(row, 'evaporation_coil');
+  const cargo1 = readTelemetryField(row, 'cargo_1_temp');
+  const cargo2 = readTelemetryField(row, 'cargo_2_temp');
+  const cargo3 = readTelemetryField(row, 'cargo_3_temp');
+  const cargo4 = readTelemetryField(row, 'cargo_4_temp');
+
+  const ultimoControl = await fetchUltimoControl(imei);
+  const decision = evaluateCoolingDecision({
+    objetivo,
+    setPoint,
+    returnAir,
+    tempSupply,
+    evaporationCoil,
+    cargo1,
+    cargo2,
+    cargo3,
+    cargo4,
+    ultimoControl,
+    localLastSetAtMs: auto.coolingLastSetAtMs ?? null,
+    localLastDefrostAtMs: auto.coolingLastDefrostAtMs ?? null,
+    lastFingerprint: auto.coolingLastFingerprint ?? null,
+  });
+
+  const events = [
+    {
+      action: 'cooling_eval',
+      imei,
+      decision: decision.action,
+      reason: decision.reason,
+      targetC: decision.targetC ?? null,
+      ...decision.meta,
+    },
+  ];
+
+  let nextAuto = {
+    ...auto,
+    coolingLastFingerprint: decision.meta?.fingerprint ?? auto.coolingLastFingerprint,
+  };
+
+  const adapter = adapterFor(ctx);
+  if (decision.action === 'set_temperature' && decision.targetC != null && adapter) {
+    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, decision.targetC);
+    events.push({
+      action: 'cooling_setpoint',
+      target: decision.targetC,
+      reason: decision.reason,
+      urls,
+      ...decision.meta,
+    });
+    nextAuto = {
+      ...nextAuto,
+      coolingLastSetAtMs: Date.now(),
+      nextActionAt: msFromNow(TEMP_VERIFY_MS),
+    };
+  } else if (decision.action === 'defrost' && adapter) {
+    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 8, 1);
+    events.push({
+      action: 'cooling_defrost',
+      reason: decision.reason,
+      urls,
+      ...decision.meta,
+    });
+    nextAuto = {
+      ...nextAuto,
+      coolingLastDefrostAtMs: Date.now(),
+      nextActionAt: msFromNow(TEMP_VERIFY_MS),
+    };
+  } else {
+    nextAuto = {
+      ...nextAuto,
+      nextActionAt: msFromNow(60 * 1000),
+    };
+  }
+
+  // Snapshot de promedio interno cuando set ≈ objetivo (trazabilidad 30 min).
+  if (
+    decision.meta?.internalAvg != null &&
+    setPoint != null &&
+    Math.abs(setPoint - objetivo) <= 0.35 &&
+    !auto.coolingCargoSnapshotAt
+  ) {
+    nextAuto = {
+      ...nextAuto,
+      coolingCargoSnapshotAt: nowIso(),
+      coolingCargoSnapshotAvg: decision.meta.internalAvg,
+    };
+    events.push({
+      action: 'cooling_cargo_snapshot',
+      internalAvg: decision.meta.internalAvg,
+      objetivo,
+    });
+  } else if (
+    auto.coolingCargoSnapshotAt &&
+    !auto.coolingCargoSnapshot30At &&
+    Date.now() - new Date(auto.coolingCargoSnapshotAt).getTime() >= 30 * 60 * 1000
+  ) {
+    nextAuto = {
+      ...nextAuto,
+      coolingCargoSnapshot30At: nowIso(),
+      coolingCargoSnapshot30Avg: decision.meta?.internalAvg ?? null,
+    };
+    events.push({
+      action: 'cooling_cargo_snapshot_30m',
+      internalAvg: decision.meta?.internalAvg ?? null,
+      previousAvg: auto.coolingCargoSnapshotAvg ?? null,
+      objetivo,
+    });
+  }
+
   await patchAutomation(ctx, () => ({
-    ...temp.auto,
-    nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
-    newEvents: temp.events,
+    ...nextAuto,
+    newEvents: events,
   }));
 }
 

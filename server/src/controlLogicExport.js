@@ -73,6 +73,7 @@ const COMMAND_TYPES = [
   { tipo: 3, name: 'co2_limit', datoFormat: 'one_decimal', description: 'Límite / objetivo CO₂ (%).' },
   { tipo: 5, name: 'ethylene_dose', datoFormat: 'integer_ppm', description: 'Inyección incremental etileno (ppm, máx. 120 por comando).' },
   { tipo: 6, name: 'ventilation', datoFormat: 'integer', description: 'Ventilación: objetivo AVL ~220 CFM; si CO₂ alto en maduración, AVL < 30.' },
+  { tipo: 8, name: 'defrost', datoFormat: 'integer', description: 'Defrost: dato=1. Usado en Cooling dinámico (evaporador bajo).' },
   {
     tipo: 10,
     name: 'stop_plan',
@@ -168,10 +169,14 @@ export async function buildControlLogicExport() {
         avlVentCo2TriggerMax: 30,
       },
       cooling: {
-        normalOffsetC: COOLING_TEMP_OFFSET_C,
-        aggressiveOffsetC: COOLING_TEMP_AGGRESSIVE_OFFSET_C,
-        returnExcessThresholdC: COOLING_RETURN_EXCESS_THRESHOLD_C,
-        rule: 'Consigna = objetivo − 2 °C; si return_air > objetivo + 3 °C → objetivo − 3 °C.',
+        dynamicLogicDefault: true,
+        disableEnv: 'COOLING_DYNAMIC_LOGIC=0',
+        legacyNormalOffsetC: COOLING_TEMP_OFFSET_C,
+        legacyAggressiveOffsetC: COOLING_TEMP_AGGRESSIVE_OFFSET_C,
+        legacyReturnExcessThresholdC: COOLING_RETURN_EXCESS_THRESHOLD_C,
+        rule:
+          'Dinámico (default): ramas por evaporation_coil + promedio cargo (cap a return_air si avg>return) + ultimo_control (:9050) + defrost tipo 8. Legacy offset −2/−3 si COOLING_DYNAMIC_LOGIC=0.',
+        ultimoControlBaseEnv: 'TERMOKING_ULTIMO_CONTROL_API_BASE',
       },
       ventilation: {
         endLeadMs: VENTILATION_END_LEAD_MS,
