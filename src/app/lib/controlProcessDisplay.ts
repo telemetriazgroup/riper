@@ -455,7 +455,12 @@ export function summarizeProcessEventParts(
   const clientSafe = useClientSafeEventDisplay(displayOpts);
   const action = String(ev.action ?? '');
   const detail = (ev.detail ?? {}) as Record<string, unknown>;
-  const target = String(ev.target ?? detail.target ?? detail.target_value ?? '—');
+  const targetRaw = ev.target ?? detail.target ?? detail.target_value ?? detail.targetC;
+  const targetNum =
+    targetRaw != null && targetRaw !== '' && Number.isFinite(Number(targetRaw))
+      ? Number(Number(targetRaw).toFixed(1))
+      : null;
+  const target = targetNum != null ? formatUiDecimal(targetNum, 1) : String(targetRaw ?? '—');
   const results = ev.results ?? detail.unitResults ?? detail.results ?? detail.checks;
   const urls = ev.urls ?? detail.urls;
   const resultsStr = fmtResults(results);
@@ -539,14 +544,76 @@ export function summarizeProcessEventParts(
         : t('log_ctrl_reason_temp_deviation', { target, results: resultsStr }),
     };
   }
-  if (action === 'send_temperature' || (action === 'send_fanout' && Number(detail.tipo) === 1) || (action === 'send' && String(ev.kind) === 'temperature')) {
+  if (action === 'cooling_setpoint') {
+    const trace = (detail.decisionTrace ?? ev.decisionTrace ?? {}) as Record<string, unknown>;
+    const change = (trace.change ?? detail.change ?? {}) as Record<string, unknown>;
+    const fromC =
+      change.fromC != null && Number.isFinite(Number(change.fromC))
+        ? formatUiDecimal(Number(Number(change.fromC).toFixed(1)), 1)
+        : detail.setPoint != null
+          ? formatUiDecimal(Number(Number(detail.setPoint).toFixed(1)), 1)
+          : '—';
+    const toC =
+      change.toC != null && Number.isFinite(Number(change.toC))
+        ? formatUiDecimal(Number(Number(change.toC).toFixed(1)), 1)
+        : detail.targetC != null || detail.target != null || detail.dato != null
+          ? formatUiDecimal(
+              Number(Number(detail.targetC ?? detail.target ?? detail.dato).toFixed(1)),
+              1,
+            )
+          : target;
+    const summary = String(
+      detail.summaryEs ?? ev.summaryEs ?? trace.summaryEs ?? detail.analysisEs ?? ev.analysisEs ?? '',
+    );
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_cooling_setpoint', { from: fromC, to: toC }),
+      reason: summary || t('log_ctrl_reason_cooling_decision', {
+        reason: String(ev.reason ?? detail.reason ?? '—'),
+      }),
+    };
+  }
+  if (
+    action === 'send_temperature' ||
+    (action === 'send_fanout' && Number(detail.tipo) === 1) ||
+    (action === 'send' && String(ev.kind) === 'temperature')
+  ) {
     const n = Array.isArray(urls) ? String(urls.length) : '1';
+    const datoRaw = detail.dato ?? ev.dato ?? targetRaw;
+    const datoFmt =
+      datoRaw != null && Number.isFinite(Number(datoRaw))
+        ? formatUiDecimal(Number(Number(datoRaw).toFixed(1)), 1)
+        : target;
     return {
       kind,
-      description: t('log_ctrl_temp_adjust', { target: String(detail.dato ?? target) }),
+      description: t('log_ctrl_temp_adjust', { target: datoFmt }),
       reason: isAuto
-        ? t('log_ctrl_reason_temp_auto_send', { target, results: resultsStr, count: n })
-        : t('log_ctrl_reason_temp_manual_send', { target, count: n }),
+        ? t('log_ctrl_reason_temp_auto_send', { target: datoFmt, results: resultsStr, count: n })
+        : t('log_ctrl_reason_temp_manual_send', { target: datoFmt, count: n }),
+    };
+  }
+  if (action === 'cooling_eval') {
+    const summary = String(detail.summaryEs ?? ev.summaryEs ?? '');
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_cooling_eval'),
+      reason:
+        summary ||
+        t('log_ctrl_reason_cooling_decision', {
+          reason: String(ev.reason ?? detail.reason ?? '—'),
+        }),
+    };
+  }
+  if (action === 'cooling_defrost') {
+    const summary = String(detail.summaryEs ?? ev.summaryEs ?? '');
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_cooling_defrost'),
+      reason:
+        summary ||
+        t('log_ctrl_reason_cooling_decision', {
+          reason: String(ev.reason ?? detail.reason ?? '—'),
+        }),
     };
   }
   if (action === 'temp_skip_after_max_attempts') {

@@ -1114,6 +1114,10 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_process_completed': 'Proceso completado: {{process}}',
     'log_ctrl_temp_check': 'Verificación de temperatura (objetivo {{target}}°C)',
     'log_ctrl_temp_adjust': 'Cambio de temperatura → {{target}}°C',
+    'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
+    'log_ctrl_cooling_defrost': 'Cooling: envío de DEFROST',
+    'log_ctrl_cooling_eval': 'Cooling: evaluación sin comando',
+    'log_ctrl_reason_cooling_decision': 'Motivo: {{reason}}',
     'log_ctrl_temp_skip_max_attempts': 'Temperatura no confirmada tras {{attempts}} intentos (objetivo {{target}}°C) — continúa siguiente fase',
     'log_ctrl_humidity_check': 'Verificación de humedad (objetivo {{target}}%)',
     'log_ctrl_humidity_adjust': 'Cambio de humedad → {{target}}%',
@@ -2647,6 +2651,10 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_process_completed': 'Process completed: {{process}}',
     'log_ctrl_temp_check': 'Temperature check (target {{target}}°C)',
     'log_ctrl_temp_adjust': 'Temperature change → {{target}}°C',
+    'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
+    'log_ctrl_cooling_defrost': 'Cooling: DEFROST command',
+    'log_ctrl_cooling_eval': 'Cooling: evaluation with no command',
+    'log_ctrl_reason_cooling_decision': 'Reason: {{reason}}',
     'log_ctrl_temp_skip_max_attempts':
       'Temperature not confirmed after {{attempts}} attempts (target {{target}}°C) — proceeding to next phase',
     'log_ctrl_humidity_skip_max_attempts':

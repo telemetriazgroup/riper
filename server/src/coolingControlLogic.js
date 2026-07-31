@@ -72,7 +72,7 @@ export function coolingTelemetryFingerprint(snap) {
     snap.cargo2,
     snap.cargo3,
     snap.cargo4,
-  ].map((v) => (v == null || !Number.isFinite(v) ? 'x' : Number(v).toFixed(2)));
+  ].map((v) => (v == null || !Number.isFinite(v) ? 'x' : Number(v).toFixed(1)));
   return parts.join('|');
 }
 
@@ -94,7 +94,7 @@ export function coolingTelemetryFingerprint(snap) {
  * @param {boolean} [input.telemetryGlitch]
  */
 export function evaluateCoolingDecision(input) {
-  const objetivo = num(input?.objetivo);
+  const objetivo = round1(num(input?.objetivo));
   if (objetivo == null || objetivo < 0) {
     return { action: 'none', reason: 'invalid_objetivo', meta: {} };
   }
@@ -103,12 +103,12 @@ export function evaluateCoolingDecision(input) {
     return { action: 'none', reason: 'telemetry_glitch_no_hold', meta: {} };
   }
 
-  const setPoint = num(input?.setPoint);
-  const returnAir = num(input?.returnAir);
-  const tempSupply = num(input?.tempSupply);
-  const evaporationCoil = num(input?.evaporationCoil);
-  const cargos = [input?.cargo1, input?.cargo2, input?.cargo3, input?.cargo4].map(num);
-  const internalAvg = resolveInternalTempAverageC(cargos, returnAir);
+  const setPoint = round1(num(input?.setPoint));
+  const returnAir = round1(num(input?.returnAir));
+  const tempSupply = round1(num(input?.tempSupply));
+  const evaporationCoil = round1(num(input?.evaporationCoil));
+  const cargos = [input?.cargo1, input?.cargo2, input?.cargo3, input?.cargo4].map((v) => round1(num(v)));
+  const internalAvg = round1(resolveInternalTempAverageC(cargos, returnAir));
 
   const snap = {
     objetivo,
@@ -266,4 +266,139 @@ export function isCoolingDynamicLogicEnabled() {
   const v = process.env.COOLING_DYNAMIC_LOGIC;
   if (v == null || String(v).trim() === '') return true;
   return !(v === '0' || /^false$/i.test(String(v).trim()));
+}
+
+const REASON_ANALYSIS_ES = {
+  cargo_avg_above_target_plus_5:
+    'Promedio interno (cargo) supera el objetivo en más de 5 °C → forzar set_point al objetivo.',
+  evap_below_minus_14_9:
+    'Evaporador < -14.9 °C → enviar DEFROST (tipo 8).',
+  evap_severe_defrost_cooldown:
+    'Evaporador < -14.9 °C pero DEFROST en cooldown (< 5 min).',
+  evap_below_minus_9_9_set_to_return:
+    'Evaporador < -9.9 °C y set ≠ objetivo → set_point = return_air.',
+  evap_below_minus_9_9_defrost:
+    'Evaporador < -9.9 °C, set = objetivo y set > return_air → DEFROST.',
+  evap_below_minus_9_9_set_to_return_equal_obj:
+    'Evaporador < -9.9 °C y set = objetivo pero set ≤ return_air → set_point = return_air.',
+  evap_mid_set_cooldown: 'Evaporador < -9.9 °C; cambio de set en cooldown (< 5 min).',
+  evap_mid_defrost_cooldown: 'Evaporador < -9.9 °C; DEFROST en cooldown (< 5 min).',
+  evap_mid_noop_cooldown: 'Evaporador < -9.9 °C; sin acción (cooldown).',
+  evap_below_minus_5_9_set_to_objetivo:
+    'Evaporador < -5.9 °C y set ≠ objetivo → set_point = objetivo.',
+  evap_below_minus_5_9_set_to_return:
+    'Evaporador < -5.9 °C y set = objetivo → set_point = return_air.',
+  evap_mild_set_cooldown: 'Evaporador < -5.9 °C; cambio de set en cooldown (< 5 min).',
+  evap_mild_noop_cooldown: 'Evaporador < -5.9 °C; sin acción (cooldown).',
+  evap_ok_set_above_objetivo:
+    'Evaporador > -4 °C y set > objetivo → set_point = objetivo.',
+  evap_ok_set_equals_objetivo_minus_1:
+    'Evaporador > -4 °C y set = objetivo → set_point = objetivo − 1.',
+  evap_ok_step_down_1:
+    'Evaporador > -4 °C y set < objetivo → set_point = set − 1 (paso cada 10 min).',
+  evap_ok_set_cooldown: 'Evaporador > -4 °C; cambio de set en cooldown.',
+  evap_ok_step_cooldown: 'Evaporador > -4 °C; paso −1 en cooldown.',
+  evap_ok_step_down_cooldown: 'Evaporador > -4 °C; paso −1 en cooldown (10 min).',
+  evap_band_no_rule: 'Evaporador en banda intermedia (−5.9…−4); sin regla de cambio.',
+  telemetry_unchanged: 'Telemetría sin cambios respecto al último análisis; no se decide.',
+  missing_critical_sensors: 'Faltan sensores críticos (set_point / return_air / evaporador).',
+  invalid_objetivo: 'Objetivo de producto inválido.',
+  telemetry_glitch_no_hold: 'Lectura glitch (ceros) sin valor previo para sostener.',
+};
+
+function fmtC(v) {
+  if (v == null || !Number.isFinite(Number(v))) return '—';
+  return `${Number(Number(v).toFixed(1))}°C`;
+}
+
+function fmtMin(ms) {
+  if (ms == null || !Number.isFinite(ms)) return '—';
+  return `${Math.round(ms / 60000)} min`;
+}
+
+/**
+ * Trazabilidad estructurada de una decisión Cooling (para bitácora y análisis).
+ * @param {ReturnType<typeof evaluateCoolingDecision>} decision
+ * @param {{ ultimoControl?: object|null }} [extra]
+ */
+export function buildCoolingDecisionTrace(decision, extra = {}) {
+  const meta = decision?.meta || {};
+  const action = decision?.action || 'none';
+  const reasonCode = decision?.reason || 'unknown';
+  const targetC = decision?.targetC != null ? round1(decision.targetC) : null;
+  const setFrom = meta.setPoint != null ? round1(meta.setPoint) : null;
+
+  let change = { type: 'none' };
+  if (action === 'set_temperature' && targetC != null) {
+    change = {
+      type: 'set_point',
+      fromC: setFrom,
+      toC: targetC,
+      deltaC: setFrom != null ? round1(targetC - setFrom) : null,
+    };
+  } else if (action === 'defrost') {
+    change = { type: 'defrost', tipo: 8, dato: 1 };
+  }
+
+  const ultimo = extra.ultimoControl || null;
+  const inputs = {
+    objetivo_C: meta.objetivo ?? null,
+    set_point_C: meta.setPoint ?? null,
+    return_air_C: meta.returnAir ?? null,
+    temp_supply_1_C: meta.tempSupply ?? null,
+    evaporation_coil_C: meta.evaporationCoil ?? null,
+    cargo_1_temp_C: meta.cargo1 ?? null,
+    cargo_2_temp_C: meta.cargo2 ?? null,
+    cargo_3_temp_C: meta.cargo3 ?? null,
+    cargo_4_temp_C: meta.cargo4 ?? null,
+    internal_avg_C: meta.internalAvg ?? null,
+  };
+
+  const analysisEs =
+    REASON_ANALYSIS_ES[reasonCode] ||
+    `Decisión Cooling: ${reasonCode}`;
+
+  const changeEs =
+    change.type === 'set_point'
+      ? `Cambio set_point: ${fmtC(change.fromC)} → ${fmtC(change.toC)} (Δ ${fmtC(change.deltaC)}).`
+      : change.type === 'defrost'
+        ? 'Acción: enviar DEFROST (tipo 8, dato 1).'
+        : 'Sin cambio de comando.';
+
+  const sensorsEs = [
+    `objetivo=${fmtC(inputs.objetivo_C)}`,
+    `set=${fmtC(inputs.set_point_C)}`,
+    `retorno=${fmtC(inputs.return_air_C)}`,
+    `supply=${fmtC(inputs.temp_supply_1_C)}`,
+    `evap=${fmtC(inputs.evaporation_coil_C)}`,
+    `cargoAvg=${fmtC(inputs.internal_avg_C)}`,
+    `cargos=[${fmtC(inputs.cargo_1_temp_C)},${fmtC(inputs.cargo_2_temp_C)},${fmtC(inputs.cargo_3_temp_C)},${fmtC(inputs.cargo_4_temp_C)}]`,
+  ].join(' | ');
+
+  const timingEs = `último set hace ${fmtMin(meta.msSinceLastSet)}; último defrost hace ${fmtMin(meta.msSinceLastDefrost)}`;
+
+  const summaryEs = `${analysisEs} ${changeEs} Datos: ${sensorsEs}. Timing: ${timingEs}.`;
+
+  return {
+    at: new Date().toISOString(),
+    action,
+    reasonCode,
+    analysisEs,
+    changeEs,
+    summaryEs,
+    change,
+    inputs,
+    timing: {
+      msSinceLastSet: meta.msSinceLastSet ?? null,
+      msSinceLastDefrost: meta.msSinceLastDefrost ?? null,
+    },
+    ultimoControl: ultimo
+      ? {
+          tipo: ultimo.tipo ?? null,
+          dato: ultimo.dato ?? null,
+          executedAtMs: ultimo.executedAtMs ?? null,
+        }
+      : null,
+    fingerprint: meta.fingerprint ?? null,
+  };
 }

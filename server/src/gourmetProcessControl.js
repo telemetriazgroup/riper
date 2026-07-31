@@ -26,6 +26,7 @@ import { gourmetTradingEmpresaIdentificador } from './gourmetFleet.js';
 import { sanitizeMaduradorRowAgainstZeroGlitch } from './telemetrySanity.js';
 import { fetchUltimoControl } from './ultimoControlClient.js';
 import {
+  buildCoolingDecisionTrace,
   evaluateCoolingDecision,
   isCoolingDynamicLogicEnabled,
 } from './coolingControlLogic.js';
@@ -65,29 +66,34 @@ export const COOLING_RETURN_EXCESS_THRESHOLD_C = 3;
  * Consigna tipo 1 en enfriamiento.
  * Normal: objetivo − 2. Si retorno > objetivo + 3: objetivo − 3.
  */
+function roundTemp1(v) {
+  if (v == null || !Number.isFinite(Number(v))) return null;
+  return Number(Number(v).toFixed(1));
+}
+
 export function coolingCommandTempC(programmedSetPointC, returnAirC) {
-  if (programmedSetPointC == null || !Number.isFinite(programmedSetPointC)) return null;
+  const programmed = roundTemp1(programmedSetPointC);
+  if (programmed == null) return null;
+  const ret = roundTemp1(returnAirC);
   const aggressive =
-    returnAirC != null &&
-    Number.isFinite(returnAirC) &&
-    returnAirC - programmedSetPointC > COOLING_RETURN_EXCESS_THRESHOLD_C;
+    ret != null && ret - programmed > COOLING_RETURN_EXCESS_THRESHOLD_C;
   const offset = aggressive ? COOLING_TEMP_AGGRESSIVE_OFFSET_C : COOLING_TEMP_OFFSET_C;
-  return programmedSetPointC - offset;
+  return roundTemp1(programmed - offset);
 }
 
 export function coolingCommandMeta(programmedSetPointC, returnAirC) {
-  if (programmedSetPointC == null || !Number.isFinite(programmedSetPointC)) {
-    return { commandC: null, programmedSetPointC, returnAirC, offsetC: null, aggressive: false };
+  const programmed = roundTemp1(programmedSetPointC);
+  if (programmed == null) {
+    return { commandC: null, programmedSetPointC: null, returnAirC: null, offsetC: null, aggressive: false };
   }
+  const ret = roundTemp1(returnAirC);
   const aggressive =
-    returnAirC != null &&
-    Number.isFinite(returnAirC) &&
-    returnAirC - programmedSetPointC > COOLING_RETURN_EXCESS_THRESHOLD_C;
+    ret != null && ret - programmed > COOLING_RETURN_EXCESS_THRESHOLD_C;
   const offsetC = aggressive ? COOLING_TEMP_AGGRESSIVE_OFFSET_C : COOLING_TEMP_OFFSET_C;
   return {
-    commandC: programmedSetPointC - offsetC,
-    programmedSetPointC,
-    returnAirC: returnAirC ?? null,
+    commandC: roundTemp1(programmed - offsetC),
+    programmedSetPointC: programmed,
+    returnAirC: ret,
     offsetC,
     aggressive,
   };
@@ -1021,7 +1027,7 @@ async function tickCooling(ctx, params, auto) {
     return;
   }
 
-  const objetivo = controlParamNumber(params, 'setPoint', 'set_point');
+  const objetivo = roundTemp1(controlParamNumber(params, 'setPoint', 'set_point'));
   if (objetivo == null) {
     await patchAutomation(ctx, () => ({
       ...auto,
@@ -1033,14 +1039,14 @@ async function tickCooling(ctx, params, auto) {
 
   const imei = sensorUnit(ctx);
   const row = await fetchUnitRow(ctx, imei);
-  const setPoint = readTelemetryField(row, 'set_point');
-  const returnAir = readTelemetryField(row, 'return_air');
-  const tempSupply = readTelemetryField(row, 'temp_supply_1');
-  const evaporationCoil = readTelemetryField(row, 'evaporation_coil');
-  const cargo1 = readTelemetryField(row, 'cargo_1_temp');
-  const cargo2 = readTelemetryField(row, 'cargo_2_temp');
-  const cargo3 = readTelemetryField(row, 'cargo_3_temp');
-  const cargo4 = readTelemetryField(row, 'cargo_4_temp');
+  const setPoint = roundTemp1(readTelemetryField(row, 'set_point'));
+  const returnAir = roundTemp1(readTelemetryField(row, 'return_air'));
+  const tempSupply = roundTemp1(readTelemetryField(row, 'temp_supply_1'));
+  const evaporationCoil = roundTemp1(readTelemetryField(row, 'evaporation_coil'));
+  const cargo1 = roundTemp1(readTelemetryField(row, 'cargo_1_temp'));
+  const cargo2 = roundTemp1(readTelemetryField(row, 'cargo_2_temp'));
+  const cargo3 = roundTemp1(readTelemetryField(row, 'cargo_3_temp'));
+  const cargo4 = roundTemp1(readTelemetryField(row, 'cargo_4_temp'));
 
   const ultimoControl = await fetchUltimoControl(imei);
   const decision = evaluateCoolingDecision({
@@ -1059,32 +1065,41 @@ async function tickCooling(ctx, params, auto) {
     lastFingerprint: auto.coolingLastFingerprint ?? null,
   });
 
-  const events = [
-    {
-      action: 'cooling_eval',
-      imei,
-      decision: decision.action,
-      reason: decision.reason,
-      targetC: decision.targetC ?? null,
-      ...decision.meta,
-    },
-  ];
+  const decisionTarget = roundTemp1(decision.targetC);
+  const decisionTrace = buildCoolingDecisionTrace(decision, { ultimoControl });
+  const events = [];
 
   let nextAuto = {
     ...auto,
     coolingLastFingerprint: decision.meta?.fingerprint ?? auto.coolingLastFingerprint,
   };
 
+  const appendDecisionLog = (trace) => {
+    const prev = Array.isArray(nextAuto.coolingDecisionLog) ? nextAuto.coolingDecisionLog : [];
+    nextAuto = {
+      ...nextAuto,
+      coolingDecisionLog: [...prev, trace].slice(-100),
+    };
+  };
+
   const adapter = adapterFor(ctx);
-  if (decision.action === 'set_temperature' && decision.targetC != null && adapter) {
-    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, decision.targetC);
+  if (decision.action === 'set_temperature' && decisionTarget != null && adapter) {
+    const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, decisionTarget);
     events.push({
       action: 'cooling_setpoint',
-      target: decision.targetC,
+      imei,
+      target: decisionTarget,
+      targetC: decisionTarget,
+      dato: decisionTarget,
       reason: decision.reason,
+      analysisEs: decisionTrace.analysisEs,
+      changeEs: decisionTrace.changeEs,
+      summaryEs: decisionTrace.summaryEs,
+      decisionTrace,
       urls,
       ...decision.meta,
     });
+    appendDecisionLog(decisionTrace);
     nextAuto = {
       ...nextAuto,
       coolingLastSetAtMs: Date.now(),
@@ -1094,16 +1109,39 @@ async function tickCooling(ctx, params, auto) {
     const urls = await fanOutSend(ctx, fanOutUnits(ctx), 8, 1);
     events.push({
       action: 'cooling_defrost',
+      imei,
       reason: decision.reason,
+      analysisEs: decisionTrace.analysisEs,
+      changeEs: decisionTrace.changeEs,
+      summaryEs: decisionTrace.summaryEs,
+      decisionTrace,
       urls,
       ...decision.meta,
     });
+    appendDecisionLog(decisionTrace);
     nextAuto = {
       ...nextAuto,
       coolingLastDefrostAtMs: Date.now(),
       nextActionAt: msFromNow(TEMP_VERIFY_MS),
     };
   } else {
+    // Solo registrar evaluaciones “ninguna acción” cuando no es telemetría idéntica
+    // (evita ruido cada minuto; las decisiones de set/defrost sí quedan siempre).
+    if (decision.reason !== 'telemetry_unchanged') {
+      events.push({
+        action: 'cooling_eval',
+        imei,
+        decision: decision.action,
+        reason: decision.reason,
+        target: decisionTarget,
+        targetC: decisionTarget,
+        analysisEs: decisionTrace.analysisEs,
+        changeEs: decisionTrace.changeEs,
+        summaryEs: decisionTrace.summaryEs,
+        decisionTrace,
+        ...decision.meta,
+      });
+    }
     nextAuto = {
       ...nextAuto,
       nextActionAt: msFromNow(60 * 1000),

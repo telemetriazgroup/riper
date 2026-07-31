@@ -61,12 +61,18 @@ Upstream (según flota):
 
 **No** se consulta `ultimo_control`. El espaciado es local (`nextActionAt` / contadores).
 
-### Trazabilidad actual
+### Trazabilidad (implementada)
 
-En bitácora de automatismo (`tunnelEventLog`):
+En bitácora (`tunnelEventLog`) al actuar o evaluar con cambio de sensores:
 
-- `check_temperature` / `send_temperature` con meta: objetivo programado, `returnAir`, offset (−2/−3), agresivo sí/no.
-- **No** hay promedio de cargo, estado de evaporador, defrost ni snapshot a 30 min.
+- `cooling_setpoint` / `cooling_defrost`: incluyen `decisionTrace` con
+  - `reasonCode` + `analysisEs` (por qué)
+  - `change` (`fromC` → `toC` o defrost tipo 8)
+  - `inputs` (objetivo, set, retorno, supply, evap, cargos, cargoAvg)
+  - `timing` (ms desde último set / defrost) y `ultimoControl`
+  - `summaryEs` legible para bitácora y análisis
+- `cooling_eval`: solo si no hubo comando y la telemetría **sí** cambió (no spam por fingerprint idéntico).
+- En `processAutomation.coolingDecisionLog`: últimas ~100 decisiones de set/defrost (JSON en detalle técnico).
 
 ### Resumen del modelo actual
 
@@ -185,7 +191,7 @@ Guardar en `params` / estado de automatización:
 
 - Seguir mostrando **objetivo programado** en tarjetas (no el set agresivo de máquina).
 - Actualizar espejo `coolingCommandTemp.ts` o deprecarlo si la decisión es 100 % servidor.
-- Bitácora: eventos nuevos (`cooling_eval`, `cooling_setpoint`, `cooling_defrost`, `cooling_cargo_avg`).
+- Bitácora: `cooling_setpoint` / `cooling_defrost` / `cooling_eval` con `decisionTrace` + `summaryEs`; log `coolingDecisionLog` en automatismo.
 
 ### 4.5 Documentación / export
 

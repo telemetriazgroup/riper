@@ -112,4 +112,14 @@ http://161.132.53.51:9051/Tunel/comando_control_tunel/NEWY1001?tipo=8&dato=1
 
 la idea es que cunado este en modo cooling analice el estado actual , vaya guardando las deciones que toma . ejemplo si pasa un minutto y el ultimo dado es el mismo no hubo actualizacion de datos , no entra en la comparacion para tomar decision , si paso otro minuto y cambia el ultimo dato analizado ahi se acticva el algoritmo siempre consultado el ultimo cambio de set-point para no esar cambiando set_poibt a cada rat y igual con eñl defrost , sino enviariamos varios comandos y no habria un control 
 
+## Trazabilidad de decisiones (análisis)
+
+Cada vez que Cooling **cambia set_point** o **manda DEFROST**, se guarda en bitácora y en `processAutomation.coolingDecisionLog`:
+
+- **Por qué** (`reasonCode` + texto `analysisEs`)
+- **Qué cambio** (set anterior → nuevo, o defrost tipo 8)
+- **Con qué datos** (objetivo, set_point, return_air, supply, evaporation_coil, cargos 1–4, promedio interno)
+- **Timing** (tiempo desde último set / defrost vía `ultimo_control`)
+
+Así se puede auditar después por qué se tomó cada decisión.
 
