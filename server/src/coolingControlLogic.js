@@ -32,24 +32,35 @@ function setEquals(a, b) {
   return Math.abs(Number(a) - Number(b)) <= COOLING_SET_TOLERANCE_C;
 }
 
+/** Ms desde la acción más reciente (menor delta = más reciente). Prioriza local vs ultimo_control. */
+function mostRecentMsSince(...candidates) {
+  const vals = candidates.filter((v) => v != null && Number.isFinite(v));
+  if (!vals.length) return null;
+  return Math.min(...vals.map((v) => Math.max(0, v)));
+}
+
 function msSinceTempSet(ultimoControl, localLastSetAtMs) {
+  let fromUltimo = null;
   if (ultimoControl?.tipo != null && String(ultimoControl.tipo).trim() === '1' && ultimoControl.executedAtMs != null) {
-    return Math.max(0, Date.now() - ultimoControl.executedAtMs);
+    fromUltimo = Date.now() - ultimoControl.executedAtMs;
   }
+  let fromLocal = null;
   if (localLastSetAtMs != null && Number.isFinite(localLastSetAtMs)) {
-    return Math.max(0, Date.now() - localLastSetAtMs);
+    fromLocal = Date.now() - localLastSetAtMs;
   }
-  return null;
+  return mostRecentMsSince(fromUltimo, fromLocal);
 }
 
 function msSinceDefrost(ultimoControl, localLastDefrostAtMs) {
+  let fromUltimo = null;
   if (ultimoControl?.tipo != null && String(ultimoControl.tipo).trim() === '8' && ultimoControl.executedAtMs != null) {
-    return Math.max(0, Date.now() - ultimoControl.executedAtMs);
+    fromUltimo = Date.now() - ultimoControl.executedAtMs;
   }
+  let fromLocal = null;
   if (localLastDefrostAtMs != null && Number.isFinite(localLastDefrostAtMs)) {
-    return Math.max(0, Date.now() - localLastDefrostAtMs);
+    fromLocal = Date.now() - localLastDefrostAtMs;
   }
-  return null;
+  return mostRecentMsSince(fromUltimo, fromLocal);
 }
 
 function cooldownOk(msSince, needMs) {

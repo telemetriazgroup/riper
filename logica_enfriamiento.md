@@ -96,7 +96,9 @@ y puede ser null o tener la siguiente estructura :
   "status": 2
 }
 
-ahi tengo el dato que es"0.4" que es el ultimo set_point a lo que se cambio y tengo fecha_ejecucion que es la fecha en la que se ejcuto esa orden , el estado 0 significa ejecuitado , el estado 1 se significa por ejecutar , sino hay  fecha_ejeccuion s etoma la fecha_creacion . 
+ahi tengo el dato que es"0.4" que es el ultimo set_point a lo que se cambio y tengo fecha_ejecucion que es la fecha en la que se ejcuto esa orden , el estado 0 significa ejecuitado , el estado 1 se significa por ejecutar , sino hay  fecha_ejeccuion s etoma la fecha_creacion .
+
+**Zona horaria:** `fecha_ejecucion` / `fecha_creacion` vienen **sin offset** pero en reloj **GMT-5**. Si se interpretan como UTC (p. ej. contenedor `TZ=UTC`), el “hace X min” sale ~300 min de más y se saltan los cooldowns de 5/10 min. En Ripener se parsean con `TERMOKING_ULTIMO_CONTROL_TZ_OFFSET=-05:00`. 
 
 entonces cunado un equipo esta el proceso de cooling se analiza los datos y se hace seguimiento de los paraemtros : set_point ,temp_supply_1, return_air ,cargo_1_temp ,cargo_2_temp.cargo_3_temp.cargo_4_temp y evaporation_coil .
 

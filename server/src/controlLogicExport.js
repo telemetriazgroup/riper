@@ -38,6 +38,7 @@ import {
   POLL_INTERVAL_MS,
   SIMPLE_VERIFY_DELAY_MS,
 } from './tunnelCommandCompliance.js';
+import { isCoolingDynamicLogicEnabled } from './coolingControlLogic.js';
 import {
   ETHYLENE_MAX_DOSE,
   ETHYLENE_MAX_READING,
@@ -170,6 +171,7 @@ export async function buildControlLogicExport() {
       },
       cooling: {
         dynamicLogicDefault: true,
+        dynamicLogicEnabledNow: isCoolingDynamicLogicEnabled(),
         disableEnv: 'COOLING_DYNAMIC_LOGIC=0',
         legacyNormalOffsetC: COOLING_TEMP_OFFSET_C,
         legacyAggressiveOffsetC: COOLING_TEMP_AGGRESSIVE_OFFSET_C,
@@ -177,6 +179,10 @@ export async function buildControlLogicExport() {
         rule:
           'Dinámico (default): ramas por evaporation_coil + promedio cargo (cap a return_air si avg>return) + ultimo_control (:9050) + defrost tipo 8. Legacy offset −2/−3 si COOLING_DYNAMIC_LOGIC=0.',
         ultimoControlBaseEnv: 'TERMOKING_ULTIMO_CONTROL_API_BASE',
+        ultimoControlTzOffsetEnv: 'TERMOKING_ULTIMO_CONTROL_TZ_OFFSET',
+        ultimoControlTzOffsetDefault: '-05:00',
+        ultimoControlTzNote:
+          'fecha_ejecucion/fecha_creacion vienen sin zona en reloj GMT-5; el API Ripener las parsea con offset -05:00 (no como UTC).',
       },
       ventilation: {
         endLeadMs: VENTILATION_END_LEAD_MS,

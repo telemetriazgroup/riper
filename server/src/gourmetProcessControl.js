@@ -377,19 +377,40 @@ export async function initGourmetProcessOnSessionStart(sessionRow) {
 
   const auto = initGourmetProcessAutomation(sessionRow);
   const ethyleneTarget = controlParamNumber(params, 'ethylene', 'ethylene_injection_programmed');
-  const nextParams = {
+  const processType = String(sessionRow.process_type || '').trim();
+  const coolingDynamic = processType === 'Cooling' && isCoolingDynamicLogicEnabled();
+  let nextParams = {
     ...params,
     source: 'process_automation',
-    processAutomation: auto,
+    processAutomation: {
+      ...auto,
+      ...(processType === 'Cooling'
+        ? { coolingDynamicLogic: coolingDynamic, coolingDecisionLog: [] }
+        : {}),
+    },
     tunnelOverallStatus: 'in_progress',
     tunnelEventLog: appendLog(params, {
       action: 'process_automation_started',
-      processType: sessionRow.process_type,
+      processType,
     }),
     ...(ethyleneTarget != null && ethyleneTarget >= 0
       ? { ethylene_injection_programmed: ethyleneTarget, ethylene: ethyleneTarget }
       : {}),
   };
+  if (processType === 'Cooling') {
+    nextParams = {
+      ...nextParams,
+      tunnelEventLog: appendLog(nextParams, {
+        action: 'cooling_logic_mode',
+        mode: coolingDynamic ? 'dynamic' : 'legacy_offset',
+        dynamicLogic: coolingDynamic,
+        reason: coolingDynamic ? 'cooling_dynamic_armed' : 'cooling_legacy_offset',
+        analysisEs: coolingDynamic
+          ? 'Seguimiento Cooling dinámico activo (evaporador / cargo / ultimo_control / defrost).'
+          : 'Cooling en modo legacy (offset −2/−3 sobre return_air). Flag COOLING_DYNAMIC_LOGIC=0.',
+      }),
+    };
+  }
   await saveSessionParams(sessionRow.id, nextParams);
   return { ...sessionRow, params: nextParams };
 }

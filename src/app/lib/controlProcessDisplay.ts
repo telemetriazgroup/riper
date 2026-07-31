@@ -544,6 +544,14 @@ export function summarizeProcessEventParts(
         : t('log_ctrl_reason_temp_deviation', { target, results: resultsStr }),
     };
   }
+  if (action === 'cooling_logic_mode') {
+    const dynamic = detail.dynamicLogic === true || ev.dynamicLogic === true || detail.mode === 'dynamic';
+    return {
+      kind: 'control_temperature',
+      description: dynamic ? t('log_ctrl_cooling_mode_dynamic') : t('log_ctrl_cooling_mode_legacy'),
+      reason: String(detail.analysisEs ?? ev.analysisEs ?? detail.reason ?? ev.reason ?? ''),
+    };
+  }
   if (action === 'cooling_setpoint') {
     const trace = (detail.decisionTrace ?? ev.decisionTrace ?? {}) as Record<string, unknown>;
     const change = (trace.change ?? detail.change ?? {}) as Record<string, unknown>;
