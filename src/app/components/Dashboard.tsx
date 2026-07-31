@@ -229,9 +229,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
         const panel = panelSessionsByDevice.get(d.id) ?? null;
         const track = ripeningTrackingByDevice.get(d.id) ?? null;
         const { primaryC } = getFleetCardTemperatureDisplay(d, panel, track, null);
-        const temp = d.telemetry?.temp_supply_1 != null || d.telemetry?.return_air != null
-          ? formatTemp(primaryC)
-          : '—';
+        const temp = Number.isFinite(primaryC) ? formatTemp(primaryC) : '—';
         const hr = d.telemetry?.relative_humidity != null ? formatUiDecimal(d.telemetry.relative_humidity) : '—';
         const eth = d.telemetry?.ethylene != null ? (d.telemetry.ethylene === 0 ? 'NA' : formatUiDecimal(d.telemetry.ethylene)) : '—';
         const co2 = d.telemetry?.co2_reading != null ? formatUiDecimal(d.telemetry.co2_reading) : '—';

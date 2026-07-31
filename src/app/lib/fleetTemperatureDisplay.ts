@@ -63,7 +63,9 @@ export function getFleetCardTemperatureDisplay(
     trackingProcess,
     trackingProgressPct
   );
-  const primaryC = device.telemetry.return_air;
+  const rawPrimary = device.telemetry.return_air;
+  const primaryC =
+    rawPrimary != null && Number.isFinite(Number(rawPrimary)) ? Number(rawPrimary) : Number.NaN;
   /** En enfriamiento la flota muestra el objetivo programado (ej. 4 °C), no la consigna enviada (ej. 2 °C). */
   const setpointC =
     inCooling && finalC != null && Number.isFinite(finalC) ? finalC : device.telemetry.set_point;

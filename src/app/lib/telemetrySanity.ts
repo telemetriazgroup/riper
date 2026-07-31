@@ -1,6 +1,6 @@
 /**
  * Lecturas basura: set_point, temp_supply_1, return_air y evaporation_coil en 0 a la vez.
- * En flota se mantiene el último valor bueno por IMEI.
+ * En flota se mantiene el último valor bueno por IMEI (memoria + sessionStorage).
  */
 
 export const TELEMETRY_GLITCH_ZERO_FIELDS = [
@@ -10,14 +10,57 @@ export const TELEMETRY_GLITCH_ZERO_FIELDS = [
   'evaporation_coil',
 ] as const;
 
-type CriticalTemps = {
+export type CriticalTemps = {
   set_point: number | null;
   temp_supply_1: number | null;
   return_air: number | null;
   evaporation_coil: number | null;
 };
 
+const STORAGE_KEY = 'riper.telemetry.lastGoodCritical.v1';
 const lastGoodByImei = new Map<string, CriticalTemps>();
+
+function canUseSessionStorage(): boolean {
+  try {
+    return typeof sessionStorage !== 'undefined';
+  } catch {
+    return false;
+  }
+}
+
+function readPersisted(imei: string): CriticalTemps | undefined {
+  if (!canUseSessionStorage()) return undefined;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return undefined;
+    const all = JSON.parse(raw) as Record<string, CriticalTemps>;
+    const held = all?.[imei];
+    if (!held || typeof held !== 'object') return undefined;
+    const ok = TELEMETRY_GLITCH_ZERO_FIELDS.every(
+      (f) => held[f] != null && Number.isFinite(Number(held[f]))
+    );
+    return ok ? held : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writePersisted(imei: string, readings: CriticalTemps): void {
+  if (!canUseSessionStorage()) return;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const all = (raw ? JSON.parse(raw) : {}) as Record<string, CriticalTemps>;
+    all[imei] = {
+      set_point: readings.set_point,
+      temp_supply_1: readings.temp_supply_1,
+      return_air: readings.return_air,
+      evaporation_coil: readings.evaporation_coil,
+    };
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 export function isSimultaneousZeroGlitch(readings: CriticalTemps): boolean {
   return TELEMETRY_GLITCH_ZERO_FIELDS.every((f) => {
@@ -41,13 +84,15 @@ export function holdCriticalTempsAgainstZeroGlitch(
     );
     if (id && allPresent) {
       lastGoodByImei.set(id, { ...readings });
+      writePersisted(id, readings);
     }
     return { ...readings, glitch: false, usedHold: false };
   }
-  const held = id ? lastGoodByImei.get(id) : undefined;
+  const held = (id ? lastGoodByImei.get(id) : undefined) ?? (id ? readPersisted(id) : undefined);
   if (!held) {
     return { ...readings, glitch: true, usedHold: false };
   }
+  if (id) lastGoodByImei.set(id, { ...held });
   return { ...held, glitch: true, usedHold: true };
 }
 

@@ -116,9 +116,11 @@ evaporation_coil < -9.9
 evaporation_coil < -14.9
   → si defrost hace ≥ 5 min → reenviar DEFROST
 
-evaporation_coil > -4
+evaporation_coil en [−5.9 … −5.5] → sin comando (banda intermedia)
+
+evaporation_coil > -5.5
   → set > objetivo → set = objetivo
-  → set = objetivo → set = objetivo − 1
+  → set = objetivo → set = objetivo − 3
   → set < objetivo → si último cambio ≥ 10 min → set = set − 1
 ```
 

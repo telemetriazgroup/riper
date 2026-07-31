@@ -22,8 +22,24 @@ import {
   isDemoMaduradorFleetEmail,
   demoMaduradorEmpresaIdentificadores,
 } from '../demoMaduradorFleet.js';
+import { sanitizeMaduradorRowAgainstZeroGlitch } from '../telemetrySanity.js';
 
 export const maduradorRouter = express.Router();
+
+/** Sustituye tramas all-cero (set/supply/return/evap) por último bueno en memoria del API. */
+function sanitizeDispositivosRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object') return row;
+    const imei = String(row.imei ?? row.ultimo_dato?.imei ?? '').trim();
+    const { row: sanitized } = sanitizeMaduradorRowAgainstZeroGlitch(row, imei);
+    return sanitized;
+  });
+}
+
+function jsonDispositivos(res, rows) {
+  return res.json({ data: sanitizeDispositivosRows(rows) });
+}
 
 /** Empresa “ancha” lista completa upstream (solo superadmin), p. ej. 2001. */
 function superadminWideEmpresaIdentificador() {
@@ -280,13 +296,13 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         }
       }
 
-      return res.json({ data: merged });
+      return jsonDispositivos(res, merged);
     }
 
     if (isDemoMaduradorFleetEmail(email)) {
       const idents = demoMaduradorEmpresaIdentificadores();
       if (!idents.length) {
-        return res.json({ data: [] });
+        return jsonDispositivos(res, []);
       }
       let merged = [];
       for (const id of idents) {
@@ -297,7 +313,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         }
         merged = mergeDispositivosRows(merged, list);
       }
-      return res.json({ data: merged });
+      return jsonDispositivos(res, merged);
     }
 
     if (isUltraorganicsFleetEmail(email)) {
@@ -334,7 +350,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         const humidity = byImei.get(ultraorganicsHumidityImei(panelId));
         return packageUltraorganicsFleetRow(primary, humidity, panelId);
       }).filter(Boolean);
-      return res.json({ data: out });
+      return jsonDispositivos(res, out);
     }
 
     if (isThermoKingFleetEmail(email)) {
@@ -346,7 +362,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         return res.status(502).json({ error: 'madurador_upstream', message: `upstream thermoking ${tkIdent}` });
       }
       const filtered = filterRowsByImeiExact(listTk, pinImei);
-      return res.json({ data: filtered });
+      return jsonDispositivos(res, filtered);
     }
 
     if (isGreenyardFleetEmail(email)) {
@@ -360,7 +376,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const data = greenyardFilterNormalOperationEnabled()
         ? filterMaduradorRowsNormalOperation(filterRowsByImeiAllowlistOrdered(listGy, allow))
         : filterRowsByImeiAllowlistOrdered(listGy, allow);
-      return res.json({ data });
+      return jsonDispositivos(res, data);
     }
 
     if (isGourmetTradingFleetEmail(email)) {
@@ -372,7 +388,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       }
       const allow = gourmetTradingMaduradorFleetImeis();
       const data = filterRowsByImeiAllowlistOrdered(listGt, allow);
-      return res.json({ data });
+      return jsonDispositivos(res, data);
     }
 
     const { rows } = await pool.query(
@@ -381,7 +397,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
     );
     const ident = rows[0]?.identificador != null ? String(rows[0].identificador).trim() : '';
     if (!ident) {
-      return res.json({ data: [] });
+      return jsonDispositivos(res, []);
     }
 
     const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(ident)}`;
@@ -402,10 +418,10 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
     }
 
     if (!Array.isArray(json)) {
-      return res.json({ data: [] });
+      return jsonDispositivos(res, []);
     }
 
-    res.json({ data: filterRowsByImeiIdentificadorSuffix(json, ident) });
+    return jsonDispositivos(res, filterRowsByImeiIdentificadorSuffix(json, ident));
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });

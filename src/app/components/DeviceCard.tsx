@@ -473,8 +473,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                    <div>
                      <div className="text-xs text-muted-foreground">{t('temperature')}</div>
                      <div className="font-bold text-card-foreground">
-                       {formatTemp(fleetTemps.primaryC)}
-                       <span className="text-muted-foreground/70 font-normal ml-1">/ {formatTemp(fleetTemps.setpointC)}</span>
+                       {Number.isFinite(fleetTemps.primaryC) ? formatTemp(fleetTemps.primaryC) : '—'}
+                       <span className="text-muted-foreground/70 font-normal ml-1">
+                         / {Number.isFinite(fleetTemps.setpointC) ? formatTemp(fleetTemps.setpointC) : '—'}
+                       </span>
                      </div>
                    </div>
                  </div>
@@ -525,8 +527,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                 <div>
                   <div className="text-xs text-muted-foreground">{t('temperature')}</div>
                   <div className="font-bold text-card-foreground">
-                       {formatTemp(fleetTemps.primaryC)}
-                       <span className="text-gray-400 font-normal ml-1">/ {formatTemp(fleetTemps.setpointC)}</span>
+                       {Number.isFinite(fleetTemps.primaryC) ? formatTemp(fleetTemps.primaryC) : '—'}
+                       <span className="text-gray-400 font-normal ml-1">
+                         / {Number.isFinite(fleetTemps.setpointC) ? formatTemp(fleetTemps.setpointC) : '—'}
+                       </span>
                   </div>
                 </div>
               </div>

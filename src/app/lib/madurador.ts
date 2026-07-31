@@ -357,10 +357,28 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
   const power_state = resolvePowerState(flat, rawPs);
 
   const setPointNested = nestedValor(row.set_point);
-  const set_point_raw = inRange(toNum(flat.set_point ?? setPointNested), -40, 40);
-  const temp_supply_raw = inRange(toNum(flat.temp_supply_1), -40, 120);
-  const return_air_raw = inRange(toNum(flat.return_air), -40, 120);
-  const evap_raw = inRange(toNum(flat.evaporation_coil), -60, 80);
+  const set_point_raw = inRange(
+    toNum(flat.set_point) ?? setPointNested ?? nestedValor(flat.set_point),
+    -40,
+    40
+  );
+  const temp_supply_raw = inRange(
+    toNum(flat.temp_supply_1) ?? nestedValor(flat.temp_supply_1) ?? nestedValor(row.temp_supply_1),
+    -40,
+    120
+  );
+  const return_air_raw = inRange(
+    toNum(flat.return_air) ?? nestedValor(flat.return_air) ?? nestedValor(row.return_air),
+    -40,
+    120
+  );
+  const evap_raw = inRange(
+    toNum(flat.evaporation_coil) ??
+      nestedValor(flat.evaporation_coil) ??
+      nestedValor(row.evaporation_coil),
+    -60,
+    80
+  );
 
   const held = holdCriticalTempsAgainstZeroGlitch(imei, {
     set_point: set_point_raw,
@@ -369,10 +387,12 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     evaporation_coil: evap_raw,
   });
 
-  const set_point = held.set_point ?? 18;
-  const temp_supply_1 = held.temp_supply_1 ?? 0;
-  const return_air = held.return_air ?? 0;
-  const evap = held.evaporation_coil ?? 0;
+  // Glitch all-cero sin hold: NaN → la tarjeta muestra "—" (no 0 engañoso).
+  const set_point = held.glitch && !held.usedHold ? 0 : (held.set_point ?? 18);
+  const temp_supply_1 =
+    held.glitch && !held.usedHold ? Number.NaN : (held.temp_supply_1 ?? 0);
+  const return_air = held.glitch && !held.usedHold ? Number.NaN : (held.return_air ?? 0);
+  const evap = held.glitch && !held.usedHold ? 0 : (held.evaporation_coil ?? 0);
 
   const humiditySpNested = nestedValor(row.humidity_set_point);
   const humidity_set_point = inRange(toNum(flat.humidity_set_point ?? humiditySpNested), 0, 100);
