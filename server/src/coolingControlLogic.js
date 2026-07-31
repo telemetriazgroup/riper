@@ -160,20 +160,8 @@ export function evaluateCoolingDecision(input) {
     msSinceLastDefrost: msDefrost,
   };
 
-  // Cargo muy por encima del objetivo → forzar set a objetivo (cooldown 5 min).
-  if (
-    internalAvg != null &&
-    internalAvg > objetivo + COOLING_CARGO_ABOVE_TARGET_C &&
-    !setEquals(setPoint, objetivo) &&
-    cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)
-  ) {
-    return {
-      action: 'set_temperature',
-      targetC: round1(objetivo),
-      reason: 'cargo_avg_above_target_plus_5',
-      meta: baseMeta,
-    };
-  }
+  // Nota: regla cargoAvg > objetivo+5 (forzar set=objetivo) suspendida — interfería
+  // con el descenso dinámico del set (p. ej. subía 1.8→2.8 mientras se bajaba).
 
   // Evaporador severo primero.
   if (evaporationCoil < COOLING_EVAP_SEVERE_C) {
@@ -281,7 +269,7 @@ export function isCoolingDynamicLogicEnabled() {
 
 const REASON_ANALYSIS_ES = {
   cargo_avg_above_target_plus_5:
-    'Promedio interno (cargo) supera el objetivo en más de 5 °C → forzar set_point al objetivo.',
+    'Promedio interno (cargo) supera el objetivo en más de 5 °C → forzar set_point al objetivo. (regla suspendida)',
   evap_below_minus_14_9:
     'Evaporador < -14.9 °C → enviar DEFROST (tipo 8).',
   evap_severe_defrost_cooldown:

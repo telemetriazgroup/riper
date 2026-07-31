@@ -122,7 +122,7 @@ evaporation_coil > -4
   → set < objetivo → si último cambio ≥ 10 min → set = set − 1
 ```
 
-Complemento: si promedio interno está **&gt; objetivo + 5 °C**, forzar set hacia objetivo; tras ~30 min en objetivo, guardar promedio en trazabilidad y seguir comparando.
+Complemento (suspendido): forzar set si promedio interno **&gt; objetivo + 5 °C** — interfería con el descenso dinámico. Sigue el snapshot de promedio a ~30 min en objetivo (solo trazabilidad).
 
 ### Comandos nuevos / reforzados
 
@@ -169,7 +169,7 @@ Pasos del tick Cooling nuevo:
 2. Calcular **promedio interno** (cargos válidos −20…40; si vacío → `return_air`).
 3. Si snapshot de sensores = último analizado → **skip** (sin comando).
 4. `GET ultimo_control/{imei}` → último set + timestamp.
-5. Evaluar ramas de `evaporation_coil` (+ regla cargo &gt; objetivo + 5).
+5. Evaluar ramas de `evaporation_coil` (sin forzar set por cargo &gt; objetivo + 5).
 6. Si hay acción y cumple cooldown → enviar tipo 1 o tipo 8.
 7. Registrar decisión en trazabilidad; actualizar “último análisis”.
 
