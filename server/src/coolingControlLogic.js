@@ -9,13 +9,14 @@ import { resolveInternalTempAverageC } from './telemetrySanity.js';
 export const COOLING_CARGO_VALID_MIN_C = -20;
 export const COOLING_CARGO_VALID_MAX_C = 40;
 export const COOLING_CARGO_ABOVE_TARGET_C = 5;
-export const COOLING_EVAP_MILD_C = -5.9;
+/** Mild: evap < este valor → set a objetivo o return_air (cooldown 5 min). */
+export const COOLING_EVAP_MILD_C = -6.5;
 export const COOLING_EVAP_MID_C = -9.9;
 export const COOLING_EVAP_SEVERE_C = -14.9;
-/** Umbral “evap OK”: reglas de descenso si evap > este valor. Banda muerta: [-5.9 … -5.5]. */
-export const COOLING_EVAP_OK_C = -5.5;
+/** Umbral “evap OK”: reglas de descenso si evap > este valor. Banda muerta: [-6.5 … -6]. */
+export const COOLING_EVAP_OK_C = -6;
 /** Cuando set = objetivo y evap > OK → bajar a objetivo − este offset. */
-export const COOLING_EVAP_OK_EQUALS_OFFSET_C = 3;
+export const COOLING_EVAP_OK_EQUALS_OFFSET_C = 4;
 export const COOLING_SET_COOLDOWN_MILD_MS = 5 * 60 * 1000;
 export const COOLING_SET_COOLDOWN_STEP_MS = 10 * 60 * 1000;
 export const COOLING_DEFROST_COOLDOWN_MS = 5 * 60 * 1000;
@@ -209,7 +210,7 @@ export function evaluateCoolingDecision(input) {
         return {
           action: 'set_temperature',
           targetC: round1(objetivo),
-          reason: 'evap_below_minus_5_9_set_to_objetivo',
+          reason: 'evap_below_minus_6_5_set_to_objetivo',
           meta: baseMeta,
         };
       }
@@ -219,14 +220,14 @@ export function evaluateCoolingDecision(input) {
       return {
         action: 'set_temperature',
         targetC: round1(returnAir),
-        reason: 'evap_below_minus_5_9_set_to_return',
+        reason: 'evap_below_minus_6_5_set_to_return',
         meta: baseMeta,
       };
     }
     return { action: 'none', reason: 'evap_mild_noop_cooldown', meta: baseMeta };
   }
 
-  // Banda intermedia [-5.9 … -5.5]: sin comando (ni mild < -5.9 ni OK > -5.5).
+  // Banda intermedia [-6.5 … -6]: sin comando (ni mild < -6.5 ni OK > -6).
   if (evaporationCoil > COOLING_EVAP_OK_C) {
     if (setPoint > objetivo + COOLING_SET_TOLERANCE_C) {
       if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
@@ -244,7 +245,7 @@ export function evaluateCoolingDecision(input) {
         return {
           action: 'set_temperature',
           targetC: round1(objetivo - COOLING_EVAP_OK_EQUALS_OFFSET_C),
-          reason: 'evap_ok_set_equals_objetivo_minus_3',
+          reason: 'evap_ok_set_equals_objetivo_minus_4',
           meta: baseMeta,
         };
       }
@@ -288,23 +289,29 @@ const REASON_ANALYSIS_ES = {
   evap_mid_defrost_cooldown: 'Evaporador < -9.9 °C; DEFROST en cooldown (< 5 min).',
   evap_mid_noop_cooldown: 'Evaporador < -9.9 °C; sin acción (cooldown).',
   evap_below_minus_5_9_set_to_objetivo:
-    'Evaporador < -5.9 °C y set ≠ objetivo → set_point = objetivo.',
+    'Evaporador < umbral mild y set ≠ objetivo → set_point = objetivo. (legacy)',
   evap_below_minus_5_9_set_to_return:
-    'Evaporador < -5.9 °C y set = objetivo → set_point = return_air.',
-  evap_mild_set_cooldown: 'Evaporador < -5.9 °C; cambio de set en cooldown (< 5 min).',
-  evap_mild_noop_cooldown: 'Evaporador < -5.9 °C; sin acción (cooldown).',
+    'Evaporador < umbral mild y set = objetivo → set_point = return_air. (legacy)',
+  evap_below_minus_6_5_set_to_objetivo:
+    'Evaporador < -6.5 °C y set ≠ objetivo → set_point = objetivo.',
+  evap_below_minus_6_5_set_to_return:
+    'Evaporador < -6.5 °C y set = objetivo → set_point = return_air.',
+  evap_mild_set_cooldown: 'Evaporador < -6.5 °C; cambio de set en cooldown (< 5 min).',
+  evap_mild_noop_cooldown: 'Evaporador < -6.5 °C; sin acción (cooldown).',
   evap_ok_set_above_objetivo:
-    'Evaporador > -5.5 °C y set > objetivo → set_point = objetivo.',
+    'Evaporador > -6 °C y set > objetivo → set_point = objetivo.',
   evap_ok_set_equals_objetivo_minus_1:
-    'Evaporador > -5.5 °C y set = objetivo → set_point = objetivo − 3. (legacy reason code)',
+    'Evaporador > -6 °C y set = objetivo → set_point = objetivo − 4. (legacy reason code)',
   evap_ok_set_equals_objetivo_minus_3:
-    'Evaporador > -5.5 °C y set = objetivo → set_point = objetivo − 3.',
+    'Evaporador > -6 °C y set = objetivo → set_point = objetivo − 4. (legacy reason code)',
+  evap_ok_set_equals_objetivo_minus_4:
+    'Evaporador > -6 °C y set = objetivo → set_point = objetivo − 4.',
   evap_ok_step_down_1:
-    'Evaporador > -5.5 °C y set < objetivo → set_point = set − 1 (paso cada 10 min).',
-  evap_ok_set_cooldown: 'Evaporador > -5.5 °C; cambio de set en cooldown.',
-  evap_ok_step_cooldown: 'Evaporador > -5.5 °C; paso objetivo−3 en cooldown.',
-  evap_ok_step_down_cooldown: 'Evaporador > -5.5 °C; paso −1 en cooldown (10 min).',
-  evap_band_no_rule: 'Evaporador en banda intermedia (−5.9…−5.5); sin regla de cambio.',
+    'Evaporador > -6 °C y set < objetivo → set_point = set − 1 (paso cada 10 min).',
+  evap_ok_set_cooldown: 'Evaporador > -6 °C; cambio de set en cooldown.',
+  evap_ok_step_cooldown: 'Evaporador > -6 °C; paso objetivo−4 en cooldown.',
+  evap_ok_step_down_cooldown: 'Evaporador > -6 °C; paso −1 en cooldown (10 min).',
+  evap_band_no_rule: 'Evaporador en banda intermedia (−6.5…−6); sin regla de cambio.',
   telemetry_unchanged: 'Telemetría sin cambios respecto al último análisis; no se decide.',
   missing_critical_sensors: 'Faltan sensores críticos (set_point / return_air / evaporador).',
   invalid_objetivo: 'Objetivo de producto inválido.',

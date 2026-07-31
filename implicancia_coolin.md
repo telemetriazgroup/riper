@@ -104,7 +104,7 @@ GET http://161.132.53.51:9050/TermoKing/ultimo_control/{imei}
 ### Ramas (esquema)
 
 ```text
-evaporation_coil < -5.9
+evaporation_coil < -6.5
   → set ≠ objetivo → set = objetivo (si último cambio ≥ 5 min)
   → si no → set = return_air (≥ 5 min)
 
@@ -116,13 +116,15 @@ evaporation_coil < -9.9
 evaporation_coil < -14.9
   → si defrost hace ≥ 5 min → reenviar DEFROST
 
-evaporation_coil en [−5.9 … −5.5] → sin comando (banda intermedia)
+evaporation_coil en [−6.5 … −6] → sin comando (banda intermedia)
 
-evaporation_coil > -5.5
+evaporation_coil > -6
   → set > objetivo → set = objetivo
-  → set = objetivo → set = objetivo − 3
+  → set = objetivo → set = objetivo − 4
   → set < objetivo → si último cambio ≥ 10 min → set = set − 1
 ```
+
+> Nota: la banda intermedia es el hueco entre mild (`< -6.5`) y OK (`> -6`).
 
 Complemento (suspendido): forzar set si promedio interno **&gt; objetivo + 5 °C** — interfería con el descenso dinámico. Sigue el snapshot de promedio a ~30 min en objetivo (solo trazabilidad).
 

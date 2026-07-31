@@ -41,7 +41,7 @@ evaporation_coil : Temperatura de evaporador
 Recordar ultimo cambio de set_point
 -> PRIMER EVENTO : Validar estado de evaporation_coil 
 
-evaporation_coil menor que -5.9 -> Evaluar set_point !=  objetivo ->SI ->Cambiar set_point a Objetivo -ultimo cambio de set_point mas de 5 
+evaporation_coil menor que -6.5 -> Evaluar set_point !=  objetivo ->SI ->Cambiar set_point a Objetivo -ultimo cambio de set_point mas de 5 
                                                         |
                                                         |-> SINO->Cambiar set_point a return_air-ultimo cambio de set_point mas de 5 minutos                          
  
@@ -55,15 +55,15 @@ evaporation_coil menor que -5.9 -> Evaluar set_point !=  objetivo ->SI ->Cambiar
 
 evaporation_coil menor que -14.9 -> Se envio defrost hace mas de 5 minutos ? -> SI -> VOLVER A ENVIAR DEFROST
 
-Banda intermedia: evaporation_coil entre -5.9 y -5.5 (inclusive) → sin comando.
+Banda intermedia: evaporation_coil entre -6.5 y -6 (inclusive) → sin comando.
 
-si evaporation_coil mayor a -5.5  Entonces : 
+si evaporation_coil mayor a -6  Entonces : 
 
             RECORDAR ULTIMOS  CAMBIO DE SETPOINT 
 
             CONSULTAR set_point es mayor que Objetivo ->SI -> cambiar set_point a Objetivo
                                                     |
-                                                    |->SINO -> set_point = Objetivo  -> SI -> Cambiar  set_point a Objetivo-3
+                                                    |->SINO -> set_point = Objetivo  -> SI -> Cambiar  set_point a Objetivo-4
                                                                                 |
                                                                                 |->SINO -> se entiende que  set_point es menor 
                                                                                             se verifcia ultimos  de set_point
