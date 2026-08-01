@@ -44,6 +44,10 @@ export const CO2_MAINTENANCE_MS = 30 * 60 * 1000;
 export const TEMP_HUMIDITY_MAINTENANCE_MS = 10 * 60 * 1000;
 export const HOURLY_REVIEW_MS = 60 * 60 * 1000;
 export const VENTILATION_VERIFY_MS = 4 * 60 * 1000;
+/** Cooling: controlling_mode debe ser 4 (potencia). Comando tipo 11 dato 4. */
+export const COOLING_CONTROLLING_MODE_REQUIRED = 4;
+export const COOLING_CONTROLLING_MODE_TIPO = 11;
+export const COOLING_CONTROLLING_MODE_COOLDOWN_MS = 5 * 60 * 1000;
 /** Enviar límite CO₂ (tipo 3) con el objetivo programado 5 min antes del fin de ventilación. */
 export const VENTILATION_END_LEAD_MS = 5 * 60 * 1000;
 /** STOP PLAN: mantener suspendido (tipo 10 dato 7200) cada hora; fin con dato 300 a 5 min del cierre. */
@@ -178,7 +182,13 @@ async function fetchUnitRow(ctx, unitId) {
 function commandImeis(ctx, tipo) {
   const adapter = adapterFor(ctx);
   if (adapter?.commandImeis) return adapter.commandImeis(ctx.device_id, tipo);
-  if (Number(tipo) === 1 || Number(tipo) === 6 || Number(tipo) === 8 || Number(tipo) === 10) {
+  if (
+    Number(tipo) === 1 ||
+    Number(tipo) === 6 ||
+    Number(tipo) === 8 ||
+    Number(tipo) === 10 ||
+    Number(tipo) === 11
+  ) {
     return fanOutUnits(ctx);
   }
   return [sensorUnit(ctx)];
@@ -1035,15 +1045,76 @@ async function tickRipening(ctx, params, auto) {
   }));
 }
 
+/**
+ * Cooling requiere controlling_mode=4; si no, envía tipo 11 dato 4 (con cooldown).
+ * @returns {Promise<{ events: object[], nextAuto: object, modeOk: boolean, controllingMode: number|null }>}
+ */
+async function ensureCoolingControllingMode(ctx, auto) {
+  const imei = sensorUnit(ctx);
+  const row = await fetchUnitRow(ctx, imei);
+  const controllingModeRaw = readTelemetryField(row, 'controlling_mode');
+  const controllingMode =
+    controllingModeRaw != null && Number.isFinite(Number(controllingModeRaw))
+      ? Number(controllingModeRaw)
+      : null;
+  const modeOk = controllingMode === COOLING_CONTROLLING_MODE_REQUIRED;
+  const events = [];
+  let nextAuto = { ...auto };
+
+  if (modeOk) {
+    return { events, nextAuto, modeOk: true, controllingMode, row };
+  }
+
+  const adapter = adapterFor(ctx);
+  const lastAt = auto.coolingLastControllingModeAtMs;
+  const canSend =
+    lastAt == null ||
+    !Number.isFinite(Number(lastAt)) ||
+    Date.now() - Number(lastAt) >= COOLING_CONTROLLING_MODE_COOLDOWN_MS;
+
+  if (adapter && canSend) {
+    const urls = await fanOutSend(
+      ctx,
+      fanOutUnits(ctx),
+      COOLING_CONTROLLING_MODE_TIPO,
+      COOLING_CONTROLLING_MODE_REQUIRED
+    );
+    events.push({
+      action: 'cooling_controlling_mode',
+      imei,
+      tipo: COOLING_CONTROLLING_MODE_TIPO,
+      dato: COOLING_CONTROLLING_MODE_REQUIRED,
+      controllingMode,
+      requiredMode: COOLING_CONTROLLING_MODE_REQUIRED,
+      reason: 'controlling_mode_not_4',
+      analysisEs:
+        controllingMode == null
+          ? 'controlling_mode ausente → enviar tipo 11 dato 4 (modo potencia Cooling).'
+          : `controlling_mode=${controllingMode} ≠ 4 → enviar tipo 11 dato 4 (activar potencia).`,
+      urls,
+    });
+    nextAuto = {
+      ...nextAuto,
+      coolingLastControllingModeAtMs: Date.now(),
+    };
+  }
+
+  return { events, nextAuto, modeOk: false, controllingMode, row };
+}
+
 async function tickCooling(ctx, params, auto) {
+  const modeGate = await ensureCoolingControllingMode(ctx, auto);
+  let events = [...modeGate.events];
+  let nextAuto = { ...modeGate.nextAuto };
+
   if (!isCoolingDynamicLogicEnabled()) {
-    const temp = await ensureTemperature(ctx, params, auto, 'Cooling', {
+    const temp = await ensureTemperature(ctx, params, nextAuto, 'Cooling', {
       allowSkipAfterMaxAttempts: true,
     });
     await patchAutomation(ctx, () => ({
       ...temp.auto,
       nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
-      newEvents: temp.events,
+      newEvents: [...events, ...temp.events],
     }));
     return;
   }
@@ -1051,15 +1122,15 @@ async function tickCooling(ctx, params, auto) {
   const objetivo = roundTemp1(controlParamNumber(params, 'setPoint', 'set_point'));
   if (objetivo == null) {
     await patchAutomation(ctx, () => ({
-      ...auto,
+      ...nextAuto,
       nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
-      newEvents: [{ action: 'cooling_skip', reason: 'missing_objetivo' }],
+      newEvents: [...events, { action: 'cooling_skip', reason: 'missing_objetivo' }],
     }));
     return;
   }
 
   const imei = sensorUnit(ctx);
-  const row = await fetchUnitRow(ctx, imei);
+  const row = modeGate.row ?? (await fetchUnitRow(ctx, imei));
   const setPoint = roundTemp1(readTelemetryField(row, 'set_point'));
   const returnAir = roundTemp1(readTelemetryField(row, 'return_air'));
   const tempSupply = roundTemp1(readTelemetryField(row, 'temp_supply_1'));
@@ -1081,18 +1152,17 @@ async function tickCooling(ctx, params, auto) {
     cargo3,
     cargo4,
     ultimoControl,
-    localLastSetAtMs: auto.coolingLastSetAtMs ?? null,
-    localLastDefrostAtMs: auto.coolingLastDefrostAtMs ?? null,
-    lastFingerprint: auto.coolingLastFingerprint ?? null,
+    localLastSetAtMs: nextAuto.coolingLastSetAtMs ?? null,
+    localLastDefrostAtMs: nextAuto.coolingLastDefrostAtMs ?? null,
+    lastFingerprint: nextAuto.coolingLastFingerprint ?? null,
   });
 
   const decisionTarget = roundTemp1(decision.targetC);
   const decisionTrace = buildCoolingDecisionTrace(decision, { ultimoControl });
-  const events = [];
 
-  let nextAuto = {
-    ...auto,
-    coolingLastFingerprint: decision.meta?.fingerprint ?? auto.coolingLastFingerprint,
+  nextAuto = {
+    ...nextAuto,
+    coolingLastFingerprint: decision.meta?.fingerprint ?? nextAuto.coolingLastFingerprint,
   };
 
   const appendDecisionLog = (trace) => {
@@ -1174,7 +1244,7 @@ async function tickCooling(ctx, params, auto) {
     decision.meta?.internalAvg != null &&
     setPoint != null &&
     Math.abs(setPoint - objetivo) <= 0.35 &&
-    !auto.coolingCargoSnapshotAt
+    !nextAuto.coolingCargoSnapshotAt
   ) {
     nextAuto = {
       ...nextAuto,
@@ -1187,9 +1257,9 @@ async function tickCooling(ctx, params, auto) {
       objetivo,
     });
   } else if (
-    auto.coolingCargoSnapshotAt &&
-    !auto.coolingCargoSnapshot30At &&
-    Date.now() - new Date(auto.coolingCargoSnapshotAt).getTime() >= 30 * 60 * 1000
+    nextAuto.coolingCargoSnapshotAt &&
+    !nextAuto.coolingCargoSnapshot30At &&
+    Date.now() - new Date(nextAuto.coolingCargoSnapshotAt).getTime() >= 30 * 60 * 1000
   ) {
     nextAuto = {
       ...nextAuto,
@@ -1199,7 +1269,7 @@ async function tickCooling(ctx, params, auto) {
     events.push({
       action: 'cooling_cargo_snapshot_30m',
       internalAvg: decision.meta?.internalAvg ?? null,
-      previousAvg: auto.coolingCargoSnapshotAvg ?? null,
+      previousAvg: nextAuto.coolingCargoSnapshotAvg ?? null,
       objetivo,
     });
   }

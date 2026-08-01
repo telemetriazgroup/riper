@@ -624,6 +624,22 @@ export function summarizeProcessEventParts(
         }),
     };
   }
+  if (action === 'cooling_controlling_mode' || action === 'cooling_controlling_mode_wait') {
+    const summary = String(detail.analysisEs ?? ev.analysisEs ?? '');
+    const current = detail.controllingMode ?? ev.controllingMode ?? '—';
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_cooling_controlling_mode', {
+        mode: String(detail.requiredMode ?? ev.requiredMode ?? 4),
+        current: String(current),
+      }),
+      reason:
+        summary ||
+        t('log_ctrl_reason_cooling_decision', {
+          reason: String(ev.reason ?? detail.reason ?? '—'),
+        }),
+    };
+  }
   if (action === 'temp_skip_after_max_attempts') {
     return {
       kind,

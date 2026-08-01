@@ -17,7 +17,7 @@ export function formatTunnelDato(tipo, dato) {
   const t = Number(tipo);
   if (t === 1) return Number(n.toFixed(1));
   if (t === 3) return Number(n.toFixed(1));
-  if (t === 2 || t === 5 || t === 0 || t === 6 || t === 8 || t === 10) return Math.round(n);
+  if (t === 2 || t === 5 || t === 0 || t === 6 || t === 8 || t === 10 || t === 11) return Math.round(n);
   return n;
 }
 

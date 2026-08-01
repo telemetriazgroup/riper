@@ -114,6 +114,11 @@ ahi tengo el dato que es"0.4" que es el ultimo set_point a lo que se cambio y te
 
 entonces cunado un equipo esta el proceso de cooling se analiza los datos y se hace seguimiento de los paraemtros : set_point ,temp_supply_1, return_air ,cargo_1_temp ,cargo_2_temp.cargo_3_temp.cargo_4_temp y evaporation_coil .
 
+**controlling_mode = 4 (obligatorio):** sin este modo el equipo no activa potencia.
+Si `controlling_mode` no es 4, enviar:
+`http://161.132.53.51:9051/TermoKing/comando_control/{imei}?tipo=11&dato=4`
+(validar en cada ciclo; reenvío con cooldown ~5 min).
+
 se hace cambio de set point enviando en el respectivo comando 
 
 en el  link que corresponda del tipo 1 se refiere a comandar temepratura y dato 3 se refiere a la temperatura a cambiar 

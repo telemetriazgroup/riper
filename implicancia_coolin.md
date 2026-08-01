@@ -144,8 +144,11 @@ Complemento (suspendido): forzar set si promedio interno **&gt; objetivo + 5 °C
 
 | Acción | Link |
 |--------|------|
+| Modo control (potencia) | `…/comando_control/{imei}?tipo=11&dato=4` — **obligatorio** en Cooling (`controlling_mode=4`) |
 | Temperatura | `…/comando_control/{imei}?tipo=1&dato={°C}` (o tunel) |
 | Defrost | `…?tipo=8&dato=1` |
+
+Si `controlling_mode ≠ 4`, el equipo no activa potencia y el enfriamiento se estanca. El tick valida siempre y reenvía tipo 11 (cooldown 5 min).
 
 ### Anti-spam
 

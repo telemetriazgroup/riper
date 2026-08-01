@@ -1117,6 +1117,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
     'log_ctrl_cooling_defrost': 'Cooling: envío de DEFROST',
     'log_ctrl_cooling_eval': 'Cooling: evaluación sin comando',
+    'log_ctrl_cooling_controlling_mode':
+      'Cooling: controlling_mode → {{mode}} (actual {{current}})',
     'log_ctrl_cooling_mode_dynamic': 'Cooling: seguimiento dinámico activo',
     'log_ctrl_cooling_mode_legacy': 'Cooling: modo legacy (offset −2/−3)',
     'log_ctrl_reason_cooling_decision': 'Motivo: {{reason}}',
@@ -2656,6 +2658,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
     'log_ctrl_cooling_defrost': 'Cooling: DEFROST command',
     'log_ctrl_cooling_eval': 'Cooling: evaluation with no command',
+    'log_ctrl_cooling_controlling_mode':
+      'Cooling: controlling_mode → {{mode}} (current {{current}})',
     'log_ctrl_cooling_mode_dynamic': 'Cooling: dynamic follow-up active',
     'log_ctrl_cooling_mode_legacy': 'Cooling: legacy mode (offset −2/−3)',
     'log_ctrl_reason_cooling_decision': 'Reason: {{reason}}',

@@ -81,6 +81,13 @@ const COMMAND_TYPES = [
     datoFormat: 'integer',
     description: 'STOP PLAN: dato 7200 mantiene suspendido (reenviar cada hora); dato 300 a 5 min del fin.',
   },
+  {
+    tipo: 11,
+    name: 'controlling_mode',
+    datoFormat: 'integer',
+    description:
+      'Modo de control: en Cooling se exige dato=4 (potencia). Sin modo 4 el equipo no activa potencia y se estanca.',
+  },
 ];
 
 const MANUAL_COMMAND_KINDS = {
@@ -177,7 +184,10 @@ export async function buildControlLogicExport() {
         legacyAggressiveOffsetC: COOLING_TEMP_AGGRESSIVE_OFFSET_C,
         legacyReturnExcessThresholdC: COOLING_RETURN_EXCESS_THRESHOLD_C,
         rule:
-          'Dinámico (default): ramas por evaporation_coil + promedio cargo (cap a return_air si avg>return) + ultimo_control (:9050) + defrost tipo 8. Legacy offset −2/−3 si COOLING_DYNAMIC_LOGIC=0.',
+          'Dinámico (default): exigir controlling_mode=4 (tipo 11 dato 4) + ramas evaporation_coil + USDA/return + ultimo_control (:9050) + defrost tipo 8. Legacy offset −2/−3 si COOLING_DYNAMIC_LOGIC=0.',
+        controllingModeRequired: 4,
+        controllingModeTipo: 11,
+        controllingModeCooldownMs: 5 * 60 * 1000,
         ultimoControlBaseEnv: 'TERMOKING_ULTIMO_CONTROL_API_BASE',
         ultimoControlTzOffsetEnv: 'TERMOKING_ULTIMO_CONTROL_TZ_OFFSET',
         ultimoControlTzOffsetDefault: '-05:00',
