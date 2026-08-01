@@ -17,6 +17,8 @@ export const COOLING_EVAP_SEVERE_C = -14.9;
 export const COOLING_EVAP_OK_C = -6;
 /** Cuando set = objetivo y evap > OK → bajar a objetivo − este offset. */
 export const COOLING_EVAP_OK_EQUALS_OFFSET_C = 4;
+/** Tope: set_point no puede bajar más de N °C bajo el objetivo (ej. obj 3 → mín −5). */
+export const COOLING_SET_MAX_BELOW_OBJETIVO_C = 8;
 export const COOLING_SET_COOLDOWN_MILD_MS = 5 * 60 * 1000;
 export const COOLING_SET_COOLDOWN_STEP_MS = 10 * 60 * 1000;
 export const COOLING_DEFROST_COOLDOWN_MS = 5 * 60 * 1000;
@@ -70,6 +72,22 @@ function msSinceDefrost(ultimoControl, localLastDefrostAtMs) {
 function cooldownOk(msSince, needMs) {
   if (msSince == null) return true; // sin historial → permitir primera acción
   return msSince >= needMs;
+}
+
+/** Piso de set: objetivo − COOLING_SET_MAX_BELOW_OBJETIVO_C. */
+export function coolingSetFloorC(objetivo) {
+  const o = round1(num(objetivo));
+  if (o == null) return null;
+  return round1(o - COOLING_SET_MAX_BELOW_OBJETIVO_C);
+}
+
+/** Limita un target de set al piso (no más frío que obj−8). */
+export function clampCoolingSetTargetC(targetC, objetivo) {
+  const t = round1(num(targetC));
+  const floor = coolingSetFloorC(objetivo);
+  if (t == null) return null;
+  if (floor == null) return t;
+  return t < floor ? floor : t;
 }
 
 /**
@@ -157,15 +175,58 @@ export function evaluateCoolingDecision(input) {
 
   const msSet = msSinceTempSet(input?.ultimoControl, input?.localLastSetAtMs);
   const msDefrost = msSinceDefrost(input?.ultimoControl, input?.localLastDefrostAtMs);
+  const setFloor = coolingSetFloorC(objetivo);
   const baseMeta = {
     ...snap,
     fingerprint,
     msSinceLastSet: msSet,
     msSinceLastDefrost: msDefrost,
+    setFloorC: setFloor,
+    maxBelowObjetivoC: COOLING_SET_MAX_BELOW_OBJETIVO_C,
   };
 
   // Nota: regla cargoAvg > objetivo+5 (forzar set=objetivo) suspendida — interfería
   // con el descenso dinámico del set (p. ej. subía 1.8→2.8 mientras se bajaba).
+
+  // Tope: si set ya está > 8 °C bajo el objetivo → volver a objetivo (no seguir bajando).
+  if (setFloor != null && setPoint < setFloor - COOLING_SET_TOLERANCE_C) {
+    if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
+      return {
+        action: 'set_temperature',
+        targetC: round1(objetivo),
+        reason: 'set_below_floor_reset_to_objetivo',
+        meta: baseMeta,
+      };
+    }
+    return { action: 'none', reason: 'set_below_floor_cooldown', meta: baseMeta };
+  }
+
+  /** Emite set con tope obj−8; si el target queda igual al set actual, no comanda. */
+  const decideSet = (rawTarget, reason, cooldownReason, cooldownMs = COOLING_SET_COOLDOWN_MILD_MS) => {
+    const raw = round1(num(rawTarget));
+    const targetC = clampCoolingSetTargetC(raw, objetivo);
+    if (targetC == null) return { action: 'none', reason: 'invalid_target', meta: baseMeta };
+    if (setEquals(targetC, setPoint)) {
+      return {
+        action: 'none',
+        reason:
+          setFloor != null && setPoint <= setFloor + COOLING_SET_TOLERANCE_C
+            ? 'set_at_floor'
+            : 'set_target_unchanged',
+        meta: baseMeta,
+      };
+    }
+    if (!cooldownOk(msSet, cooldownMs)) {
+      return { action: 'none', reason: cooldownReason, meta: baseMeta };
+    }
+    const clamped = raw != null && setFloor != null && raw < setFloor - 1e-9;
+    return {
+      action: 'set_temperature',
+      targetC,
+      reason: clamped ? 'set_clamped_to_floor' : reason,
+      meta: { ...baseMeta, rawTargetC: raw, clampedToFloor: clamped },
+    };
+  };
 
   // Evaporador severo primero.
   if (evaporationCoil < COOLING_EVAP_SEVERE_C) {
@@ -177,15 +238,11 @@ export function evaluateCoolingDecision(input) {
 
   if (evaporationCoil < COOLING_EVAP_MID_C) {
     if (!setEquals(setPoint, objetivo)) {
-      if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-        return {
-          action: 'set_temperature',
-          targetC: round1(returnAir),
-          reason: 'evap_below_minus_9_9_set_to_return',
-          meta: baseMeta,
-        };
-      }
-      return { action: 'none', reason: 'evap_mid_set_cooldown', meta: baseMeta };
+      return decideSet(
+        returnAir,
+        'evap_below_minus_9_9_set_to_return',
+        'evap_mid_set_cooldown'
+      );
     }
     if (setPoint > returnAir + COOLING_SET_TOLERANCE_C) {
       if (cooldownOk(msDefrost, COOLING_DEFROST_COOLDOWN_MS)) {
@@ -193,74 +250,47 @@ export function evaluateCoolingDecision(input) {
       }
       return { action: 'none', reason: 'evap_mid_defrost_cooldown', meta: baseMeta };
     }
-    if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-      return {
-        action: 'set_temperature',
-        targetC: round1(returnAir),
-        reason: 'evap_below_minus_9_9_set_to_return_equal_obj',
-        meta: baseMeta,
-      };
-    }
-    return { action: 'none', reason: 'evap_mid_noop_cooldown', meta: baseMeta };
+    return decideSet(
+      returnAir,
+      'evap_below_minus_9_9_set_to_return_equal_obj',
+      'evap_mid_noop_cooldown'
+    );
   }
 
   if (evaporationCoil < COOLING_EVAP_MILD_C) {
     if (!setEquals(setPoint, objetivo)) {
-      if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-        return {
-          action: 'set_temperature',
-          targetC: round1(objetivo),
-          reason: 'evap_below_minus_6_5_set_to_objetivo',
-          meta: baseMeta,
-        };
-      }
-      return { action: 'none', reason: 'evap_mild_set_cooldown', meta: baseMeta };
+      return decideSet(
+        objetivo,
+        'evap_below_minus_6_5_set_to_objetivo',
+        'evap_mild_set_cooldown'
+      );
     }
-    if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-      return {
-        action: 'set_temperature',
-        targetC: round1(returnAir),
-        reason: 'evap_below_minus_6_5_set_to_return',
-        meta: baseMeta,
-      };
-    }
-    return { action: 'none', reason: 'evap_mild_noop_cooldown', meta: baseMeta };
+    return decideSet(
+      returnAir,
+      'evap_below_minus_6_5_set_to_return',
+      'evap_mild_noop_cooldown'
+    );
   }
 
   // Banda intermedia [-6.5 … -6]: sin comando (ni mild < -6.5 ni OK > -6).
   if (evaporationCoil > COOLING_EVAP_OK_C) {
     if (setPoint > objetivo + COOLING_SET_TOLERANCE_C) {
-      if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-        return {
-          action: 'set_temperature',
-          targetC: round1(objetivo),
-          reason: 'evap_ok_set_above_objetivo',
-          meta: baseMeta,
-        };
-      }
-      return { action: 'none', reason: 'evap_ok_set_cooldown', meta: baseMeta };
+      return decideSet(objetivo, 'evap_ok_set_above_objetivo', 'evap_ok_set_cooldown');
     }
     if (setEquals(setPoint, objetivo)) {
-      if (cooldownOk(msSet, COOLING_SET_COOLDOWN_MILD_MS)) {
-        return {
-          action: 'set_temperature',
-          targetC: round1(objetivo - COOLING_EVAP_OK_EQUALS_OFFSET_C),
-          reason: 'evap_ok_set_equals_objetivo_minus_4',
-          meta: baseMeta,
-        };
-      }
-      return { action: 'none', reason: 'evap_ok_step_cooldown', meta: baseMeta };
+      return decideSet(
+        objetivo - COOLING_EVAP_OK_EQUALS_OFFSET_C,
+        'evap_ok_set_equals_objetivo_minus_4',
+        'evap_ok_step_cooldown'
+      );
     }
-    // set < objetivo → bajar 1 °C cada 10 min
-    if (cooldownOk(msSet, COOLING_SET_COOLDOWN_STEP_MS)) {
-      return {
-        action: 'set_temperature',
-        targetC: round1(setPoint - 1),
-        reason: 'evap_ok_step_down_1',
-        meta: baseMeta,
-      };
-    }
-    return { action: 'none', reason: 'evap_ok_step_down_cooldown', meta: baseMeta };
+    // set < objetivo → bajar 1 °C cada 10 min (tope obj−8)
+    return decideSet(
+      setPoint - 1,
+      'evap_ok_step_down_1',
+      'evap_ok_step_down_cooldown',
+      COOLING_SET_COOLDOWN_STEP_MS
+    );
   }
 
   return { action: 'none', reason: 'evap_band_no_rule', meta: baseMeta };
@@ -312,6 +342,14 @@ const REASON_ANALYSIS_ES = {
   evap_ok_step_cooldown: 'Evaporador > -6 °C; paso objetivo−4 en cooldown.',
   evap_ok_step_down_cooldown: 'Evaporador > -6 °C; paso −1 en cooldown (10 min).',
   evap_band_no_rule: 'Evaporador en banda intermedia (−6.5…−6); sin regla de cambio.',
+  set_below_floor_reset_to_objetivo:
+    'Set_point más de 8 °C bajo el objetivo → forzar set_point = objetivo.',
+  set_below_floor_cooldown:
+    'Set_point bajo el tope (obj−8); espera cooldown antes de volver a objetivo.',
+  set_clamped_to_floor:
+    'Target bajo el tope → set_point limitado a objetivo − 8 °C.',
+  set_at_floor: 'Set_point ya en el tope (objetivo − 8 °C); no bajar más.',
+  set_target_unchanged: 'Target de set igual al actual; sin comando.',
   telemetry_unchanged: 'Telemetría sin cambios respecto al último análisis; no se decide.',
   missing_critical_sensors: 'Faltan sensores críticos (set_point / return_air / evaporador).',
   invalid_objetivo: 'Objetivo de producto inválido.',
@@ -356,6 +394,8 @@ export function buildCoolingDecisionTrace(decision, extra = {}) {
   const inputs = {
     objetivo_C: meta.objetivo ?? null,
     set_point_C: meta.setPoint ?? null,
+    set_floor_C: meta.setFloorC ?? null,
+    max_below_objetivo_C: meta.maxBelowObjetivoC ?? COOLING_SET_MAX_BELOW_OBJETIVO_C,
     return_air_C: meta.returnAir ?? null,
     temp_supply_1_C: meta.tempSupply ?? null,
     evaporation_coil_C: meta.evaporationCoil ?? null,
@@ -380,6 +420,7 @@ export function buildCoolingDecisionTrace(decision, extra = {}) {
   const sensorsEs = [
     `objetivo=${fmtC(inputs.objetivo_C)}`,
     `set=${fmtC(inputs.set_point_C)}`,
+    `piso(obj-8)=${fmtC(inputs.set_floor_C)}`,
     `retorno=${fmtC(inputs.return_air_C)}`,
     `supply=${fmtC(inputs.temp_supply_1_C)}`,
     `evap=${fmtC(inputs.evaporation_coil_C)}`,

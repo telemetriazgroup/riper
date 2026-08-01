@@ -57,6 +57,9 @@ evaporation_coil menor que -14.9 -> Se envio defrost hace mas de 5 minutos ? -> 
 
 Banda intermedia: evaporation_coil entre -6.5 y -6 (inclusive) → sin comando.
 
+Tope de set_point: no bajar más de 8 °C bajo el objetivo (obj 3 → mín -5).
+Si set actual < objetivo-8 (ej. -9) → cambiar set a objetivo.
+
 si evaporation_coil mayor a -6  Entonces : 
 
             RECORDAR ULTIMOS  CAMBIO DE SETPOINT 

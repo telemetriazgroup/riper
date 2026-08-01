@@ -124,6 +124,10 @@ evaporation_coil > -6
   → set < objetivo → si último cambio ≥ 10 min → set = set − 1
 ```
 
+**Tope de descenso:** `set_point` no puede quedar más de **8 °C** bajo el objetivo  
+(ej. objetivo 3 → mínimo −5). Cualquier target más frío se limita a `objetivo − 8`.  
+Si el set actual ya está por debajo de ese piso (ej. −9), se fuerza `set = objetivo`.
+
 > Nota: la banda intermedia es el hueco entre mild (`< -6.5`) y OK (`> -6`).
 
 Complemento (suspendido): forzar set si promedio interno **&gt; objetivo + 5 °C** — interfería con el descenso dinámico. Sigue el snapshot de promedio a ~30 min en objetivo (solo trazabilidad).
