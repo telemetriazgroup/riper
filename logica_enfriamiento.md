@@ -60,6 +60,13 @@ Banda intermedia: evaporation_coil entre -6.5 y -6 (inclusive) → sin comando.
 Tope de set_point: no bajar más de 8 °C bajo el objetivo (obj 3 → mín -5).
 Si set actual < objetivo-8 (ej. -9) → cambiar set a objetivo.
 
+Si return_air < objetivo (enfriamiento casi terminado) Y hay cargos USDA válidos:
+  ordenar USDA (cargo_1..4) de menor a mayor → promedio
+  si promedio USDA < objetivo → set_point = objetivo - 1
+  si no → set_point = objetivo - 2
+  si ya está en ese set → no bajar más (mantener con set ligero)
+Si no hay cargos válidos → seguir lógica normal de return_air / evaporador.
+
 si evaporation_coil mayor a -6  Entonces : 
 
             RECORDAR ULTIMOS  CAMBIO DE SETPOINT 

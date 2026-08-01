@@ -128,6 +128,14 @@ evaporation_coil > -6
 (ej. objetivo 3 → mínimo −5). Cualquier target más frío se limita a `objetivo − 8`.  
 Si el set actual ya está por debajo de ese piso (ej. −9), se fuerza `set = objetivo`.
 
+**Mantenimiento (proceso casi listo):** si `return_air < objetivo` (tras proteger evaporador)
+**y hay al menos una USDA/cargo válida** (−20…40):
+1. Ordenar USDA (`cargo_1..4` válidos) de menor a mayor y promediar.
+2. Si promedio USDA **&lt; objetivo** → `set_point = objetivo − 1`.
+3. Si no (promedio ≥ objetivo) → `set_point = objetivo − 2`.
+4. Si ya está en ese set → no bajar más (set ligero para mantener el objetivo).  
+Si **no** hay cargos válidos → se sigue la lógica normal de `return_air` / evaporador (no se inventa promedio USDA).
+
 > Nota: la banda intermedia es el hueco entre mild (`< -6.5`) y OK (`> -6`).
 
 Complemento (suspendido): forzar set si promedio interno **&gt; objetivo + 5 °C** — interfería con el descenso dinámico. Sigue el snapshot de promedio a ~30 min en objetivo (solo trazabilidad).

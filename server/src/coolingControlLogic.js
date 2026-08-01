@@ -91,6 +91,21 @@ export function clampCoolingSetTargetC(targetC, objetivo) {
 }
 
 /**
+ * USDA (cargo_1..4): válidos −20…40, ordenados de menor a mayor; promedio.
+ * @returns {{ sorted: number[], avg: number|null }}
+ */
+export function resolveUsdaAverageC(cargoTemps) {
+  const sorted = (Array.isArray(cargoTemps) ? cargoTemps : [])
+    .map((v) => round1(num(v)))
+    .filter((v) => v != null && v >= COOLING_CARGO_VALID_MIN_C && v <= COOLING_CARGO_VALID_MAX_C)
+    .sort((a, b) => a - b);
+  if (!sorted.length) return { sorted: [], avg: null };
+  if (sorted.length === 1) return { sorted, avg: sorted[0] };
+  const avg = round1(sorted.reduce((a, b) => a + b, 0) / sorted.length);
+  return { sorted, avg };
+}
+
+/**
  * Fingerprint de telemetría relevante para skip si no cambió.
  */
 export function coolingTelemetryFingerprint(snap) {
@@ -142,6 +157,7 @@ export function evaluateCoolingDecision(input) {
   const evaporationCoil = round1(num(input?.evaporationCoil));
   const cargos = [input?.cargo1, input?.cargo2, input?.cargo3, input?.cargo4].map((v) => round1(num(v)));
   const internalAvg = round1(resolveInternalTempAverageC(cargos, returnAir));
+  const { sorted: usdaSorted, avg: usdaAvg } = resolveUsdaAverageC(cargos);
 
   const snap = {
     objetivo,
@@ -150,6 +166,8 @@ export function evaluateCoolingDecision(input) {
     tempSupply,
     evaporationCoil,
     internalAvg,
+    usdaAvg,
+    usdaSorted,
     cargo1: cargos[0],
     cargo2: cargos[1],
     cargo3: cargos[2],
@@ -272,6 +290,23 @@ export function evaluateCoolingDecision(input) {
     );
   }
 
+  // return_air < objetivo + hay USDA válidas → mantenimiento por promedio USDA.
+  // Sin cargos válidos → no entrar aquí; seguir lógica normal de return_air / evap.
+  if (
+    returnAir < objetivo - COOLING_SET_TOLERANCE_C &&
+    usdaAvg != null
+  ) {
+    const holdTarget =
+      usdaAvg < objetivo - COOLING_SET_TOLERANCE_C
+        ? round1(objetivo - 1)
+        : round1(objetivo - 2);
+    const reason =
+      usdaAvg < objetivo - COOLING_SET_TOLERANCE_C
+        ? 'return_below_obj_usda_avg_low_set_obj_minus_1'
+        : 'return_below_obj_usda_avg_high_set_obj_minus_2';
+    return decideSet(holdTarget, reason, 'return_below_obj_hold_cooldown', COOLING_SET_COOLDOWN_MILD_MS);
+  }
+
   // Banda intermedia [-6.5 … -6]: sin comando (ni mild < -6.5 ni OK > -6).
   if (evaporationCoil > COOLING_EVAP_OK_C) {
     if (setPoint > objetivo + COOLING_SET_TOLERANCE_C) {
@@ -350,6 +385,12 @@ const REASON_ANALYSIS_ES = {
     'Target bajo el tope → set_point limitado a objetivo − 8 °C.',
   set_at_floor: 'Set_point ya en el tope (objetivo − 8 °C); no bajar más.',
   set_target_unchanged: 'Target de set igual al actual; sin comando.',
+  return_below_obj_usda_avg_low_set_obj_minus_1:
+    'return_air < objetivo (enfriamiento casi listo). Promedio USDA < objetivo → set_point = objetivo − 1 (mantener).',
+  return_below_obj_usda_avg_high_set_obj_minus_2:
+    'return_air < objetivo (enfriamiento casi listo). Promedio USDA ≥ objetivo → set_point = objetivo − 2 (mantener).',
+  return_below_obj_hold_cooldown:
+    'return_air < objetivo; mantenimiento USDA en cooldown (< 5 min).',
   telemetry_unchanged: 'Telemetría sin cambios respecto al último análisis; no se decide.',
   missing_critical_sensors: 'Faltan sensores críticos (set_point / return_air / evaporador).',
   invalid_objetivo: 'Objetivo de producto inválido.',
@@ -404,6 +445,8 @@ export function buildCoolingDecisionTrace(decision, extra = {}) {
     cargo_3_temp_C: meta.cargo3 ?? null,
     cargo_4_temp_C: meta.cargo4 ?? null,
     internal_avg_C: meta.internalAvg ?? null,
+    usda_avg_C: meta.usdaAvg ?? null,
+    usda_sorted_C: Array.isArray(meta.usdaSorted) ? meta.usdaSorted : null,
   };
 
   const analysisEs =
@@ -425,6 +468,12 @@ export function buildCoolingDecisionTrace(decision, extra = {}) {
     `supply=${fmtC(inputs.temp_supply_1_C)}`,
     `evap=${fmtC(inputs.evaporation_coil_C)}`,
     `cargoAvg=${fmtC(inputs.internal_avg_C)}`,
+    `usdaAvg=${fmtC(inputs.usda_avg_C)}`,
+    `usdaSorted=[${
+      Array.isArray(inputs.usda_sorted_C)
+        ? inputs.usda_sorted_C.map((v) => fmtC(v)).join(',')
+        : '—'
+    }]`,
     `cargos=[${fmtC(inputs.cargo_1_temp_C)},${fmtC(inputs.cargo_2_temp_C)},${fmtC(inputs.cargo_3_temp_C)},${fmtC(inputs.cargo_4_temp_C)}]`,
   ].join(' | ');
 
