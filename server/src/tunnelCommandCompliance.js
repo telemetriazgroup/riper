@@ -14,6 +14,7 @@ import {
 } from './tunelControlClient.js';
 import { sendEthyleneDoseWithDeviceConfig } from './ethyleneDeviceConfig.js';
 import { fetchDeviceRowByImei, readTelemetryField } from './tunnelCommandTelemetry.js';
+import { resolveProcessControlAdapter } from './processControlAdapter.js';
 import {
   ETHYLENE_MAX_READING,
   applyEthyleneReadingToMeta,
@@ -77,7 +78,38 @@ function resolveFanOutImeis(job) {
     }
     return gourmetTradingTunnelUnitImeis();
   }
+  const adapter = resolveProcessControlAdapter(job.device_id);
+  if (adapter?.commandImeis) {
+    const tipo = Number(job.tunnel_tipo);
+    const fromAdapter = adapter.commandImeis(job.device_id, tipo);
+    if (Array.isArray(fromAdapter) && fromAdapter.length > 0) {
+      return fromAdapter.map((x) => String(x).trim()).filter(Boolean);
+    }
+  }
+  if (adapter?.fanOutUnits) {
+    const units = adapter.fanOutUnits(job.device_id);
+    if (Array.isArray(units) && units.length > 0) {
+      return units.map((x) => String(x).trim()).filter(Boolean);
+    }
+  }
   return [String(job.device_id).trim()];
+}
+
+/** Envía tipo/dato por flota (túnel Gourmet o TermoKing Greenyard/UltraOrganics). */
+async function sendJobControlCommand(job, unitId, tipo, dato) {
+  const adapter = resolveProcessControlAdapter(job.device_id);
+  if (adapter?.sendCommand) {
+    return adapter.sendCommand(unitId, tipo, dato);
+  }
+  return sendTunnelControlCommand(unitId, tipo, dato);
+}
+
+async function sendJobEthyleneDose(job, unitId, ppm) {
+  const adapter = resolveProcessControlAdapter(job.device_id);
+  if (adapter?.sendEthyleneDose) {
+    return adapter.sendEthyleneDose(unitId, ppm);
+  }
+  return sendEthyleneInjectionCommand(unitId, ppm);
 }
 
 function resolveEthyleneImei(job) {
@@ -148,6 +180,14 @@ function buildJobMeta(deviceId, kind, target) {
       return { ...meta, sensorImei: gourmetTunnelEthyleneImei() };
     }
   }
+
+  const adapter = resolveProcessControlAdapter(id);
+  if (adapter?.commandImeis && KIND_CONFIG[kind]) {
+    const imeis = adapter.commandImeis(id, KIND_CONFIG[kind].tunnelTipo);
+    if (Array.isArray(imeis) && imeis.length > 0) {
+      return { ...meta, fanOutImeis: imeis };
+    }
+  }
   return meta;
 }
 
@@ -198,7 +238,7 @@ async function dispatchFanOutSimple(job) {
 
   try {
     for (const imei of imeis) {
-      const sent = await sendTunnelControlCommand(imei, job.tunnel_tipo, target);
+      const sent = await sendJobControlCommand(job, imei, job.tunnel_tipo, target);
       sentUrls.push({ imei, url: sent.url, dato: sent.dato });
     }
     steps = appendStep(steps, {
@@ -233,11 +273,18 @@ async function dispatchLegacyEthylene(job) {
   let steps = job.steps ?? [];
 
   try {
-    const sent = await sendEthyleneInjectionCommand(imei, target);
+    const sent = await sendJobEthyleneDose(job, imei, target);
+    const urls = Array.isArray(sent?.steps)
+      ? sent.steps.map((s) => s.url)
+      : sent?.step?.url
+        ? [sent.step.url]
+        : sent?.url
+          ? [sent.url]
+          : [];
     steps = appendStep(steps, {
       action: 'send_ethylene',
-      ppm: sent.ppm,
-      urls: sent.steps.map((s) => s.url),
+      ppm: sent?.ppm ?? target,
+      urls,
     });
     const nextCheck = new Date(Date.now() + ETHYLENE_VERIFY_DELAY_MS);
     await updateJob(job.id, {
@@ -358,7 +405,7 @@ async function dispatchInitialSend(job) {
   let steps = job.steps ?? [];
 
   try {
-    const sent = await sendTunnelControlCommand(job.device_id, job.tunnel_tipo, target);
+    const sent = await sendJobControlCommand(job, job.device_id, job.tunnel_tipo, target);
     steps = appendStep(steps, {
       action: 'send',
       tipo: job.tunnel_tipo,
@@ -537,12 +584,19 @@ async function verifyLegacyEthyleneJob(job, row) {
   }
 
   try {
-    const sent = await sendEthyleneInjectionCommand(job.device_id, delta);
+    const sent = await sendJobEthyleneDose(job, job.device_id, delta);
+    const urls = Array.isArray(sent?.steps)
+      ? sent.steps.map((s) => s.url)
+      : sent?.step?.url
+        ? [sent.step.url]
+        : sent?.url
+          ? [sent.url]
+          : [];
     steps = appendStep(steps, {
       action: 'retry_ethylene',
       deltaPpm: delta,
       readPpm: actual,
-      urls: sent.steps.map((s) => s.url),
+      urls,
     });
     const nextCheck = new Date(Date.now() + ETHYLENE_VERIFY_DELAY_MS);
     await updateJob(job.id, {

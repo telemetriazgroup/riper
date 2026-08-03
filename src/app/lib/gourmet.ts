@@ -73,7 +73,7 @@ export function isGourmetTunnelCommandDevice(deviceId?: string | null): boolean 
   return getGourmetTradingPinnedImeis().includes(id);
 }
 
-/** Ocultar «Estados de comandos» mientras hay proceso de panel activo (no Manual). */
+/** @deprecated Usar showManualCommandStatesPanel de fleetDemo (cubre Greenyard/UltraOrganics). */
 export function showGourmetTunnelCommandStatesPanel(
   deviceId: string | undefined,
   activeProcessType: string | null | undefined,

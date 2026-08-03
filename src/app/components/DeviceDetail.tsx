@@ -19,7 +19,8 @@ import { DeviceControlProcessPanel } from '@/app/components/DeviceControlProcess
 import { DeviceRipeningTrackingOverview } from '@/app/components/DeviceRipeningTrackingOverview';
 import { DeviceMonitoringAnalysis } from '@/app/components/DeviceMonitoringAnalysis';
 import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandCompliancePanel';
-import { showGourmetTunnelCommandStatesPanel, isGourmetSession } from '@/app/lib/gourmet';
+import { isGourmetSession } from '@/app/lib/gourmet';
+import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 
 interface DeviceDetailProps {
@@ -213,7 +214,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
             formatDateTime={formatDateTime}
           />
           <DeviceControlProcessPanel deviceId={deviceId} />
-          {showGourmetTunnelCommandStatesPanel(
+          {showManualCommandStatesPanel(
             deviceId,
             activeControlSession?.process_type,
             activeControlSession?.status

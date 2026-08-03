@@ -1,5 +1,7 @@
 /** Normalización y lectura de parámetros de procesos de panel (Homogenización, Maduración, …). */
 
+import { validateProcessSetPointC } from './processTempLimits.js';
+
 function asObject(v) {
   if (v && typeof v === 'object' && !Array.isArray(v)) return v;
   if (Array.isArray(v)) return { tunnelEventLog: v };
@@ -164,5 +166,13 @@ export function validateControlProcessParams(processType, params) {
   if (pt === 'Ventilation') {
     if (controlParamNumber(params, 'targetCo2', 'target_co2') == null) return 'targetCo2 required';
   }
+
+  const setPoint = controlParamNumber(params, 'setPoint', 'set_point');
+  if (setPoint != null && ['Homogenization', 'Ripening', 'Cooling', 'Manual'].includes(pt)) {
+    const extendedManual = params?.extendedManualTempRange === true || params?.extended_temp_range === true;
+    const tempErr = validateProcessSetPointC(pt, setPoint, { extendedManual });
+    if (tempErr) return tempErr;
+  }
+
   return null;
 }

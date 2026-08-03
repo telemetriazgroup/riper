@@ -3,12 +3,20 @@ import { writeAudit } from '../auditLog.js';
 import { fireEmailNotification } from '../emailNotifications.js';
 import { isPinnedFleetDeviceId, isPinnedFleetDemoEmail } from '../demoFleetFilter.js';
 import { isGourmetTunnelCommandDeviceId, isGourmetTradingFleetEmail } from '../gourmetFleet.js';
+import { isGreenyardDeviceId, isGreenyardFleetEmail } from '../greenyardFleet.js';
+import {
+  isUltraorganicsDeviceId,
+  isUltraorganicsFleetEmail,
+  isUltraorganicsScopedDeviceId,
+} from '../ultraorganicsFleet.js';
+import { isAutomatedControlDeviceId } from '../processControlAdapter.js';
 import {
   createTunnelCommandJobs,
   kickoffTunnelCommandBatch,
   listTunnelCommandJobs,
 } from '../tunnelCommandCompliance.js';
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
+import { validateProcessSetPointC } from '../processTempLimits.js';
 
 export const tunnelCommandsRouter = express.Router();
 
@@ -18,12 +26,21 @@ function isViewer(req) {
 
 function canUseTunnelCommands(req, deviceId) {
   if (isViewer(req)) return false;
-  if (!isGourmetTradingFleetEmail(req.user?.email)) return false;
-  if (!isGourmetTunnelCommandDeviceId(deviceId)) return false;
-  if (isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
+  const email = req.user?.email;
+  const id = String(deviceId || '').trim();
+  if (!id) return false;
+  if (isPinnedFleetDemoEmail(email) && !isPinnedFleetDeviceId(email, id)) {
     return false;
   }
-  return true;
+  if (isGourmetTradingFleetEmail(email) && isGourmetTunnelCommandDeviceId(id)) return true;
+  if (isGreenyardFleetEmail(email) && isGreenyardDeviceId(id)) return true;
+  if (isUltraorganicsFleetEmail(email) && (isUltraorganicsDeviceId(id) || isUltraorganicsScopedDeviceId(id))) {
+    return true;
+  }
+  if ((req.user?.role === 'superadmin' || req.user?.role === 'admin') && isAutomatedControlDeviceId(id)) {
+    return true;
+  }
+  return false;
 }
 
 function parseCommandsBody(body) {
@@ -54,6 +71,14 @@ tunnelCommandsRouter.post('/apply-manual', async (req, res) => {
     const kinds = Object.keys(commands).filter((k) => Number.isFinite(commands[k]));
     if (kinds.length === 0) {
       return res.status(400).json({ error: 'validation', message: 'at least one command required' });
+    }
+
+    if (Number.isFinite(commands.temperature)) {
+      const extended = req.body?.extendedManualTempRange === true || req.body?.extended_temp_range === true;
+      const tempErr = validateProcessSetPointC('Manual', commands.temperature, { extendedManual: extended });
+      if (tempErr) {
+        return res.status(400).json({ error: 'validation', message: tempErr });
+      }
     }
 
     const { batchId, jobs } = await createTunnelCommandJobs({
@@ -92,11 +117,23 @@ tunnelCommandsRouter.get('/', async (req, res) => {
     const deviceId = String(req.query.deviceId || '').trim();
     const batchId = String(req.query.batchId || '').trim();
     const activeOnly = req.query.active === '1' || req.query.active === 'true';
+    const email = req.user?.email;
 
-    if (deviceId && isGourmetTradingFleetEmail(req.user?.email) && !isGourmetTunnelCommandDeviceId(deviceId)) {
+    if (deviceId && isPinnedFleetDemoEmail(email) && !isPinnedFleetDeviceId(email, deviceId)) {
       return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
     }
-    if (deviceId && isPinnedFleetDemoEmail(req.user?.email) && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
+    if (deviceId && isGourmetTradingFleetEmail(email) && !isGourmetTunnelCommandDeviceId(deviceId)) {
+      return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
+    }
+    if (deviceId && isGreenyardFleetEmail(email) && !isGreenyardDeviceId(deviceId)) {
+      return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
+    }
+    if (
+      deviceId &&
+      isUltraorganicsFleetEmail(email) &&
+      !isUltraorganicsDeviceId(deviceId) &&
+      !isUltraorganicsScopedDeviceId(deviceId)
+    ) {
       return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
     }
 

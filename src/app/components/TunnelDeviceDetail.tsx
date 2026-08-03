@@ -25,7 +25,8 @@ import { resolveControlPanelTab } from '@/app/lib/madurador';
 import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandCompliancePanel';
 import { EventLog } from '@/app/components/EventLog';
 import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
-import { showGourmetTunnelCommandStatesPanel, isGourmetSession } from '@/app/lib/gourmet';
+import { isGourmetSession } from '@/app/lib/gourmet';
+import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 
 interface TunnelDeviceDetailProps {
@@ -375,7 +376,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
         </div>
       )}
 
-      {showGourmetTunnelCommandStatesPanel(
+      {showManualCommandStatesPanel(
         GOURMET_TUNEL_DEVICE_ID,
         activeControlSession?.process_type,
         activeControlSession?.status

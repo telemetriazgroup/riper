@@ -60,6 +60,8 @@ export type TunnelCommandJob = {
 
 export type ApplyTunnelManualBody = {
   deviceId: string;
+  /** Rango extendido manual (−40…5 °C). Requerido si set_point &lt; 5. */
+  extendedManualTempRange?: boolean;
   commands: {
     set_point?: number;
     humidity_set_point?: number;
@@ -93,6 +95,11 @@ export async function fetchTunnelCommandJobs(
   return json.data ?? [];
 }
 
+type TranslateFn = {
+  (key: string): string;
+  (key: string, fallback: string): string;
+};
+
 export function tunnelCommandKindLabel(kind: TunnelCommandKind, t: (k: string) => string): string {
   switch (kind) {
     case 'temperature':
@@ -108,11 +115,38 @@ export function tunnelCommandKindLabel(kind: TunnelCommandKind, t: (k: string) =
   }
 }
 
+/** Etiquetas de estado en lenguaje de usuario (nunca claves técnicas). */
+export function tunnelCommandStatusLabel(
+  status: string | null | undefined,
+  t: TranslateFn
+): string {
+  switch (String(status || '').trim()) {
+    case 'pending':
+      return t('tunnel_cmd_pending', 'Pendiente');
+    case 'sent':
+      return t('tunnel_cmd_sent', 'Enviado');
+    case 'verifying':
+      return t('tunnel_cmd_verifying', 'Verificando');
+    case 'waiting':
+      return t('tunnel_cmd_waiting', 'Esperando lectura');
+    case 'completed':
+      return t('tunnel_cmd_completed', 'Completado');
+    case 'failed':
+      return t('tunnel_cmd_failed', 'Fallido');
+    case 'cancelled':
+      return t('tunnel_cmd_cancelled', 'Cancelado');
+    case 'in_progress':
+      return t('tunnel_cmd_in_progress', 'En curso');
+    default:
+      return t('tunnel_cmd_verifying', 'Verificando');
+  }
+}
+
 export function tunnelCommandStatusTone(
-  status: TunnelCommandStatus
+  status: TunnelCommandStatus | string
 ): 'default' | 'success' | 'warning' | 'danger' {
   if (status === 'completed') return 'success';
   if (status === 'failed' || status === 'cancelled') return 'danger';
-  if (status === 'waiting' || status === 'verifying') return 'warning';
+  if (status === 'waiting' || status === 'verifying' || status === 'in_progress') return 'warning';
   return 'default';
 }

@@ -67,7 +67,22 @@ export type DeviceControlSessionRow = {
 };
 
 export function controlSessionProgressPct(session: DeviceControlSessionRow | null | undefined): number {
-  if (!session || session.status !== 'active') return 0;
+  if (!session) return 0;
+
+  /** Manual con jobs de cumplimiento: progreso por comandos terminados. */
+  if (session.process_type === 'Manual') {
+    const jobs = session.params?.tunnelJobs;
+    if (Array.isArray(jobs) && jobs.length > 0) {
+      const terminal = jobs.filter((j) => {
+        const st = String((j as { status?: string })?.status || '');
+        return st === 'completed' || st === 'failed' || st === 'cancelled';
+      }).length;
+      return Math.round((1000 * terminal) / jobs.length) / 10;
+    }
+    if (session.status !== 'active') return 100;
+  }
+
+  if (session.status !== 'active') return 0;
   const t0 = new Date(session.started_at).getTime();
   const t1 = new Date(session.estimated_end_at).getTime();
   const now = Date.now();

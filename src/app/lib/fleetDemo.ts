@@ -169,8 +169,25 @@ export function isAutomatedControlDevice(deviceId?: string | null): boolean {
   if (!deviceId) return false;
   const id = String(deviceId).trim();
   if (isGourmetTunnelCommandDevice(id)) return true;
-  if (isGreenyardSession() && getGreenyardPinnedImeis().includes(id)) return true;
-  if (isUltraorganicsSession() && getUltraorganicsAllImeis().includes(id)) return true;
+  /** Por IMEI (también Super Admin / operadores que no usan el email demo de flota). */
+  if (getGreenyardPinnedImeis().includes(id)) return true;
+  if (getUltraorganicsAllImeis().includes(id)) return true;
   return false;
+}
+
+/**
+ * Panel «Estados de comandos» / último control manual con cumplimiento telemetría.
+ * Se oculta si hay proceso de panel activo distinto de Manual.
+ */
+export function showManualCommandStatesPanel(
+  deviceId: string | undefined,
+  activeProcessType: string | null | undefined,
+  sessionStatus: string | null | undefined
+): boolean {
+  if (!deviceId || !isAutomatedControlDevice(deviceId)) return false;
+  if (sessionStatus === 'active' && activeProcessType && activeProcessType !== 'Manual') {
+    return false;
+  }
+  return true;
 }
 

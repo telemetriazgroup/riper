@@ -5,6 +5,7 @@ import { useSettings } from '@/app/contexts/SettingsContext';
 import { useTunnelCommandJobs } from '@/app/hooks/useTunnelCommandJobs';
 import {
   tunnelCommandKindLabel,
+  tunnelCommandStatusLabel,
   tunnelCommandStatusTone,
   type TunnelCommandJob,
   type TunnelCommandStatus,
@@ -15,27 +16,6 @@ import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 type Props = {
   deviceId: string;
 };
-
-function statusLabel(status: TunnelCommandStatus, t: (k: string) => string): string {
-  switch (status) {
-    case 'pending':
-      return t('tunnel_cmd_pending') || 'Pendiente';
-    case 'sent':
-      return t('tunnel_cmd_sent') || 'Enviado';
-    case 'verifying':
-      return t('tunnel_cmd_verifying') || 'Verificando';
-    case 'waiting':
-      return t('tunnel_cmd_waiting') || 'Esperando lectura';
-    case 'completed':
-      return t('tunnel_cmd_completed') || 'Completado';
-    case 'failed':
-      return t('tunnel_cmd_failed') || 'Fallido';
-    case 'cancelled':
-      return t('tunnel_cmd_cancelled') || 'Cancelado';
-    default:
-      return status;
-  }
-}
 
 function StatusIcon({ status }: { status: TunnelCommandStatus }) {
   if (status === 'completed') return <CheckCircle2 className="h-4 w-4 text-green-600" />;
@@ -101,7 +81,7 @@ function JobRow({
             tone === 'default' && 'bg-gray-100 text-gray-700'
           )}
         >
-          {statusLabel(job.status, t)}
+          {tunnelCommandStatusLabel(job.status, t)}
         </span>
       </div>
       {job.last_error && (

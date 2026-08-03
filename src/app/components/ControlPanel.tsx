@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
 import { applyTunnelManualCommands } from '@/app/lib/tunnelCommandsApi';
 import { isGourmetSession, isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
+import { isAutomatedControlDevice } from '@/app/lib/fleetDemo';
 import {
   cacheGourmetProgrammedEthylene,
   resolveGourmetProgrammedEthylenePpm,
@@ -42,10 +43,15 @@ import { isActivePanelProcess } from '@/app/lib/controlProcessDisplay';
 import { ActiveProcessProgrammedPanel } from '@/app/components/ActiveProcessProgrammedPanel';
 import {
   MANUAL_TARGET_TEMP_EXTENDED_MIN_C,
-  MANUAL_TARGET_TEMP_MAX_C,
+  MANUAL_TARGET_TEMP_EXTENDED_MAX_C,
+  COOLING_TARGET_TEMP_MIN_C,
+  COOLING_TARGET_TEMP_MAX_C,
+  RIPENING_TARGET_TEMP_MIN_C,
+  RIPENING_TARGET_TEMP_MAX_C,
   clampManualTargetTempC,
   deviceNeedsExtendedTempRange,
   formatManualTempRangeDual,
+  isManualTempBelowSensorSafeC,
   manualTargetTempBoundsC,
 } from '@/app/lib/manualControlTemp';
 import { formatUiDecimal, formatUiPercent, UI_MAX_DECIMALS } from '@/app/lib/formatUiNumber';
@@ -381,7 +387,10 @@ const ManualControl = ({
   );
   const extendedRangeDual = useMemo(
     () =>
-      formatManualTempRangeDual(MANUAL_TARGET_TEMP_EXTENDED_MIN_C, MANUAL_TARGET_TEMP_MAX_C),
+      formatManualTempRangeDual(
+        MANUAL_TARGET_TEMP_EXTENDED_MIN_C,
+        MANUAL_TARGET_TEMP_EXTENDED_MAX_C
+      ),
     []
   );
   const [temp, setTemp] = useState(() =>
@@ -442,6 +451,8 @@ const ManualControl = ({
   const originalEthylene = clamp(manualEthyleneBase, MANUAL_ETH_MIN, MANUAL_ETH_MAX);
   const originalFan = device?.madurador?.ventilation_fan_reference_pct ?? 100;
   const isPoweredOn = device?.telemetry.power_state === 1;
+  const tempBelowSensorSafe =
+    temp !== originalTemp && isManualTempBelowSensorSafeC(temp);
 
   // Connection Status Logic
   const lastSeenDate = device?.last_seen ? new Date(device.last_seen) : new Date();
@@ -479,15 +490,19 @@ const ManualControl = ({
       if (ethylene !== originalEthylene) tunnelCommands.ethylene = Math.round(ethylene);
       if (fan !== originalFan) tunnelCommands.fan_speed = Math.round(fan);
 
-      if (isGourmetTunnelCommandDevice(deviceId)) {
+      if (isAutomatedControlDevice(deviceId) || isGourmetTunnelCommandDevice(deviceId)) {
         if (Object.keys(tunnelCommands).length === 0) {
           toast.error(t('no_changes_to_apply') || 'Sin cambios');
           setIsConfirmOpen(false);
           return;
         }
-        const result = await applyTunnelManualCommands({ deviceId, commands: tunnelCommands });
+        const result = await applyTunnelManualCommands({
+          deviceId,
+          extendedManualTempRange: extendedTempRange || isManualTempBelowSensorSafeC(temp),
+          commands: tunnelCommands,
+        });
         const sentKinds = result.jobs.map((j) => j.kind).join(', ');
-        console.info('[tunnel] comandos enviados upstream', deviceId, tunnelCommands, sentKinds);
+        console.info('[manual-cmd] comandos enviados upstream', deviceId, tunnelCommands, sentKinds);
         const summary = changes.map((c) => `${c.name}: ${c.from} → ${c.to}`).join(' · ');
         await startControlProcess({
           deviceId,
@@ -500,6 +515,7 @@ const ManualControl = ({
             fan_speed: fan,
             changes,
             tempUnit,
+            extendedManualTempRange: extendedTempRange || isManualTempBelowSensorSafeC(temp),
             source: 'tunnel_api',
             tunnelCommandBatchId: result.batchId,
             tunnelJobs: result.jobs.map((j) => ({
@@ -509,27 +525,31 @@ const ManualControl = ({
               target: j.target_value,
             })),
             tunnelOverallStatus: 'in_progress',
-            ethylene_injection_programmed: ethylene,
+            ...(isGourmetSession() || isGourmetTunnelCommandDevice(deviceId)
+              ? { ethylene_injection_programmed: ethylene }
+              : {}),
           },
           durationHours: 1 / 3600,
           auditLog: true,
           startedAt: new Date().toISOString(),
         });
-        cacheGourmetProgrammedEthylene(deviceId, ethylene);
+        if (isGourmetSession() || isGourmetTunnelCommandDevice(deviceId)) {
+          cacheGourmetProgrammedEthylene(deviceId, ethylene);
+        }
         void revalidateControlSessionsList();
         void revalidateFleetActiveControlSessions();
         await sessionMutate();
-        toast.success(t('tunnel_cmd_sent_ok') || 'Comandos enviados al túnel — seguimiento en curso');
+        toast.success(t('tunnel_cmd_sent_ok', 'Cambios enviados. Seguimiento en curso.'));
         setIsConfirmOpen(false);
         return;
-      } else {
-        await sendControlCommand(deviceId, 'manual_update', {
-          set_point: temp,
-          humidity_set_point: humidity,
-          ethylene,
-          fan_speed: fan,
-        });
       }
+
+      await sendControlCommand(deviceId, 'manual_update', {
+        set_point: temp,
+        humidity_set_point: humidity,
+        ethylene,
+        fan_speed: fan,
+      });
       const summary = changes.map((c) => `${c.name}: ${c.from} → ${c.to}`).join(' · ');
       await startControlProcess({
         deviceId,
@@ -542,6 +562,7 @@ const ManualControl = ({
           fan_speed: fan,
           changes,
           tempUnit,
+          extendedManualTempRange: extendedTempRange || isManualTempBelowSensorSafeC(temp),
           ...(isGourmetSession() ? { ethylene_injection_programmed: ethylene } : {}),
         },
         durationHours: 1 / 3600,
@@ -554,11 +575,7 @@ const ManualControl = ({
       void revalidateControlSessionsList();
       void revalidateFleetActiveControlSessions();
       await sessionMutate();
-      toast.success(
-        isGourmetTunnelCommandDevice(deviceId)
-          ? t('tunnel_cmd_sent_ok') || 'Comandos enviados al túnel — seguimiento en curso'
-          : t('manual_control_logged') || t('apply_changes') + ' OK'
-      );
+      toast.success(t('manual_control_logged') || t('apply_changes') + ' OK');
       setIsConfirmOpen(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error');
@@ -732,7 +749,7 @@ const ManualControl = ({
               />
               <span>{t('manual_temp_extended_unlock', extendedRangeDual)}</span>
             </label>
-            {extendedTempRange && isMadurador && (
+            {(extendedTempRange || tempBelowSensorSafe) && (
               <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-1.5 mb-3">
                 {t('manual_temp_extended_warning')}
               </p>
@@ -803,11 +820,16 @@ const ManualControl = ({
                     </div>
                     ))}
                 </div>
+                {tempBelowSensorSafe && (
+                  <p className="mt-3 text-xs text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 rounded-md px-3 py-2">
+                    {t('manual_temp_below_5_responsibility')}
+                  </p>
+                )}
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                 <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
                 <AlertDialogAction onClick={handleApply} className="bg-blue-600 hover:bg-blue-700">
-                    {t('confirm_changes')}
+                    {tempBelowSensorSafe ? t('manual_temp_confirm_under_responsibility') : t('confirm_changes')}
                 </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
@@ -1007,7 +1029,7 @@ const RipeningControl = ({
       processType: 'Ripening',
       displayLabel: t('ripening'),
       params: {
-        setPoint: temp,
+        setPoint: clamp(temp, RIPENING_TARGET_TEMP_MIN_C, RIPENING_TARGET_TEMP_MAX_C),
         humiditySetPoint: humidity,
         durationHours: duration,
         ethylene,
@@ -1026,11 +1048,17 @@ const RipeningControl = ({
           label={t('target_temperature')} 
           value={convertTemp(temp)} 
           unit={`°${tempUnit}`} 
-          min={convertTemp(10)} 
-          max={convertTemp(30)} 
+          min={convertTemp(RIPENING_TARGET_TEMP_MIN_C)} 
+          max={convertTemp(RIPENING_TARGET_TEMP_MAX_C)} 
           onChange={(val: number) => {
              const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-             setTemp(clamp(Number(cVal.toFixed(1)), 10, 30));
+             setTemp(
+               clamp(
+                 Number(cVal.toFixed(1)),
+                 RIPENING_TARGET_TEMP_MIN_C,
+                 RIPENING_TARGET_TEMP_MAX_C
+               )
+             );
           }}
           disabled={disabled}
           step={0.1}
@@ -1117,7 +1145,7 @@ const CoolingControl = ({
       processType: 'Cooling',
       displayLabel: t('cooling'),
       params: {
-        setPoint: target,
+        setPoint: clamp(target, COOLING_TARGET_TEMP_MIN_C, COOLING_TARGET_TEMP_MAX_C),
         durationHours: rampHours,
         name: t('cooling'),
         tempUnit: tempUnitKey,
@@ -1137,11 +1165,17 @@ const CoolingControl = ({
         label={t('final_temperature')} 
         value={convertTemp(target)} 
         unit={`°${tempUnit}`} 
-        min={convertTemp(0)} 
-        max={convertTemp(20)} 
+        min={convertTemp(COOLING_TARGET_TEMP_MIN_C)} 
+        max={convertTemp(COOLING_TARGET_TEMP_MAX_C)} 
         onChange={(val: number) => {
              const cVal = tempUnit === 'F' ? (val - 32) * 5/9 : val;
-             setTarget(clamp(Number(cVal.toFixed(1)), 0, 20));
+             setTarget(
+               clamp(
+                 Number(cVal.toFixed(1)),
+                 COOLING_TARGET_TEMP_MIN_C,
+                 COOLING_TARGET_TEMP_MAX_C
+               )
+             );
           }} 
         disabled={disabled}
         step={0.1}

@@ -14,6 +14,7 @@ import {
   processEventLogFromParams,
   type ProcessEventRow,
 } from '@/app/lib/controlProcessDisplay';
+import { tunnelCommandStatusLabel } from '@/app/lib/tunnelCommandsApi';
 import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { inferCurrentNextPhase } from '@/app/lib/ripeningProcessMappers';
@@ -99,73 +100,78 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
     );
   }
 
-  if (!session || session.status !== 'active') {
-    if (activeTracking?.process) {
-      const trackEvents = processEventLogFromParams(trackingPayload ?? {}) as ProcessEventRow[];
-      return (
-        <>
-          <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-gradient-to-br from-indigo-50/90 to-white dark:from-indigo-950/50 dark:to-card p-4 shadow-sm">
-            <div>
-              <h3 className="font-semibold text-foreground flex items-center gap-2">
-                <Activity className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                {t('control_follow_active_title')}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                {activeTracking.process.display_name || activeTracking.summary?.display_name}
-              </p>
-            </div>
-
-            {trackingPhaseLabel && (
-              <div className="mt-3 rounded-lg border border-indigo-200/80 bg-card/60 p-3 text-sm">
-                <span className="text-muted-foreground">{t('control_follow_stage')}:</span>{' '}
-                <span className="font-medium text-foreground">{trackingPhaseLabel}</span>
-              </div>
-            )}
-
-            <div className="mt-4 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/30 p-3 space-y-2">
-              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200 uppercase">
-                {t('control_automation_active')}
-              </p>
-              {trackingAutoPhaseLabel && (
-                <p className="text-sm text-emerald-900 dark:text-emerald-100">
-                  <span className="text-emerald-700 dark:text-emerald-300">{t('control_automation_phase')}:</span>{' '}
-                  {trackingAutoPhaseLabel}
-                </p>
-              )}
-              {!clientSafeEvents && trackingLastAction && (
-                <p className="text-xs text-emerald-800/90 dark:text-emerald-200/90 leading-relaxed">
-                  <span className="font-medium">{t('control_automation_last_action')}:</span> {trackingLastAction}
-                </p>
-              )}
-              {trackingSyncedAt && (
-                <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 font-mono">
-                  {t('control_automation_synced')}: {formatDateTime(trackingSyncedAt)}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-4">
-              <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setTechOpen(true)}>
-                {t('control_process_see_more')}
-              </Button>
-            </div>
+  /** Seguimiento activo tiene prioridad sobre control manual / sesión de panel. */
+  if (activeTracking?.process) {
+    const trackEvents = processEventLogFromParams(trackingPayload ?? {}) as ProcessEventRow[];
+    return (
+      <>
+        <div className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-gradient-to-br from-indigo-50/90 to-white dark:from-indigo-950/50 dark:to-card p-4 shadow-sm">
+          <div>
+            <h3 className="font-semibold text-foreground flex items-center gap-2">
+              <Activity className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              {t('control_follow_active_title')}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {activeTracking.process.display_name || activeTracking.summary?.display_name}
+            </p>
           </div>
 
-          <ProcessTechnicalDetailsDialog
-            open={techOpen}
-            onOpenChange={setTechOpen}
-            title={t('control_process_technical_detail')}
-            payload={trackingPayload}
-            eventLog={trackEvents}
-            formatEvent={(ev) =>
-              summarizeProcessEventI18n(ev, t, { clientSafe: clientSafeEvents })
-            }
-            formatDateTime={formatDateTime}
-          />
-        </>
-      );
-    }
+          {trackingPhaseLabel && (
+            <div className="mt-3 rounded-lg border border-indigo-200/80 bg-card/60 p-3 text-sm">
+              <span className="text-muted-foreground">{t('control_follow_stage')}:</span>{' '}
+              <span className="font-medium text-foreground">{trackingPhaseLabel}</span>
+            </div>
+          )}
 
+          <div className="mt-4 rounded-lg border border-emerald-200 dark:border-emerald-900 bg-emerald-50/80 dark:bg-emerald-950/30 p-3 space-y-2">
+            <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200 uppercase">
+              {t('control_automation_active')}
+            </p>
+            {trackingAutoPhaseLabel && (
+              <p className="text-sm text-emerald-900 dark:text-emerald-100">
+                <span className="text-emerald-700 dark:text-emerald-300">{t('control_automation_phase')}:</span>{' '}
+                {trackingAutoPhaseLabel}
+              </p>
+            )}
+            {!clientSafeEvents && trackingLastAction && (
+              <p className="text-xs text-emerald-800/90 dark:text-emerald-200/90 leading-relaxed">
+                <span className="font-medium">{t('control_automation_last_action')}:</span> {trackingLastAction}
+              </p>
+            )}
+            {trackingSyncedAt && (
+              <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 font-mono">
+                {t('control_automation_synced')}: {formatDateTime(trackingSyncedAt)}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4">
+            <Button type="button" variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setTechOpen(true)}>
+              {t('control_process_see_more')}
+            </Button>
+          </div>
+        </div>
+
+        <ProcessTechnicalDetailsDialog
+          open={techOpen}
+          onOpenChange={setTechOpen}
+          title={t('control_process_technical_detail')}
+          payload={trackingPayload}
+          eventLog={trackEvents}
+          formatEvent={(ev) =>
+            summarizeProcessEventI18n(ev, t, { clientSafe: clientSafeEvents })
+          }
+          formatDateTime={formatDateTime}
+        />
+      </>
+    );
+  }
+
+  const isManualSession = session?.process_type === 'Manual';
+  const showSession =
+    Boolean(session) && (session!.status === 'active' || isManualSession);
+
+  if (!showSession) {
     return (
       <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2 text-foreground font-medium">
@@ -177,19 +183,23 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
     );
   }
 
-  const userParams = filterUserFacingParams(session.params ?? {});
-  const eventLog = Array.isArray(session.params?.tunnelEventLog)
-    ? (session.params.tunnelEventLog as ProcessEventRow[])
+  const row = session!;
+  const userParams = filterUserFacingParams(row.params ?? {});
+  const eventLog = Array.isArray(row.params?.tunnelEventLog)
+    ? (row.params.tunnelEventLog as ProcessEventRow[])
     : [];
   const technicalPayload = {
     userParams,
-    processAutomation: session.params?.processAutomation,
-    tunnelEventLog: session.params?.tunnelEventLog,
-    tunnelSyncedAt: session.params?.tunnelSyncedAt,
-    tunnelOverallStatus: session.params?.tunnelOverallStatus,
-    tunnelJobs: session.params?.tunnelJobs,
-    tunnelCommandBatchId: session.params?.tunnelCommandBatchId,
+    processAutomation: row.params?.processAutomation,
+    tunnelEventLog: row.params?.tunnelEventLog,
+    tunnelSyncedAt: row.params?.tunnelSyncedAt,
+    tunnelOverallStatus: row.params?.tunnelOverallStatus,
+    tunnelJobs: row.params?.tunnelJobs,
+    tunnelCommandBatchId: row.params?.tunnelCommandBatchId,
   };
+  const canCancel = row.status === 'active' && canOperateDeviceControl();
+  const titleKey = isManualSession ? 'manual_mode' : 'active_control_process';
+  const overall = String(row.params?.tunnelOverallStatus || '');
 
   return (
     <>
@@ -198,20 +208,25 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
           <div>
             <h3 className="font-semibold text-foreground flex items-center gap-2">
               <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-              {t('active_control_process')}
+              {t(titleKey)}
             </h3>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {session.display_label || session.process_type}
+              {row.display_label || row.process_type}
             </p>
+            {isManualSession && overall && (
+              <p className="text-xs mt-1 font-medium text-blue-800 dark:text-blue-300">
+                {tunnelCommandStatusLabel(overall, t)}
+              </p>
+            )}
           </div>
-          {canOperateDeviceControl() && (
+          {canCancel && (
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="shrink-0 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-900 dark:hover:bg-red-950/50"
               disabled={cancelling}
-              onClick={() => onCancel(session)}
+              onClick={() => onCancel(row)}
             >
               {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
               <span className="ml-1">{t('cancel_process')}</span>
@@ -235,11 +250,11 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
         <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
           <div>
             <span className="text-muted-foreground">{t('start')}</span>
-            <p className="font-mono text-foreground">{formatDateTime(session.started_at)}</p>
+            <p className="font-mono text-foreground">{formatDateTime(row.started_at)}</p>
           </div>
           <div>
             <span className="text-muted-foreground">{t('control_process_estimated_end')}</span>
-            <p className="font-mono text-foreground">{formatDateTime(session.estimated_end_at)}</p>
+            <p className="font-mono text-foreground">{formatDateTime(row.estimated_end_at)}</p>
           </div>
         </div>
 
