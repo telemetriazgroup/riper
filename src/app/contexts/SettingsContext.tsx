@@ -1013,7 +1013,7 @@ const translations: Record<Language, Record<string, string>> = {
     'download_pdf': 'Descargar PDF',
     'download_csv': 'Descargar CSV',
     'download_excel': 'Descargar Excel',
-    'generate_table_to_load': 'Elija fechas y pulse «Generar Tabla» para cargar la tabla',
+    'generate_table_to_load': 'Las últimas 12 h se cargan al abrir. Elija otro rango y pulse «Generar Tabla» si hace falta.',
     'temperature': 'Temperatura',
     'oxygen': 'O₂',
     'humidity': 'Humedad',
@@ -1433,11 +1433,14 @@ const translations: Record<Language, Record<string, string>> = {
     'ventilation_control_desc':
       'Evacuación rápida de gases (Etileno/CO₂) post-maduración.',
     'cooling_control_desc':
-      'Reducción de temperatura para conservación y transporte.',
+      'Reducción de temperatura para conservación y transporte (rango 6–14 °C).',
+    'cooling_process_disclaimer':
+      'Es importante considerar que el dispositivo no es un equipo especializado para enfriamiento (cooling). No obstante, incorpora funciones y características activas que le permiten reducir significativamente la temperatura del producto, dependiendo de factores como la temperatura inicial del producto, el nivel de carga y las condiciones de operación.\n\nPor lo tanto, el desempeño del proceso de enfriamiento puede variar en función de estas variables, y no debe interpretarse como equivalente al de un sistema de refrigeración diseñado específicamente para realizar procesos de enfriamiento rápido.',
+    'cooling_process_disclaimer_title': 'Aviso del proceso de enfriamiento',
     'control_gases': 'Gases',
     'control_parameters': 'Parámetros',
     'no_data_in_range': 'Sin datos en el rango seleccionado',
-    'generate_chart_to_load': 'Elija fechas y pulse «Generar gráfico» para cargar la gráfica',
+    'generate_chart_to_load': 'Las últimas 12 h se cargan al abrir. Elija otro rango y pulse «Generar gráfico» si hace falta.',
     'table_preset_views': 'Vistas predefinidas',
     'chart_export_datetime': 'Fecha / Hora',
     'historical_show_values': 'Valores',
@@ -2566,7 +2569,7 @@ const translations: Record<Language, Record<string, string>> = {
     'download_pdf': 'Download PDF',
     'download_csv': 'Download CSV',
     'download_excel': 'Download Excel',
-    'generate_table_to_load': 'Select dates and click «Generate Table» to load the table',
+    'generate_table_to_load': 'Last 12 h load on open. Pick another range and click «Generate Table» if needed.',
     'temperature': 'Temperature',
     'oxygen': 'O₂',
     'humidity': 'Humidity',
@@ -2988,11 +2991,14 @@ const translations: Record<Language, Record<string, string>> = {
     'ventilation_control_desc':
       'Rapid evacuation of gases (ethylene/CO₂) after ripening.',
     'cooling_control_desc':
-      'Temperature reduction for storage and transport.',
+      'Temperature reduction for storage and transport (range 6–14 °C).',
+    'cooling_process_disclaimer':
+      'It is important to note that this device is not specialized cooling equipment. However, it includes active functions and features that can significantly reduce product temperature, depending on factors such as the product’s initial temperature, load level, and operating conditions.\n\nTherefore, cooling performance may vary with these variables and should not be interpreted as equivalent to a refrigeration system specifically designed for rapid cooling processes.',
+    'cooling_process_disclaimer_title': 'Cooling process notice',
     'control_gases': 'Gases',
     'control_parameters': 'Parameters',
     'no_data_in_range': 'No data in the selected range',
-    'generate_chart_to_load': 'Select dates and click «Generate Chart» to load the chart',
+    'generate_chart_to_load': 'Last 12 h load on open. Pick another range and click «Generate Chart» if needed.',
     'table_preset_views': 'Preset views',
     'chart_export_datetime': 'Date / Time',
     'historical_show_values': 'Values',

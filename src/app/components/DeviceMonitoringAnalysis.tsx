@@ -70,10 +70,22 @@ interface DeviceMonitoringAnalysisProps {
   onGoToCreateTracking?: () => void;
 }
 
-function chartTick(ts: string): string {
+function chartTick(
+  ts: string,
+  displayTimeZone: string,
+  language: 'es' | 'en' = 'es'
+): string {
   try {
     const d = new Date(ts);
-    return `${d.getDate()}/${d.getMonth() + 1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    if (Number.isNaN(d.getTime())) return ts;
+    return new Intl.DateTimeFormat(language === 'es' ? 'es-419' : 'en-GB', {
+      timeZone: displayTimeZone,
+      day: 'numeric',
+      month: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d);
   } catch {
     return ts;
   }
@@ -90,7 +102,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
   deviceId,
   onGoToCreateTracking,
 }) => {
-  const { t, formatDateTime } = useSettings();
+  const { t, formatDateTime, displayTimeZone, language } = useSettings();
   const { activeTracking, isLoading: trackingLoading, mutate: mutateTracking } =
     useRipeningActiveForDevice(deviceId);
   const [chartTab, setChartTab] = useState<'environment' | 'gases'>('environment');
@@ -167,7 +179,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
     const co2 = co2San.map((v) => (v === 0 ? null : v));
     const o2 = pts.map((p: HistoryPoint) => chartNullIfZero(p.o2_reading));
     return pts.map((p: HistoryPoint, i: number) => ({
-      tick: chartTick(p.timestamp),
+      tick: chartTick(p.timestamp, displayTimeZone, language),
       ts: p.timestamp,
       temp_pulp: tempPulp[i],
       temp_air: tempAir[i],
@@ -175,7 +187,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       co2: co2[i],
       o2: o2[i],
     }));
-  }, [rangoData?.points, pruebaCaMonitoring]);
+  }, [rangoData?.points, pruebaCaMonitoring, displayTimeZone, language]);
 
   const metrics = useMemo(() => {
     const raw = rangoData?.rawDatos;

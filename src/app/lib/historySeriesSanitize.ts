@@ -3,6 +3,19 @@
  * Los datos crudos de API no se modifican; esto aplica al construir filas para Recharts (null = sin trazo).
  */
 
+import {
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_DISPLAY_TIMEZONE,
+  formatChartPointLabels,
+  type DateFormatStyle,
+} from '@/app/lib/displayTimeZone';
+
+export type Last12hTimeLabelOpts = {
+  displayTimeZone?: string;
+  language?: 'es' | 'en';
+  dateFormat?: DateFormatStyle;
+};
+
 export const CHART_AVL_MAX_CFM = 200;
 
 /** campo_1 (etileno ppm): omitir lecturas absurdamente altas en gráfica (post-filtro cliente ≤ ~500). */
@@ -239,7 +252,7 @@ export function buildLast12hChartData(
     co2_reading?: number | null;
   }[],
   convertTemp: (c: number) => number,
-  opts?: { ethyleneMaxPpm?: number }
+  opts?: { ethyleneMaxPpm?: number } & Last12hTimeLabelOpts
 ): Last12hChartPoint[] {
   const rawTempC = history.map((h) => {
     const ret = h.return_air;
@@ -257,13 +270,19 @@ export function buildLast12hChartData(
 
   const ethylene = sanitizeEthylenePpmSeries(ethRaw, { maxPpm: opts?.ethyleneMaxPpm });
   const co2 = sanitizeCo2PercentSeries(co2Raw);
+  const tz = opts?.displayTimeZone || DEFAULT_DISPLAY_TIMEZONE;
+  const language = opts?.language || 'es';
+  const dateFormat = opts?.dateFormat || DEFAULT_DATE_FORMAT;
 
   return history.map((h, i) => {
     const c = co2[i];
     const coVal = c != null && c === 0 ? null : c;
+    const d = new Date(h.timestamp);
+    const prev = i > 0 ? new Date(history[i - 1].timestamp) : null;
+    const { timeAxisLabel } = formatChartPointLabels(d, prev, tz, language, dateFormat);
     return {
-      rawDate: new Date(h.timestamp),
-      time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      rawDate: d,
+      time: timeAxisLabel,
       temp: rawTempC[i] != null ? Number(rawTempC[i]!.toFixed(2)) : null,
       humidity: humidity[i] != null ? Number(humidity[i]!.toFixed(2)) : null,
       ethylene: ethylene[i] != null ? Number(ethylene[i]!.toFixed(2)) : null,
@@ -293,7 +312,7 @@ export function buildThermoKingLast12hChartData(
     o2_reading?: number | null;
   }[],
   convertTemp: (c: number) => number,
-  opts?: { ethyleneMaxPpm?: number }
+  opts?: { ethyleneMaxPpm?: number } & Last12hTimeLabelOpts
 ): ThermoKingLast12hChartPoint[] {
   const rawReturn = history.map((h) => {
     const ret = h.return_air;
@@ -315,15 +334,21 @@ export function buildThermoKingLast12hChartData(
   const ethylene = sanitizeEthylenePpmSeries(ethRaw, { maxPpm: opts?.ethyleneMaxPpm });
   const co2San = sanitizeCo2PercentSeries(co2Raw);
   const o2San = sanitizeCo2PercentSeries(o2Raw);
+  const tz = opts?.displayTimeZone || DEFAULT_DISPLAY_TIMEZONE;
+  const language = opts?.language || 'es';
+  const dateFormat = opts?.dateFormat || DEFAULT_DATE_FORMAT;
 
   return history.map((h, i) => {
     const c = co2San[i];
     const coVal = c != null && c === 0 ? null : c;
     const oo = o2San[i];
     const oVal = oo != null && oo === 0 ? null : oo;
+    const d = new Date(h.timestamp);
+    const prev = i > 0 ? new Date(history[i - 1].timestamp) : null;
+    const { timeAxisLabel } = formatChartPointLabels(d, prev, tz, language, dateFormat);
     return {
-      rawDate: new Date(h.timestamp),
-      time: new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      rawDate: d,
+      time: timeAxisLabel,
       temp_return: rawReturn[i],
       temp_supply: rawSupply[i],
       ethylene: ethylene[i] != null ? Number(ethylene[i]!.toFixed(2)) : null,

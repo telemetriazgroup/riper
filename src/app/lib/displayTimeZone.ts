@@ -200,6 +200,102 @@ export function formatChartPointLabels(
   return { timeStr, timeAxisLabel: withMonth };
 }
 
+/** Solo hora `HH:mm` en el huso de visualización (ejes de últimas 12 h). */
+export function formatTimeOnlyInDisplayTimeZone(
+  input: string | number | Date | null | undefined,
+  timeZone: string,
+  language: 'es' | 'en' = 'es',
+  dateFormat: DateFormatStyle = DEFAULT_DATE_FORMAT
+): string {
+  if (input == null || input === '') return '—';
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return '—';
+  return new Intl.DateTimeFormat(dateFormatLocale(dateFormat, language), {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+}
+
+/** Valor para inputs `datetime-local` (`yyyy-MM-ddTHH:mm`) en el huso configurado. */
+export function formatDateTimeLocalInDisplayTimeZone(
+  input: string | number | Date,
+  timeZone: string
+): string {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return '';
+  const datePart = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+  const timePart = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d);
+  return `${datePart}T${timePart}`;
+}
+
+/**
+ * Interpreta `yyyy-MM-ddTHH:mm[:ss]` como hora civil del huso de visualización
+ * (no como hora del navegador).
+ */
+export function parseDateTimeLocalInDisplayTimeZone(
+  dateTimeLocal: string,
+  timeZone: string
+): Date {
+  const raw = String(dateTimeLocal || '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/.exec(raw);
+  if (!m) {
+    const fallback = new Date(raw);
+    return Number.isNaN(fallback.getTime()) ? new Date() : fallback;
+  }
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const day = Number(m[3]);
+  const h = Number(m[4]);
+  const mi = Number(m[5]);
+  const s = Number(m[6] || 0);
+  const desiredAsUtc = Date.UTC(y, mo - 1, day, h, mi, s);
+  let utcMs = desiredAsUtc;
+
+  for (let i = 0; i < 3; i++) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).formatToParts(new Date(utcMs));
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    let hour = get('hour');
+    if (hour === 24) hour = 0;
+    const wallAsUtc = Date.UTC(get('year'), get('month') - 1, get('day'), hour, get('minute'), get('second'));
+    const diff = desiredAsUtc - wallAsUtc;
+    utcMs += diff;
+    if (diff === 0) break;
+  }
+  return new Date(utcMs);
+}
+
+/** Rango predeterminado últimas 12 h en el huso configurado (para inputs datetime-local). */
+export function defaultLast12hDateTimeLocalRange(timeZone: string, now: Date = new Date()): {
+  start: string;
+  end: string;
+} {
+  return {
+    start: formatDateTimeLocalInDisplayTimeZone(new Date(now.getTime() - 12 * 60 * 60 * 1000), timeZone),
+    end: formatDateTimeLocalInDisplayTimeZone(now, timeZone),
+  };
+}
+
 /** Sufijo de archivo: `yyyy-MM-dd_HHmm` en el huso de visualización. */
 export function formatFileTimestampInDisplayTimeZone(
   input: string | number | Date,

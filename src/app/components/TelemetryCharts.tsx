@@ -31,8 +31,11 @@ import {
   DialogTitle,
 } from "@/app/components/ui/dialog";
 import { clsx } from 'clsx';
-import { format, subHours, subDays } from 'date-fns';
-import { formatChartPointLabels } from '@/app/lib/displayTimeZone';
+import {
+  defaultLast12hDateTimeLocalRange,
+  formatChartPointLabels,
+  parseDateTimeLocalInDisplayTimeZone,
+} from '@/app/lib/displayTimeZone';
 import {
   buildLast12hChartData,
   buildThermoKingLast12hChartData,
@@ -61,8 +64,11 @@ const HISTORICAL_PRESET_RIPENING = [
   'set_point_co2', 'co2_reading', 'ethylene', 'relative_humidity', 'temp_supply_1',
 ] as const;
 const HISTORICAL_PRESET_STANDARD = [
-  'temp_supply_1', 'return_air', 'evaporation_coil', 'relative_humidity', 'capacity_load', 'set_point',
+  'return_air', 'temp_supply_1', 'evaporation_coil', 'set_point',
 ] as const;
+
+/** Grosor de línea en gráficas históricas / últimas 12 h. */
+const CHART_LINE_STROKE_WIDTH = 3.5;
 /** CO₂, etileno y ventilación (avl_pct). */
 const HISTORICAL_PRESET_GASES = ['co2_reading', 'ethylene', 'avl_pct'] as const;
 /** Incluye Set O2 por defecto (TermoKing / atmósfera controlada). */
@@ -74,6 +80,30 @@ const HISTORICAL_SIDEBAR_METRIC_ORDER: string[] = [
   ...HISTORICAL_Y3_GAS_KEYS,
   ...HISTORICAL_Y4_AUX_KEYS,
 ];
+
+/** Mapea puntos de historial (ya con política aplicada) a filas de gráfica/tabla histórica. */
+function mapHistoryPointsToHistoricalRows(history: any[]): any[] {
+  return history.map((h: any) => {
+    const d = new Date(h.timestamp);
+    const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
+    CHART_METRIC_KEYS.forEach((key) => {
+      let v = h[key];
+      if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) {
+        row[key] = null;
+        return;
+      }
+      if (key === 'ethylene') {
+        row[key] = v != null ? Number(v) : null;
+        return;
+      }
+      v = Number(v ?? 0);
+      if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
+      else row[key] = Number(v.toFixed(2));
+    });
+    row.avl_raw = h.avl_raw ?? null;
+    return row;
+  });
+}
 
 type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases' | 'controlled_atmosphere';
 
@@ -161,11 +191,12 @@ function computePowerShadingSegments(
   return computeOnSegments(data, (i) => (data[i].power_state === 1 ? 1 : 0));
 }
 
-/** Colores por métrica para la leyenda */
+/** Colores por métrica (Return / Supply / Evap / SetPoint alineados a referencia gráfica). */
 const METRIC_COLORS: Record<string, string> = {
-  temp_supply_1: '#ef4444',
-  return_air: '#f97316',
-  evaporation_coil: '#3b82f6',
+  return_air: '#f8766d',
+  temp_supply_1: '#00ba38',
+  evaporation_coil: '#9e9e9e',
+  set_point: '#f1c40f',
   condensation_coil: '#8b5cf6',
   compress_coil_1: '#ec4899',
   ambient_air: '#64748b',
@@ -181,7 +212,6 @@ const METRIC_COLORS: Record<string, string> = {
   co2_reading: '#f46601',
   /** O₂ lectura por defecto (R5 G79 B250) */
   o2_reading: '#054ffa',
-  set_point: '#dc2626',
   capacity_load: '#ea580c',
   humidity_set_point: '#2563eb',
   set_point_o2: '#4f46e5',
@@ -217,7 +247,7 @@ function ViewAsClientToggle({
 }
 
 export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) => {
-  const { t, convertTemp, tempUnit, language } = useSettings();
+  const { t, convertTemp, tempUnit, language, displayTimeZone, dateFormat } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
@@ -265,13 +295,22 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   }, [history, telemetryPolicyCtx]);
 
   const isTkCharts = isThermoKingSession();
+  const last12hLabelOpts = useMemo(
+    () => ({
+      ethyleneMaxPpm: chartEthyleneMaxPpm,
+      displayTimeZone,
+      language,
+      dateFormat,
+    }),
+    [chartEthyleneMaxPpm, displayTimeZone, language, dateFormat]
+  );
   const dataClassic = useMemo(
-    () => buildLast12hChartData(policyHistory, convertTemp, { ethyleneMaxPpm: chartEthyleneMaxPpm }),
-    [policyHistory, convertTemp, chartEthyleneMaxPpm]
+    () => buildLast12hChartData(policyHistory, convertTemp, last12hLabelOpts),
+    [policyHistory, convertTemp, last12hLabelOpts]
   );
   const dataThermoKing = useMemo(
-    () => buildThermoKingLast12hChartData(policyHistory, convertTemp, { ethyleneMaxPpm: chartEthyleneMaxPpm }),
-    [policyHistory, convertTemp, chartEthyleneMaxPpm]
+    () => buildThermoKingLast12hChartData(policyHistory, convertTemp, last12hLabelOpts),
+    [policyHistory, convertTemp, last12hLabelOpts]
   );
 
   const ethyleneChartDomain = useMemo((): [number, number] => {
@@ -365,8 +404,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         type="monotone"
                         dataKey="temp_return"
                         name={`${metricLabels.return_air} (°${tempUnit})`}
-                        stroke="#ef4444"
-                        strokeWidth={2}
+                        stroke={METRIC_COLORS.return_air}
+                        strokeWidth={CHART_LINE_STROKE_WIDTH}
                         dot={false}
                         activeDot={{ r: 6 }}
                         allowDataOverflow
@@ -377,8 +416,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         type="monotone"
                         dataKey="temp_supply"
                         name={`${metricLabels.temp_supply_1} (°${tempUnit})`}
-                        stroke="#f97316"
-                        strokeWidth={2}
+                        stroke={METRIC_COLORS.temp_supply_1}
+                        strokeWidth={CHART_LINE_STROKE_WIDTH}
                         dot={false}
                         activeDot={{ r: 6 }}
                         allowDataOverflow
@@ -448,7 +487,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         dataKey="ethylene"
                         name={`${t('ethylene')} (ppm)`}
                         stroke="#10b981"
-                        strokeWidth={2}
+                        strokeWidth={CHART_LINE_STROKE_WIDTH}
                         dot={false}
                         activeDot={{ r: 6 }}
                         allowDataOverflow
@@ -460,7 +499,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         dataKey="co2"
                         name={`${t('co2')} (%)`}
                         stroke="#f46601"
-                        strokeWidth={2}
+                        strokeWidth={CHART_LINE_STROKE_WIDTH}
                         strokeDasharray="5 5"
                         dot={false}
                         activeDot={{ r: 6 }}
@@ -473,7 +512,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         dataKey="o2"
                         name={`${metricLabels.o2_reading} (%)`}
                         stroke="#054ffa"
-                        strokeWidth={2}
+                        strokeWidth={CHART_LINE_STROKE_WIDTH}
                         dot={false}
                         activeDot={{ r: 6 }}
                         allowDataOverflow
@@ -529,8 +568,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
                       />
                       <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                      <Line yAxisId="left" type="monotone" dataKey="temp" name={`${metricLabels.return_air} (°${tempUnit})`} stroke="#ef4444" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                      <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="left" type="monotone" dataKey="temp" name={`${metricLabels.return_air} (°${tempUnit})`} stroke={METRIC_COLORS.return_air} strokeWidth={CHART_LINE_STROKE_WIDTH} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="right" type="monotone" dataKey="humidity" name={`${t('humidity')} (%)`} stroke={METRIC_COLORS.relative_humidity} strokeWidth={CHART_LINE_STROKE_WIDTH} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -578,8 +617,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                         labelStyle={{ color: '#374151', marginBottom: '0.25rem', fontWeight: 600 }}
                       />
                       <Legend wrapperStyle={{ paddingTop: '12px' }} />
-                      <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
-                      <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#f46601" strokeWidth={2} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="left" type="monotone" dataKey="ethylene" name={`${t('ethylene')} (ppm)`} stroke="#10b981" strokeWidth={CHART_LINE_STROKE_WIDTH} dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
+                      <Line yAxisId="right" type="monotone" dataKey="co2" name={`${t('co2')} (%)`} stroke="#f46601" strokeWidth={CHART_LINE_STROKE_WIDTH} strokeDasharray="5 5" dot={false} activeDot={{ r: 6 }} allowDataOverflow connectNulls />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -599,6 +638,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         viewAsClient={viewAsClient}
         onViewAsClientChange={setViewAsClient}
         showViewAsClientToggle={showViewAsClientToggle}
+        preloadedHistory={policyHistory}
       />
       <HistoricalDataTableModal
         isOpen={isTableModalOpen}
@@ -609,6 +649,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
         viewAsClient={viewAsClient}
         onViewAsClientChange={setViewAsClient}
         showViewAsClientToggle={showViewAsClientToggle}
+        preloadedHistory={policyHistory}
       />
     </Card>
   );
@@ -625,6 +666,7 @@ const HistoricalDataModal = ({
   viewAsClient,
   onViewAsClientChange,
   showViewAsClientToggle,
+  preloadedHistory = [],
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -634,15 +676,14 @@ const HistoricalDataModal = ({
   viewAsClient?: boolean;
   onViewAsClientChange?: (v: boolean) => void;
   showViewAsClientToggle?: boolean;
+  /** Historial ya cargado en detalle (últimas ~12 h); evita refetch al abrir. */
+  preloadedHistory?: any[];
 }) => {
   const { t, tempUnit, displayTimeZone, language, dateFormat } = useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   
-  // Initialize range to last 12 hours
-  const [dateRange, setDateRange] = useState({ 
-    start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"), 
-    end: format(new Date(), "yyyy-MM-dd'T'HH:mm") 
-  });
+  // Initialize range to last 12 hours (en huso configurado)
+  const [dateRange, setDateRange] = useState(() => defaultLast12hDateTimeLocalRange(displayTimeZone));
   
   const [historicalPreset, setHistoricalPreset] = useState<HistoricalChartPreset | null>(() =>
     isThermoKingSession() ? 'controlled_atmosphere' : 'standard'
@@ -713,46 +754,60 @@ const HistoricalDataModal = ({
     });
   }, [sidebarMetricKeys, variablesColorSearch, metricLabels]);
 
-  const generateData = async () => {
-    if (!deviceId) return;
-    setIsLoading(true);
-    try {
-      const startStr = dateRange.start.length === 16 ? dateRange.start + ':00' : dateRange.start;
-      const endStr = dateRange.end.length === 16 ? dateRange.end + ':00' : dateRange.end;
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      if (start.getTime() >= end.getTime()) {
-        setChartData([]);
-        return;
-      }
-      const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
-      const history =
-        telemetryPolicyCtx && historyRaw.length > 0
-          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
-          : historyRaw;
-      const data = history.map((h: any) => {
-        const d = new Date(h.timestamp);
-        const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
-        CHART_METRIC_KEYS.forEach((key) => {
-          let v = h[key];
-          if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
-          if (key === 'ethylene') {
-            row[key] = v != null ? Number(v) : null;
-            return;
-          }
-          v = Number(v ?? 0);
-          if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
-          else row[key] = Number(v.toFixed(2));
-        });
-        row.avl_raw = h.avl_raw ?? null;
-        return row;
-      });
+  const applyHistoryToChart = useCallback(
+    (history: any[]) => {
+      const data = mapHistoryPointsToHistoricalRows(history);
       postProcessHistoricalChartRows(data, {
         nullZeroCo2O2Readings: true,
         ethyleneMaxPpm: chartEthyleneMaxPpm,
       });
       setChartData(data);
-      setZoomRange({ startIndex: 0, endIndex: data.length - 1 });
+      setZoomRange(data.length ? { startIndex: 0, endIndex: data.length - 1 } : null);
+    },
+    [chartEthyleneMaxPpm]
+  );
+
+  const generateData = async (opts?: { preferPreloaded?: boolean }) => {
+    if (!deviceId) return;
+    setIsLoading(true);
+    try {
+      const startStr = dateRange.start.length === 16 ? dateRange.start + ':00' : dateRange.start;
+      const endStr = dateRange.end.length === 16 ? dateRange.end + ':00' : dateRange.end;
+      const start = parseDateTimeLocalInDisplayTimeZone(startStr, displayTimeZone);
+      const end = parseDateTimeLocalInDisplayTimeZone(endStr, displayTimeZone);
+      if (start.getTime() >= end.getTime()) {
+        setChartData([]);
+        return;
+      }
+
+      if (Array.isArray(preloadedHistory) && preloadedHistory.length > 0) {
+        const preloadTimes = preloadedHistory
+          .map((h) => new Date(h.timestamp).getTime())
+          .filter((n) => Number.isFinite(n));
+        const pMin = Math.min(...preloadTimes);
+        const pMax = Math.max(...preloadTimes);
+        const slackMs = 5 * 60 * 1000;
+        const covered =
+          start.getTime() >= pMin - slackMs && end.getTime() <= pMax + slackMs;
+        if (covered || opts?.preferPreloaded) {
+          const filtered = preloadedHistory.filter((h) => {
+            const ts = new Date(h.timestamp).getTime();
+            return Number.isFinite(ts) && ts >= start.getTime() && ts <= end.getTime();
+          });
+          applyHistoryToChart(filtered.length ? filtered : preloadedHistory);
+          return;
+        }
+      }
+
+      const historyRaw = await fetchDeviceHistory(deviceId, {
+        fecha_inicio: start.toISOString(),
+        fecha_fin: end.toISOString(),
+      });
+      const history =
+        telemetryPolicyCtx && historyRaw.length > 0
+          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
+          : historyRaw;
+      applyHistoryToChart(history);
     } catch (e) {
       console.error(e);
       setChartData([]);
@@ -865,14 +920,11 @@ const HistoricalDataModal = ({
     setSelectedMetrics([key]);
   }, []);
 
+  const chartModalWasOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
-      setDateRange({
-        start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
-        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      });
-      setChartData([]);
-      setZoomRange(null);
+    if (isOpen && !chartModalWasOpenRef.current) {
+      const range = defaultLast12hDateTimeLocalRange(displayTimeZone);
+      setDateRange(range);
       if (isThermoKingSession()) {
         setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
         setHistoricalPreset('controlled_atmosphere');
@@ -883,8 +935,21 @@ const HistoricalDataModal = ({
       setShowLabelsByMetric({});
       setHistoricalTempUnit(tempUnit === 'F' ? 'F' : 'C');
       setVariablesColorSearch('');
+      if (preloadedHistory.length > 0) {
+        applyHistoryToChart(preloadedHistory);
+      } else {
+        setChartData([]);
+        setZoomRange(null);
+      }
     }
-  }, [isOpen, tempUnit]);
+    chartModalWasOpenRef.current = isOpen;
+  }, [isOpen, tempUnit, displayTimeZone, preloadedHistory, applyHistoryToChart]);
+
+  /** Si el detalle aún cargaba el historial al abrir el modal, aplícalo al llegar. */
+  useEffect(() => {
+    if (!isOpen || chartData.length > 0 || preloadedHistory.length === 0) return;
+    applyHistoryToChart(preloadedHistory);
+  }, [isOpen, preloadedHistory, chartData.length, applyHistoryToChart]);
 
   useEffect(() => {
     if (chartData.length > 0 && zoomRange === null)
@@ -1067,10 +1132,11 @@ const HistoricalDataModal = ({
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 min-h-0 gap-4 pt-2">
-          {/* Sidebar: rango y métricas + color por línea */}
-          <div className="w-64 flex-shrink-0 flex flex-col gap-3 overflow-y-auto border-r border-gray-200 pr-3">
-            <div className="rounded-lg border border-gray-200 bg-muted/20 p-3 space-y-3">
+        <div className="flex flex-1 min-h-0 gap-3 pt-2">
+          {/* Sidebar: controles arriba (scroll) + Variables fijas abajo (no se pierden con zoom) */}
+          <div className="w-[15.5rem] sm:w-64 flex-shrink-0 flex flex-col min-h-0 border-r border-gray-200 pr-2 sm:pr-3">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-2.5 pb-2">
+            <div className="rounded-lg border border-gray-200 bg-muted/20 p-2.5 sm:p-3 space-y-2.5">
               <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2">
                 <CalendarIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                 {t('historical_period_search')}
@@ -1155,7 +1221,7 @@ const HistoricalDataModal = ({
                 </div>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 text-sm py-1.5 sm:py-2" onClick={generateData} disabled={isLoading}>
+            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700 text-sm py-1.5 sm:py-2" onClick={() => void generateData()} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {t('generate_chart')}
             </Button>
@@ -1231,11 +1297,14 @@ const HistoricalDataModal = ({
                 <span>{t('chart_shading_power_on')}</span>
               </label>
             </div>
-            <div className="min-h-0 flex flex-col">
-              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 sm:mb-2">
+            </div>
+
+            {/* Anclado: siempre visible aunque el gráfico o el zoom del navegador reduzcan altura */}
+            <div className="flex-shrink-0 flex flex-col border-t border-gray-200 bg-white pt-2 mt-0.5 min-h-0 max-h-[42%] sm:max-h-[46%]">
+              <h4 className="font-medium text-xs sm:text-sm text-gray-900 flex items-center gap-2 mb-1 shrink-0">
                 <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> {t('historical_variables_and_color')}
               </h4>
-              <div className="relative mb-1.5 sm:mb-2">
+              <div className="relative mb-1.5 shrink-0">
                 <Search className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 shrink-0" aria-hidden />
                 <input
                   type="search"
@@ -1247,7 +1316,7 @@ const HistoricalDataModal = ({
                   spellCheck={false}
                 />
               </div>
-              <div className="space-y-1 max-h-[20vh] sm:max-h-[45vh] overflow-y-auto">
+              <div className="space-y-1 min-h-0 flex-1 overflow-y-auto overscroll-contain">
                 {filteredSidebarMetricKeys.length === 0 ? (
                   <p className="text-xs text-gray-500 py-2 px-1">{t('historical_variables_no_match')}</p>
                 ) : (
@@ -1296,7 +1365,7 @@ const HistoricalDataModal = ({
             </div>
           </div>
 
-          {/* Área gráfica: flexible y con zoom */}
+          {/* Área gráfica: flexible y con zoom (altura mínima reducida para no empujar el sidebar) */}
           <div className="flex-1 min-w-0 min-h-0 flex flex-col rounded-lg border border-gray-200 bg-white overflow-hidden">
             {chartDataLabeled.length > 0 ? (
               <>
@@ -1314,7 +1383,7 @@ const HistoricalDataModal = ({
                 </div>
                 <div
                   ref={chartContainerRef}
-                  className="flex-1 min-h-[280px] sm:min-h-[320px] w-full touch-none select-none cursor-grab active:cursor-grabbing"
+                  className="flex-1 min-h-0 h-full w-full touch-none select-none cursor-grab active:cursor-grabbing"
                   onWheel={handleWheel}
                   onMouseDown={handleMouseDown}
                   onMouseMove={handleMouseMove}
@@ -1444,7 +1513,7 @@ const HistoricalDataModal = ({
                             type="monotone"
                             dataKey={key}
                             stroke={color}
-                            strokeWidth={2}
+                            strokeWidth={CHART_LINE_STROKE_WIDTH}
                             dot={false}
                             connectNulls
                             activeDot={{ r: 4 }}
@@ -1481,7 +1550,7 @@ const HistoricalDataModal = ({
                 </div>
               </>
             ) : (
-              <div className="flex-1 min-h-[280px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 p-4">
+              <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 p-4">
                 <History className="h-12 w-12 sm:h-14 sm:w-14 mb-2 sm:mb-3 opacity-30" />
                 <p className="text-sm sm:text-base font-medium text-center">{t('no_data_in_range')}</p>
                 <p className="text-xs sm:text-sm mt-1 text-center">{t('generate_chart_to_load')}</p>
@@ -1522,6 +1591,7 @@ const HistoricalDataTableModal = ({
   viewAsClient,
   onViewAsClientChange,
   showViewAsClientToggle,
+  preloadedHistory = [],
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -1531,13 +1601,12 @@ const HistoricalDataTableModal = ({
   viewAsClient?: boolean;
   onViewAsClientChange?: (v: boolean) => void;
   showViewAsClientToggle?: boolean;
+  preloadedHistory?: any[];
 }) => {
-  const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp, language } = useSettings();
+  const { t, convertTemp, tempUnit, formatDateTime, formatFileTimestamp, language, displayTimeZone } =
+    useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
-  const [dateRange, setDateRange] = useState({
-    start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
-    end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-  });
+  const [dateRange, setDateRange] = useState(() => defaultLast12hDateTimeLocalRange(displayTimeZone));
   const [selectedColumns, setSelectedColumns] = useState<string[]>(() => tableModalDefaultPresetColumns());
   const [tableData, setTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -1547,40 +1616,9 @@ const HistoricalDataTableModal = ({
     [tableData, formatDateTime]
   );
 
-  const loadData = async () => {
-    if (!deviceId) return;
-    setIsLoading(true);
-    try {
-      const startStr = dateRange.start.length === 16 ? dateRange.start + ':00' : dateRange.start;
-      const endStr = dateRange.end.length === 16 ? dateRange.end + ':00' : dateRange.end;
-      const start = new Date(startStr);
-      const end = new Date(endStr);
-      if (start.getTime() >= end.getTime()) {
-        setTableData([]);
-        return;
-      }
-      const historyRaw = await fetchDeviceHistory(deviceId, { fecha_inicio: startStr, fecha_fin: endStr });
-      const history =
-        telemetryPolicyCtx && historyRaw.length > 0
-          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
-          : historyRaw;
-      const data = history.map((h: any) => {
-        const d = new Date(h.timestamp);
-        const row: any = { timestamp: d.getTime(), power_state: h.power_state ?? 0, iCtrlRip: h.iCtrlRip ?? 0 };
-        CHART_METRIC_KEYS.forEach((key) => {
-          let v = h[key];
-          if (v == null && (key.startsWith('cargo_') || key === 'set_point_o2')) { row[key] = null; return; }
-          if (key === 'ethylene') {
-            row[key] = v != null ? Number(v) : null;
-            return;
-          }
-          v = Number(v ?? 0);
-          if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) row[key] = Number(Number(v ?? 0).toFixed(2));
-          else row[key] = Number(v.toFixed(2));
-        });
-        row.avl_raw = h.avl_raw ?? null;
-        return row;
-      });
+  const applyHistoryToTable = useCallback(
+    (history: any[]) => {
+      const data = mapHistoryPointsToHistoricalRows(history);
       postProcessHistoricalChartRows(data, {
         nullZeroCo2O2Readings: true,
         ethyleneMaxPpm: chartEthyleneMaxPpm,
@@ -1594,6 +1632,51 @@ const HistoricalDataTableModal = ({
         return next;
       });
       setTableData(forDisplay);
+    },
+    [chartEthyleneMaxPpm, convertTemp]
+  );
+
+  const loadData = async (opts?: { preferPreloaded?: boolean }) => {
+    if (!deviceId) return;
+    setIsLoading(true);
+    try {
+      const startStr = dateRange.start.length === 16 ? dateRange.start + ':00' : dateRange.start;
+      const endStr = dateRange.end.length === 16 ? dateRange.end + ':00' : dateRange.end;
+      const start = parseDateTimeLocalInDisplayTimeZone(startStr, displayTimeZone);
+      const end = parseDateTimeLocalInDisplayTimeZone(endStr, displayTimeZone);
+      if (start.getTime() >= end.getTime()) {
+        setTableData([]);
+        return;
+      }
+
+      if (Array.isArray(preloadedHistory) && preloadedHistory.length > 0) {
+        const preloadTimes = preloadedHistory
+          .map((h) => new Date(h.timestamp).getTime())
+          .filter((n) => Number.isFinite(n));
+        const pMin = Math.min(...preloadTimes);
+        const pMax = Math.max(...preloadTimes);
+        const slackMs = 5 * 60 * 1000;
+        const covered =
+          start.getTime() >= pMin - slackMs && end.getTime() <= pMax + slackMs;
+        if (covered || opts?.preferPreloaded) {
+          const filtered = preloadedHistory.filter((h) => {
+            const ts = new Date(h.timestamp).getTime();
+            return Number.isFinite(ts) && ts >= start.getTime() && ts <= end.getTime();
+          });
+          applyHistoryToTable(filtered.length ? filtered : preloadedHistory);
+          return;
+        }
+      }
+
+      const historyRaw = await fetchDeviceHistory(deviceId, {
+        fecha_inicio: start.toISOString(),
+        fecha_fin: end.toISOString(),
+      });
+      const history =
+        telemetryPolicyCtx && historyRaw.length > 0
+          ? applyTelemetryDisplayPolicyToHistory(historyRaw, telemetryPolicyCtx)
+          : historyRaw;
+      applyHistoryToTable(history);
     } catch (e) {
       console.error(e);
       setTableData([]);
@@ -1602,25 +1685,33 @@ const HistoricalDataTableModal = ({
     }
   };
 
+  const tableModalWasOpenRef = useRef(false);
   useEffect(() => {
-    if (isOpen) {
-      setDateRange({
-        start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
-        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      });
-      setTableData([]);
+    if (isOpen && !tableModalWasOpenRef.current) {
+      setDateRange(defaultLast12hDateTimeLocalRange(displayTimeZone));
       setSelectedColumns(tableModalDefaultPresetColumns());
+      if (preloadedHistory.length > 0) {
+        applyHistoryToTable(preloadedHistory);
+      } else {
+        setTableData([]);
+      }
     }
-  }, [isOpen]);
+    tableModalWasOpenRef.current = isOpen;
+  }, [isOpen, displayTimeZone, preloadedHistory, applyHistoryToTable]);
+
+  useEffect(() => {
+    if (!isOpen || tableData.length > 0 || preloadedHistory.length === 0) return;
+    applyHistoryToTable(preloadedHistory);
+  }, [isOpen, preloadedHistory, tableData.length, applyHistoryToTable]);
 
   const applyPreset = (presetId: string) => {
     const preset = TABLE_PRESETS.find((p) => p.id === presetId);
     if (preset) setSelectedColumns(preset.columns);
     if (presetId === 'last12') {
-      setDateRange({
-        start: format(subHours(new Date(), 12), "yyyy-MM-dd'T'HH:mm"),
-        end: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      });
+      setDateRange(defaultLast12hDateTimeLocalRange(displayTimeZone));
+      if (preloadedHistory.length > 0) {
+        applyHistoryToTable(preloadedHistory);
+      }
     }
   };
 
@@ -1739,7 +1830,7 @@ const HistoricalDataTableModal = ({
                 </div>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" onClick={loadData} disabled={isLoading}>
+            <Button className="w-full bg-blue-600 text-white hover:bg-blue-700" onClick={() => void loadData()} disabled={isLoading}>
               {isLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               {t('generate_table')}
             </Button>

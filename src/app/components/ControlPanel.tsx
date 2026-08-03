@@ -15,7 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { cn } from '@/app/lib/utils';
-import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Timer, WifiOff, Loader2 } from 'lucide-react';
+import { Thermometer, Wind, Zap, Play, Snowflake, Fan, Timer, WifiOff, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
 import { applyTunnelManualCommands } from '@/app/lib/tunnelCommandsApi';
@@ -1159,6 +1159,19 @@ const CoolingControl = ({
     <div className="bg-blue-50 dark:bg-blue-950/40 p-4 rounded-md text-sm text-blue-800 dark:text-blue-200 flex gap-2">
       <Snowflake className="h-5 w-5 shrink-0" />
       <p>{t('cooling_control_desc')}</p>
+    </div>
+    <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 p-3 text-sm text-amber-950 dark:text-amber-100 flex gap-2">
+      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+      <div className="space-y-2">
+        <p className="font-medium">{t('cooling_process_disclaimer_title')}</p>
+        {t('cooling_process_disclaimer')
+          .split('\n\n')
+          .map((para, i) => (
+            <p key={i} className="leading-relaxed text-amber-900/90 dark:text-amber-100/90">
+              {para}
+            </p>
+          ))}
+      </div>
     </div>
     <ControlGroup title={t('settings')}>
       <RangeControl 
