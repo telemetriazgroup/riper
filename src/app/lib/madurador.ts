@@ -380,11 +380,20 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     80
   );
 
+  const c1_raw = inRange(toNum(flat.cargo_1_temp), -40, 100);
+  const c2_raw = inRange(toNum(flat.cargo_2_temp), -40, 100);
+  const c3_raw = inRange(toNum(flat.cargo_3_temp), -40, 100);
+  const c4_raw = inRange(toNum(flat.cargo_4_temp), -40, 100);
+
   const held = holdCriticalTempsAgainstZeroGlitch(imei, {
     set_point: set_point_raw,
     temp_supply_1: temp_supply_raw,
     return_air: return_air_raw,
     evaporation_coil: evap_raw,
+    cargo_1_temp: c1_raw,
+    cargo_2_temp: c2_raw,
+    cargo_3_temp: c3_raw,
+    cargo_4_temp: c4_raw,
   });
 
   // Glitch all-cero sin hold: NaN → la tarjeta muestra "—" (no 0 engañoso).
@@ -450,10 +459,31 @@ export function mapMaduradorRowToDevice(row: Record<string, unknown>): Device {
     parseMaduradorMongoDate(flat.fecha) ??
     (flat.fecha != null && typeof flat.fecha !== 'object' ? String(flat.fecha) : null);
 
-  const c1 = inRange(toNum(flat.cargo_1_temp), -40, 100);
-  const c2 = inRange(toNum(flat.cargo_2_temp), -40, 100);
-  const c3 = inRange(toNum(flat.cargo_3_temp), -40, 100);
-  const c4 = inRange(toNum(flat.cargo_4_temp), -40, 100);
+  // Cargos: en glitch usar hold; sin hold no mostrar 0 engañoso.
+  const c1 =
+    held.glitch && !held.usedHold
+      ? null
+      : held.usedHold
+        ? inRange(held.cargo_1_temp ?? null, -40, 100)
+        : c1_raw;
+  const c2 =
+    held.glitch && !held.usedHold
+      ? null
+      : held.usedHold
+        ? inRange(held.cargo_2_temp ?? null, -40, 100)
+        : c2_raw;
+  const c3 =
+    held.glitch && !held.usedHold
+      ? null
+      : held.usedHold
+        ? inRange(held.cargo_3_temp ?? null, -40, 100)
+        : c3_raw;
+  const c4 =
+    held.glitch && !held.usedHold
+      ? null
+      : held.usedHold
+        ? inRange(held.cargo_4_temp ?? null, -40, 100)
+        : c4_raw;
   const compTemp = inRange(toNum(flat.compress_coil_1), -60, 200);
   const spCo2Num = inRange(toNum(flat.set_point_co2), 0, 100);
   const hasSpEtilenoField =

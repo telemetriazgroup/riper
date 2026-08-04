@@ -147,8 +147,13 @@ export function evaluateCoolingDecision(input) {
     return { action: 'none', reason: 'invalid_objetivo', meta: {} };
   }
 
-  if (input?.telemetryGlitch && input?.setPoint == null && input?.returnAir == null) {
-    return { action: 'none', reason: 'telemetry_glitch_no_hold', meta: {} };
+  // Trama con sensores en 0: no evaluar (ni con hold — solo se usa el hold para mostrar).
+  if (input?.telemetryGlitch) {
+    return {
+      action: 'none',
+      reason: input?.usedHold ? 'telemetry_glitch_held' : 'telemetry_glitch_no_hold',
+      meta: { usedHold: Boolean(input?.usedHold) },
+    };
   }
 
   const setPoint = round1(num(input?.setPoint));
@@ -395,6 +400,8 @@ const REASON_ANALYSIS_ES = {
   missing_critical_sensors: 'Faltan sensores críticos (set_point / return_air / evaporador).',
   invalid_objetivo: 'Objetivo de producto inválido.',
   telemetry_glitch_no_hold: 'Lectura glitch (ceros) sin valor previo para sostener.',
+  telemetry_glitch_held:
+    'Lectura glitch (retorno/suministro/evaporador/cargos en 0); se mantiene el dato anterior. Sin evaluación.',
 };
 
 function fmtC(v) {

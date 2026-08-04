@@ -175,7 +175,14 @@ async function fetchUnitRow(ctx, unitId) {
     warnTelemetryNotFoundOnce(adapter.fleet, unitId, ident);
   }
   if (!row) return null;
-  const { row: sanitized } = sanitizeMaduradorRowAgainstZeroGlitch(row, unitId);
+  const { row: sanitized, glitch, usedHold } = sanitizeMaduradorRowAgainstZeroGlitch(
+    row,
+    unitId
+  );
+  if (sanitized && typeof sanitized === 'object') {
+    sanitized.__telemetryGlitch = Boolean(glitch);
+    sanitized.__telemetryUsedHold = Boolean(usedHold);
+  }
   return sanitized;
 }
 
@@ -1131,6 +1138,8 @@ async function tickCooling(ctx, params, auto) {
 
   const imei = sensorUnit(ctx);
   const row = modeGate.row ?? (await fetchUnitRow(ctx, imei));
+  const telemetryGlitch = Boolean(row?.__telemetryGlitch);
+  const usedHold = Boolean(row?.__telemetryUsedHold);
   const setPoint = roundTemp1(readTelemetryField(row, 'set_point'));
   const returnAir = roundTemp1(readTelemetryField(row, 'return_air'));
   const tempSupply = roundTemp1(readTelemetryField(row, 'temp_supply_1'));
@@ -1155,6 +1164,8 @@ async function tickCooling(ctx, params, auto) {
     localLastSetAtMs: nextAuto.coolingLastSetAtMs ?? null,
     localLastDefrostAtMs: nextAuto.coolingLastDefrostAtMs ?? null,
     lastFingerprint: nextAuto.coolingLastFingerprint ?? null,
+    telemetryGlitch,
+    usedHold,
   });
 
   const decisionTarget = roundTemp1(decision.targetC);
@@ -1217,8 +1228,12 @@ async function tickCooling(ctx, params, auto) {
     };
   } else {
     // Solo registrar evaluaciones “ninguna acción” cuando no es telemetría idéntica
-    // (evita ruido cada minuto; las decisiones de set/defrost sí quedan siempre).
-    if (decision.reason !== 'telemetry_unchanged') {
+    // ni glitch de ceros (evita ruido / datos erróneos en el resumen al cliente).
+    if (
+      decision.reason !== 'telemetry_unchanged' &&
+      decision.reason !== 'telemetry_glitch_held' &&
+      decision.reason !== 'telemetry_glitch_no_hold'
+    ) {
       events.push({
         action: 'cooling_eval',
         imei,

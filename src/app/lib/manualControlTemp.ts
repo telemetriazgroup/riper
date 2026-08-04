@@ -46,7 +46,7 @@ export function formatManualTempRangeDual(minC: number, maxC: number) {
 /** Rangos de temperatura programada por tipo de proceso (panel). */
 export const RIPENING_TARGET_TEMP_MIN_C = 14;
 export const RIPENING_TARGET_TEMP_MAX_C = 30;
-export const COOLING_TARGET_TEMP_MIN_C = 6;
+export const COOLING_TARGET_TEMP_MIN_C = 5;
 export const COOLING_TARGET_TEMP_MAX_C = 14;
 export const HOMOGENIZATION_TARGET_TEMP_MIN_C = 15;
 export const HOMOGENIZATION_TARGET_TEMP_MAX_C = 30;
