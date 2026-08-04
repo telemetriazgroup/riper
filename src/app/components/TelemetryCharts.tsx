@@ -39,6 +39,7 @@ import {
 import {
   buildLast12hChartData,
   buildThermoKingLast12hChartData,
+  CHART_KEYS_SUPPRESS_ZERO,
   postProcessHistoricalChartRows,
   resolveEthyleneChartDomain,
 } from '@/app/lib/historySeriesSanitize';
@@ -50,6 +51,8 @@ import {
   formatChartMetricValueWithUnit,
 } from '@/app/lib/chartMetricLabels';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
+
+const SUPPRESS_ZERO_KEYS = new Set<string>(CHART_KEYS_SUPPRESS_ZERO);
 
 /** Modal Datos históricos: ejes Y1–Y4 y orden de variables en panel. */
 const HISTORICAL_Y1_TEMP_KEYS = [
@@ -1773,6 +1776,7 @@ const HistoricalDataTableModal = ({
     if (v == null) return '—';
     if ((key === 'co2_reading' || key === 'o2_reading') && Number(v) === 0) return '-';
     if (key === 'ethylene' && Number(v) === 0) return 'NA';
+    if (SUPPRESS_ZERO_KEYS.has(key) && Number(v) === 0) return '—';
     if (typeof v === 'number') return formatUiDecimal(v);
     return String(v);
   };
@@ -1951,9 +1955,11 @@ const HistoricalDataTableModal = ({
                                 ? '-'
                                 : key === 'ethylene' && Number(row[key]) === 0
                                   ? 'NA'
-                                  : typeof row[key] === 'number'
-                                    ? formatUiDecimal(Number(row[key]))
-                                    : String(row[key])}
+                                  : SUPPRESS_ZERO_KEYS.has(key) && Number(row[key]) === 0
+                                    ? '—'
+                                    : typeof row[key] === 'number'
+                                      ? formatUiDecimal(Number(row[key]))
+                                      : String(row[key])}
                           </td>
                         ))}
                       </tr>

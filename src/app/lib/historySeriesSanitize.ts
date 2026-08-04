@@ -199,6 +199,17 @@ export function sanitizeAvlPctForChart(avl_pct: number, avl_raw?: number | null)
 
 const TEMP_KEYS_ZERO_NULL = ['set_point', 'return_air', 'temp_supply_1'] as const;
 
+/**
+ * Ceros espurios que distorsionan tendencia (condensador, compresor, ambiente, voltaje).
+ * Se omiten en gráfica (null = sin trazo) y en tabla (celda vacía).
+ */
+export const CHART_KEYS_SUPPRESS_ZERO = [
+  'condensation_coil',
+  'compress_coil_1',
+  'ambient_air',
+  'line_voltage',
+] as const;
+
 /** Post-proceso filas del modal histórico (mismas claves que CHART_METRIC_KEYS + avl_raw). */
 export function postProcessHistoricalChartRows(
   rows: Record<string, unknown>[],
@@ -209,6 +220,9 @@ export function postProcessHistoricalChartRows(
     row.relative_humidity = chartNullIfZero(row.relative_humidity);
     row.set_point_co2 = chartNullIfZero(row.set_point_co2);
     for (const k of TEMP_KEYS_ZERO_NULL) {
+      row[k] = chartNullIfZero(row[k]);
+    }
+    for (const k of CHART_KEYS_SUPPRESS_ZERO) {
       row[k] = chartNullIfZero(row[k]);
     }
 
