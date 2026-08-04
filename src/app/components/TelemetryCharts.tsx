@@ -42,8 +42,13 @@ import {
   postProcessHistoricalChartRows,
   resolveEthyleneChartDomain,
 } from '@/app/lib/historySeriesSanitize';
+import { labelBudgetPerSeries, selectChartLabelIndices } from '@/app/lib/chartValueLabels';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
-import { CHART_METRIC_KEYS, buildChartMetricLabels } from '@/app/lib/chartMetricLabels';
+import {
+  CHART_METRIC_KEYS,
+  buildChartMetricLabels,
+  formatChartMetricValueWithUnit,
+} from '@/app/lib/chartMetricLabels';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 
 /** Modal Datos históricos: ejes Y1–Y4 y orden de variables en panel. */
@@ -63,8 +68,9 @@ const HISTORICAL_PRESET_COOLING = [
 const HISTORICAL_PRESET_RIPENING = [
   'set_point_co2', 'co2_reading', 'ethylene', 'relative_humidity', 'temp_supply_1',
 ] as const;
+/** Estándar: retorno, suministro y set (sin evaporador). */
 const HISTORICAL_PRESET_STANDARD = [
-  'return_air', 'temp_supply_1', 'evaporation_coil', 'set_point',
+  'return_air', 'temp_supply_1', 'set_point',
 ] as const;
 
 /** Grosor de línea en gráficas históricas / últimas 12 h. */
@@ -106,6 +112,14 @@ function mapHistoryPointsToHistoricalRows(history: any[]): any[] {
 }
 
 type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases' | 'controlled_atmosphere';
+
+/** «Valores» activos por defecto al elegir cada vista predefinida. */
+function defaultShowLabelsForPreset(preset: HistoricalChartPreset | null): Record<string, boolean> {
+  if (preset === 'standard') return { return_air: true };
+  if (preset === 'cooling') return { cargo_1_temp: true, cargo_4_temp: true };
+  if (preset === 'ripening') return { ethylene: true, co2_reading: true };
+  return {};
+}
 
 function historicalYAxisIdForMetric(key: string): 'left' | 'pct' | 'gas' | 'aux' {
   if ((HISTORICAL_Y1_TEMP_KEYS as readonly string[]).includes(key)) return 'left';
@@ -695,7 +709,9 @@ const HistoricalDataModal = ({
   const [isLoading, setIsLoading] = useState(false);
   const [metricColors, setMetricColors] = useState<Record<string, string>>({});
   const [zoomRange, setZoomRange] = useState<{ startIndex: number; endIndex: number } | null>(null);
-  const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>({});
+  const [showLabelsByMetric, setShowLabelsByMetric] = useState<Record<string, boolean>>(() =>
+    defaultShowLabelsForPreset(isThermoKingSession() ? 'controlled_atmosphere' : 'standard')
+  );
   const [showPowerShading, setShowPowerShading] = useState(false);
   const [historicalTempUnit, setHistoricalTempUnit] = useState<'C' | 'F'>('C');
   const [variablesColorSearch, setVariablesColorSearch] = useState('');
@@ -908,6 +924,7 @@ const HistoricalDataModal = ({
     else if (preset === 'controlled_atmosphere')
       setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
     else setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+    setShowLabelsByMetric(defaultShowLabelsForPreset(preset));
   }, []);
 
   const clearAllHistoricalMetrics = useCallback(() => {
@@ -928,11 +945,12 @@ const HistoricalDataModal = ({
       if (isThermoKingSession()) {
         setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
         setHistoricalPreset('controlled_atmosphere');
+        setShowLabelsByMetric(defaultShowLabelsForPreset('controlled_atmosphere'));
       } else {
         setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
         setHistoricalPreset('standard');
+        setShowLabelsByMetric(defaultShowLabelsForPreset('standard'));
       }
-      setShowLabelsByMetric({});
       setHistoricalTempUnit(tempUnit === 'F' ? 'F' : 'C');
       setVariablesColorSearch('');
       if (preloadedHistory.length > 0) {
@@ -983,12 +1001,22 @@ const HistoricalDataModal = ({
           </p>
         )}
         <ul className="space-y-1">
-          {(Array.isArray(payload) ? payload : []).map((entry) => (
-            <li key={entry.dataKey} className="flex justify-between gap-4 text-sm">
-              <span style={{ color: entry.color }}>{metricLabels[String(entry.dataKey)] ?? entry.dataKey}</span>
-              <span className="font-mono font-medium">{entry.value != null ? formatUiDecimal(Number(entry.value)) : '—'}</span>
-            </li>
-          ))}
+          {(Array.isArray(payload) ? payload : []).map((entry) => {
+            const key = String(entry.dataKey ?? '');
+            return (
+              <li key={key} className="flex justify-between gap-4 text-sm">
+                <span style={{ color: entry.color }}>{metricLabels[key] ?? key}</span>
+                <span className="font-mono font-medium">
+                  {formatChartMetricValueWithUnit(
+                    key,
+                    entry.value != null ? Number(entry.value) : null,
+                    historicalTempUnit,
+                    formatUiDecimal
+                  )}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </div>
     );
@@ -1490,61 +1518,80 @@ const HistoricalDataModal = ({
                             fillOpacity={0.35}
                           />
                         ))}
-                      {historicalChartLineKeys.map((key, lineIndex) => {
-                        const color = getLineColor(key);
-                        const showLabels = !!showLabelsByMetric[key];
+                      {(() => {
                         const visibleLen = brushEnd - brushStart + 1;
                         const displayData = chartDataWithDisplayTemps.slice(brushStart, brushEnd + 1);
-                        const isHighVariation = key === 'ethylene' || key === 'relative_humidity';
-                        const maxLabels = key === 'ethylene'
-                          ? (visibleLen > 15 ? 15 : 8)
-                          : isHighVariation
-                            ? 4
-                            : 8;
-                        const labelStep = Math.max(1, Math.floor(visibleLen / maxLabels));
-                        const isEthylene = key === 'ethylene';
-                        const labelDy = isEthylene ? 0 : 5 + lineIndex * 12;
-                        const labelFontSize = isEthylene ? 10 : 13;
-                        const variationThreshold = key === 'ethylene' ? 10 : key === 'relative_humidity' ? 2 : 0.3;
-                        return (
-                          <Line
-                            key={key}
-                            yAxisId={historicalYAxisIdForMetric(key)}
-                            type="monotone"
-                            dataKey={key}
-                            stroke={color}
-                            strokeWidth={CHART_LINE_STROKE_WIDTH}
-                            dot={false}
-                            connectNulls
-                            activeDot={{ r: 4 }}
-                            name={metricLabels[key]}
-                          >
-                            {showLabels && (
-                              <LabelList
-                                content={(props: { index?: number; value?: number; x?: number; y?: number }) => {
-                                  const { index = 0, value, x, y } = props;
-                                  if (value == null || x == null || y == null) return null;
-                                  const numVal = typeof value === 'number' ? value : Number(value);
-                                  const prev = index > 0 ? displayData[index - 1]?.[key] : null;
-                                  const next = index < displayData.length - 1 ? displayData[index + 1]?.[key] : null;
-                                  const prevNum = prev != null ? Number(prev) : null;
-                                  const nextNum = next != null ? Number(next) : null;
-                                  const isVariation = (prevNum != null && Math.abs(numVal - prevNum) >= variationThreshold) ||
-                                    (nextNum != null && Math.abs(numVal - nextNum) >= variationThreshold);
-                                  const isRegular = index % labelStep === 0;
-                                  if (!isVariation && !isRegular) return null;
-                                  const text = typeof value === 'number' ? formatUiDecimal(value) : String(value);
-                                  return (
-                                    <text x={x} y={y} dy={labelDy} textAnchor="middle" fill={color} fontSize={labelFontSize} fontWeight={700}>
-                                      {text}
-                                    </text>
-                                  );
-                                }}
-                              />
-                            )}
-                          </Line>
+                        const activeLabelSeries = historicalChartLineKeys.filter((k) => showLabelsByMetric[k]);
+                        const { maxLabels, minIndexGap } = labelBudgetPerSeries(
+                          activeLabelSeries.length,
+                          visibleLen
                         );
-                      })}
+                        const labelIndexByKey = new Map<string, Set<number>>();
+                        for (const key of activeLabelSeries) {
+                          const seriesVals = displayData.map((row) => {
+                            const v = row[key];
+                            return typeof v === 'number' && Number.isFinite(v) ? v : null;
+                          });
+                          labelIndexByKey.set(
+                            key,
+                            selectChartLabelIndices(seriesVals, {
+                              maxLabels: key === 'ethylene' ? Math.min(maxLabels + 2, 16) : maxLabels,
+                              minIndexGap,
+                              extremumWindow: key === 'ethylene' || key === 'relative_humidity' ? 3 : 2,
+                            })
+                          );
+                        }
+                        return historicalChartLineKeys.map((key, lineIndex) => {
+                          const color = getLineColor(key);
+                          const showLabels = !!showLabelsByMetric[key];
+                          const labelIndices = labelIndexByKey.get(key) ?? new Set<number>();
+                          return (
+                            <Line
+                              key={key}
+                              yAxisId={historicalYAxisIdForMetric(key)}
+                              type="monotone"
+                              dataKey={key}
+                              stroke={color}
+                              strokeWidth={CHART_LINE_STROKE_WIDTH}
+                              dot={false}
+                              connectNulls
+                              activeDot={{ r: 4 }}
+                              name={metricLabels[key]}
+                            >
+                              {showLabels && (
+                                <LabelList
+                                  content={(props: { index?: number; value?: number; x?: number; y?: number }) => {
+                                    const { index = 0, value, x, y } = props;
+                                    if (value == null || x == null || y == null) return null;
+                                    if (!labelIndices.has(index)) return null;
+                                    const text = formatChartMetricValueWithUnit(
+                                      key,
+                                      typeof value === 'number' ? value : Number(value),
+                                      historicalTempUnit,
+                                      formatUiDecimal
+                                    );
+                                    /** Alterna arriba/abajo para no tapar la línea (look referencia). */
+                                    const dy = index % 2 === 0 ? -10 - (lineIndex % 3) * 3 : 12 + (lineIndex % 3) * 3;
+                                    return (
+                                      <text
+                                        x={x}
+                                        y={y}
+                                        dy={dy}
+                                        textAnchor="middle"
+                                        fill={color}
+                                        fontSize={10}
+                                        fontWeight={600}
+                                      >
+                                        {text}
+                                      </text>
+                                    );
+                                  }}
+                                />
+                              )}
+                            </Line>
+                          );
+                        });
+                      })()}
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
