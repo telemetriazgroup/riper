@@ -14,6 +14,10 @@ export async function sendTermoKingControlCommand(deviceId, tipo, dato) {
   const id = String(deviceId || '').trim();
   if (!id) throw new Error('deviceId required');
 
+  // Dynamic import evita ciclo: tunnelCommandTelemetry → tunelControlClient.
+  const { assertLiveTelemetryForCommand } = await import('./commandTelemetryGate.js');
+  await assertLiveTelemetryForCommand(id);
+
   const formatted = formatTunnelDato(tipo, dato);
   const url = `${base}/TermoKing/comando_control/${encodeURIComponent(id)}?tipo=${encodeURIComponent(String(tipo))}&dato=${encodeURIComponent(String(formatted))}`;
   const ctrl =

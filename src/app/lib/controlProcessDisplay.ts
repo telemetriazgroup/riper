@@ -600,6 +600,23 @@ export function summarizeProcessEventParts(
         : t('log_ctrl_reason_temp_manual_send', { target: datoFmt, count: n }),
     };
   }
+  if (action === 'command_skipped_stale') {
+    const age =
+      detail.ageMinutes != null && Number.isFinite(Number(detail.ageMinutes))
+        ? String(Math.round(Number(detail.ageMinutes)))
+        : '—';
+    const lastUtc = String(detail.lastSeenUtcIso ?? ev.lastSeenUtcIso ?? '—');
+    const nowUtc = String(detail.serverNowUtcIso ?? ev.serverNowUtcIso ?? '—');
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_command_skipped_stale'),
+      reason: t('log_ctrl_reason_command_skipped_stale', {
+        age,
+        lastUtc,
+        nowUtc,
+      }),
+    };
+  }
   if (action === 'cooling_eval') {
     const summary = String(detail.summaryEs ?? ev.summaryEs ?? '');
     return {

@@ -1119,6 +1119,9 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_temp_adjust': 'Cambio de temperatura → {{target}}°C',
     'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
     'log_ctrl_cooling_defrost': 'Cooling: envío de DEFROST',
+    'log_ctrl_command_skipped_stale': 'Comando no enviado: equipo sin dato en vivo',
+    'log_ctrl_reason_command_skipped_stale':
+      'Último dato hace {{age}} min (límite 10). Comparación UTC: último={{lastUtc}} · servidor={{nowUtc}}. El equipo no está conectado; el comando no se ejecutaría.',
     'log_ctrl_cooling_eval': 'Cooling: evaluación sin comando',
     'log_ctrl_cooling_controlling_mode':
       'Cooling: controlling_mode → {{mode}} (actual {{current}})',
@@ -2675,6 +2678,9 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_temp_adjust': 'Temperature change → {{target}}°C',
     'log_ctrl_cooling_setpoint': 'Cooling: set_point {{from}} → {{to}}°C',
     'log_ctrl_cooling_defrost': 'Cooling: DEFROST command',
+    'log_ctrl_command_skipped_stale': 'Command not sent: no live telemetry',
+    'log_ctrl_reason_command_skipped_stale':
+      'Last sample {{age}} min ago (limit 10). UTC compare: last={{lastUtc}} · server={{nowUtc}}. Device is offline; the command would not run.',
     'log_ctrl_cooling_eval': 'Cooling: evaluation with no command',
     'log_ctrl_cooling_controlling_mode':
       'Cooling: controlling_mode → {{mode}} (current {{current}})',

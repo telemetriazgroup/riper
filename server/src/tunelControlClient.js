@@ -31,6 +31,10 @@ export async function sendTunnelControlCommand(imei, tipo, dato) {
   const id = String(imei || '').trim();
   if (!id) throw new Error('imei required');
 
+  // Dynamic import evita ciclo: tunnelCommandTelemetry → tunelControlClient.
+  const { assertLiveTelemetryForCommand } = await import('./commandTelemetryGate.js');
+  await assertLiveTelemetryForCommand(id);
+
   const formatted = formatTunnelDato(tipo, dato);
   const url = `${base}/Tunel/comando_control_tunel/${encodeURIComponent(id)}?tipo=${encodeURIComponent(String(tipo))}&dato=${encodeURIComponent(String(formatted))}`;
   const ctrl =

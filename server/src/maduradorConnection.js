@@ -2,6 +2,8 @@
 
 export const CONNECTION_STANDBY_MINUTES = 30;
 export const CONNECTION_OFFLINE_MINUTES = 720;
+/** Umbral para bloquear envío de comandos si el último dato en vivo es más antiguo (minutos UTC). */
+export const COMMAND_STALE_TELEMETRY_MINUTES = 10;
 export const MADURADOR_SERVER_TIMEZONE = 'America/Lima';
 
 const TZ_AWARE_SUFFIX = /([Zz]|[+-]\d{2}:?\d{2})$/;

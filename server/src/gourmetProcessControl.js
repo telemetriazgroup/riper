@@ -30,6 +30,7 @@ import {
   evaluateCoolingDecision,
   isCoolingDynamicLogicEnabled,
 } from './coolingControlLogic.js';
+import { isCommandTelemetryStaleError } from './commandTelemetryGate.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
@@ -209,14 +210,46 @@ async function telemetryRow(ctx, field) {
   return fetchUnitRow(ctx, imei);
 }
 
+function summarizeCommandSend(urls) {
+  const list = Array.isArray(urls) ? urls : [];
+  const sent = list.filter((u) => u && u.url && !u.skipped);
+  const skipped = list.filter((u) => u && u.skipped);
+  return {
+    sent,
+    skipped,
+    anySent: sent.length > 0,
+    allSkipped: list.length > 0 && sent.length === 0,
+  };
+}
+
+async function sendOneCommand(adapter, unitId, tipo, dato) {
+  try {
+    const sent = await adapter.sendCommand(unitId, tipo, dato);
+    return { imei: unitId, url: sent.url, dato: sent.dato, ok: true };
+  } catch (err) {
+    if (isCommandTelemetryStaleError(err)) {
+      return {
+        imei: unitId,
+        skipped: true,
+        ok: false,
+        reason: err.code || 'telemetry_stale',
+        ageMinutes: err.ageMinutes ?? err.details?.ageMinutes ?? null,
+        lastSeenUtcIso: err.lastSeenUtcIso ?? err.details?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: err.serverNowUtcIso ?? err.details?.serverNowUtcIso ?? null,
+        message: String(err.message || ''),
+      };
+    }
+    throw err;
+  }
+}
+
 async function sendCommandTargets(ctx, tipo, dato) {
   const adapter = adapterFor(ctx);
   if (!adapter) return [];
   const targets = commandImeis(ctx, tipo);
   const urls = [];
   for (const unitId of targets) {
-    const sent = await adapter.sendCommand(unitId, tipo, dato);
-    urls.push({ imei: unitId, url: sent.url, dato: sent.dato });
+    urls.push(await sendOneCommand(adapter, unitId, tipo, dato));
   }
   return urls;
 }
@@ -235,8 +268,7 @@ async function fanOutSend(ctx, units, tipo, dato) {
   const targets = adapter.commandImeis ? commandImeis(ctx, tipo) : units;
   const urls = [];
   for (const unitId of targets) {
-    const sent = await adapter.sendCommand(unitId, tipo, dato);
-    urls.push({ imei: unitId, url: sent.url, dato: sent.dato });
+    urls.push(await sendOneCommand(adapter, unitId, tipo, dato));
   }
   return urls;
 }
@@ -474,6 +506,25 @@ async function ensureTemperature(ctx, params, auto, processType, opts = {}) {
     }
     if (adapter) {
       const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, target);
+      const send = summarizeCommandSend(urls);
+      if (!send.anySent) {
+        events.push({
+          action: 'command_skipped_stale',
+          kind: 'temperature',
+          target,
+          ...tempMeta,
+          urls,
+          reason: send.skipped[0]?.reason || 'telemetry_stale',
+          lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+          serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+          ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+        });
+        return {
+          auto: { ...auto, nextActionAt: msFromNow(60 * 1000) },
+          events,
+          rescheduled: true,
+        };
+      }
       events.push({ action: 'send_temperature', target, ...tempMeta, urls });
     }
     return {
@@ -517,6 +568,25 @@ async function ensureHumidity(ctx, params, auto, opts = {}) {
       };
     }
     const urls = await sendCommandTargets(ctx, 2, target);
+    const send = summarizeCommandSend(urls);
+    if (!send.anySent) {
+      events.push({
+        action: 'command_skipped_stale',
+        kind: 'humidity',
+        target,
+        imei,
+        urls,
+        reason: send.skipped[0]?.reason || 'telemetry_stale',
+        lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+        ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+      });
+      return {
+        auto: { ...auto, nextActionAt: msFromNow(60 * 1000) },
+        events,
+        rescheduled: true,
+      };
+    }
     events.push({ action: 'send_humidity', target, imei, urls, dato: target });
     return {
       auto: { ...auto, humidityAdjustAttempts: attempts + 1, nextActionAt: msFromNow(HUMIDITY_VERIFY_MS) },
@@ -556,6 +626,25 @@ async function ensureCo2Limit(ctx, params, auto, opts = {}) {
       };
     }
     const urls = await sendCommandTargets(ctx, 3, commandVal);
+    const send = summarizeCommandSend(urls);
+    if (!send.anySent) {
+      events.push({
+        action: 'command_skipped_stale',
+        kind: 'co2',
+        imei,
+        dato: commandVal,
+        urls,
+        reason: send.skipped[0]?.reason || 'telemetry_stale',
+        lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+        ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+      });
+      return {
+        auto: { ...auto, nextActionAt: msFromNow(60 * 1000) },
+        events,
+        rescheduled: true,
+      };
+    }
     events.push({
       action: 'send_co2_limit',
       imei,
@@ -634,7 +723,15 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
       events.push({ action: 'ethylene_poll', url: poll.url, reason: 'steady_monitor', tipo: 0, dato: 1 });
     }
   } catch (e) {
-    events.push({ action: 'ethylene_poll_error', message: String(e.message) });
+    events.push({
+      action: isCommandTelemetryStaleError(e) ? 'command_skipped_stale' : 'ethylene_poll_error',
+      kind: 'ethylene_poll',
+      message: String(e.message),
+      reason: isCommandTelemetryStaleError(e) ? e.code || 'telemetry_stale' : undefined,
+      lastSeenUtcIso: e.lastSeenUtcIso ?? e.details?.lastSeenUtcIso ?? null,
+      serverNowUtcIso: e.serverNowUtcIso ?? e.details?.serverNowUtcIso ?? null,
+      ageMinutes: e.ageMinutes ?? e.details?.ageMinutes ?? null,
+    });
   }
 
   const row = await telemetryRow(ctx, 'campo_1');
@@ -762,16 +859,28 @@ async function tickEthyleneCycle(ctx, params, auto) {
     const baseline = resolved.effective;
 
     if (baseline != null && baseline < target - 0.5 && adapter && resolved.canInject) {
-      const sent = await adapter.sendEthyleneDose(imei, 2);
-      eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, baseline);
-      events.push({
-        action: 'ethylene_tipo5_initial',
-        imei,
-        ...ethyleneInjectionEventFields(sent, {
-          baseline,
-          value: baselineRaw,
-        }),
-      });
+      try {
+        const sent = await adapter.sendEthyleneDose(imei, 2);
+        eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, baseline);
+        events.push({
+          action: 'ethylene_tipo5_initial',
+          imei,
+          ...ethyleneInjectionEventFields(sent, {
+            baseline,
+            value: baselineRaw,
+          }),
+        });
+      } catch (e) {
+        events.push({
+          action: isCommandTelemetryStaleError(e) ? 'command_skipped_stale' : 'ethylene_dose_error',
+          kind: 'ethylene',
+          message: String(e.message),
+          reason: isCommandTelemetryStaleError(e) ? e.code || 'telemetry_stale' : undefined,
+          lastSeenUtcIso: e.lastSeenUtcIso ?? e.details?.lastSeenUtcIso ?? null,
+          serverNowUtcIso: e.serverNowUtcIso ?? e.details?.serverNowUtcIso ?? null,
+          ageMinutes: e.ageMinutes ?? e.details?.ageMinutes ?? null,
+        });
+      }
     } else if (baseline != null && baseline >= target - 0.5) {
       events.push({ action: 'ethylene_skip_dose', reason: 'at_target', baseline, target });
       return {
@@ -854,19 +963,31 @@ async function tickEthyleneCycle(ctx, params, auto) {
   const lastReading = resolved.history[resolved.history.length - 1];
   const dose = computeProportionalEthyleneDose(eth, target, lastReading);
   if (dose > 0 && lastReading < target - 0.5 && adapter && resolved.canInject) {
-    const sent = await adapter.sendEthyleneDose(imei, dose);
-    eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, lastReading);
-    eth.readings = [];
-    eth.nonZeroReadings = [];
-    eth.pollRound = 0;
-    events.push({
-      action: 'ethylene_tipo5_proportional',
-      imei,
-      ...ethyleneInjectionEventFields(sent, {
-        lastReading,
-        target,
-      }),
-    });
+    try {
+      const sent = await adapter.sendEthyleneDose(imei, dose);
+      eth = recordEthyleneDose(eth, sent.doseLogical ?? sent.ppm, lastReading);
+      eth.readings = [];
+      eth.nonZeroReadings = [];
+      eth.pollRound = 0;
+      events.push({
+        action: 'ethylene_tipo5_proportional',
+        imei,
+        ...ethyleneInjectionEventFields(sent, {
+          lastReading,
+          target,
+        }),
+      });
+    } catch (e) {
+      events.push({
+        action: isCommandTelemetryStaleError(e) ? 'command_skipped_stale' : 'ethylene_dose_error',
+        kind: 'ethylene',
+        message: String(e.message),
+        reason: isCommandTelemetryStaleError(e) ? e.code || 'telemetry_stale' : undefined,
+        lastSeenUtcIso: e.lastSeenUtcIso ?? e.details?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: e.serverNowUtcIso ?? e.details?.serverNowUtcIso ?? null,
+        ageMinutes: e.ageMinutes ?? e.details?.ageMinutes ?? null,
+      });
+    }
   }
 
   return {
@@ -1086,24 +1207,42 @@ async function ensureCoolingControllingMode(ctx, auto) {
       COOLING_CONTROLLING_MODE_TIPO,
       COOLING_CONTROLLING_MODE_REQUIRED
     );
-    events.push({
-      action: 'cooling_controlling_mode',
-      imei,
-      tipo: COOLING_CONTROLLING_MODE_TIPO,
-      dato: COOLING_CONTROLLING_MODE_REQUIRED,
-      controllingMode,
-      requiredMode: COOLING_CONTROLLING_MODE_REQUIRED,
-      reason: 'controlling_mode_not_4',
-      analysisEs:
-        controllingMode == null
-          ? 'controlling_mode ausente → enviar tipo 11 dato 4 (modo potencia Cooling).'
-          : `controlling_mode=${controllingMode} ≠ 4 → enviar tipo 11 dato 4 (activar potencia).`,
-      urls,
-    });
-    nextAuto = {
-      ...nextAuto,
-      coolingLastControllingModeAtMs: Date.now(),
-    };
+    const send = summarizeCommandSend(urls);
+    if (!send.anySent) {
+      events.push({
+        action: 'command_skipped_stale',
+        kind: 'controlling_mode',
+        imei,
+        tipo: COOLING_CONTROLLING_MODE_TIPO,
+        dato: COOLING_CONTROLLING_MODE_REQUIRED,
+        urls,
+        reason: send.skipped[0]?.reason || 'telemetry_stale',
+        lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+        ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+        analysisEs:
+          'No se envía controlling_mode: último dato en vivo supera 10 min (UTC). Equipo no conectado.',
+      });
+    } else {
+      events.push({
+        action: 'cooling_controlling_mode',
+        imei,
+        tipo: COOLING_CONTROLLING_MODE_TIPO,
+        dato: COOLING_CONTROLLING_MODE_REQUIRED,
+        controllingMode,
+        requiredMode: COOLING_CONTROLLING_MODE_REQUIRED,
+        reason: 'controlling_mode_not_4',
+        analysisEs:
+          controllingMode == null
+            ? 'controlling_mode ausente → enviar tipo 11 dato 4 (modo potencia Cooling).'
+            : `controlling_mode=${controllingMode} ≠ 4 → enviar tipo 11 dato 4 (activar potencia).`,
+        urls,
+      });
+      nextAuto = {
+        ...nextAuto,
+        coolingLastControllingModeAtMs: Date.now(),
+      };
+    }
   }
 
   return { events, nextAuto, modeOk: false, controllingMode, row };
@@ -1187,45 +1326,90 @@ async function tickCooling(ctx, params, auto) {
   const adapter = adapterFor(ctx);
   if (decision.action === 'set_temperature' && decisionTarget != null && adapter) {
     const urls = await fanOutSend(ctx, fanOutUnits(ctx), 1, decisionTarget);
-    events.push({
-      action: 'cooling_setpoint',
-      imei,
-      target: decisionTarget,
-      targetC: decisionTarget,
-      dato: decisionTarget,
-      reason: decision.reason,
-      analysisEs: decisionTrace.analysisEs,
-      changeEs: decisionTrace.changeEs,
-      summaryEs: decisionTrace.summaryEs,
-      decisionTrace,
-      urls,
-      ...decision.meta,
-    });
-    appendDecisionLog(decisionTrace);
-    nextAuto = {
-      ...nextAuto,
-      coolingLastSetAtMs: Date.now(),
-      nextActionAt: msFromNow(TEMP_VERIFY_MS),
-    };
+    const send = summarizeCommandSend(urls);
+    if (!send.anySent) {
+      events.push({
+        action: 'command_skipped_stale',
+        kind: 'cooling_setpoint',
+        imei,
+        target: decisionTarget,
+        targetC: decisionTarget,
+        dato: decisionTarget,
+        reason: send.skipped[0]?.reason || 'telemetry_stale',
+        lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+        ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+        analysisEs:
+          'No se envía set_point: último dato en vivo supera 10 min (UTC). Equipo no conectado.',
+        decisionTrace,
+        urls,
+      });
+      nextAuto = {
+        ...nextAuto,
+        nextActionAt: msFromNow(60 * 1000),
+      };
+    } else {
+      events.push({
+        action: 'cooling_setpoint',
+        imei,
+        target: decisionTarget,
+        targetC: decisionTarget,
+        dato: decisionTarget,
+        reason: decision.reason,
+        analysisEs: decisionTrace.analysisEs,
+        changeEs: decisionTrace.changeEs,
+        summaryEs: decisionTrace.summaryEs,
+        decisionTrace,
+        urls,
+        ...decision.meta,
+      });
+      appendDecisionLog(decisionTrace);
+      nextAuto = {
+        ...nextAuto,
+        coolingLastSetAtMs: Date.now(),
+        nextActionAt: msFromNow(TEMP_VERIFY_MS),
+      };
+    }
   } else if (decision.action === 'defrost' && adapter) {
     const urls = await fanOutSend(ctx, fanOutUnits(ctx), 8, 1);
-    events.push({
-      action: 'cooling_defrost',
-      imei,
-      reason: decision.reason,
-      analysisEs: decisionTrace.analysisEs,
-      changeEs: decisionTrace.changeEs,
-      summaryEs: decisionTrace.summaryEs,
-      decisionTrace,
-      urls,
-      ...decision.meta,
-    });
-    appendDecisionLog(decisionTrace);
-    nextAuto = {
-      ...nextAuto,
-      coolingLastDefrostAtMs: Date.now(),
-      nextActionAt: msFromNow(TEMP_VERIFY_MS),
-    };
+    const send = summarizeCommandSend(urls);
+    if (!send.anySent) {
+      events.push({
+        action: 'command_skipped_stale',
+        kind: 'cooling_defrost',
+        imei,
+        reason: send.skipped[0]?.reason || 'telemetry_stale',
+        lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+        serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+        ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+        analysisEs:
+          'No se envía DEFROST: último dato en vivo supera 10 min (UTC). Equipo no conectado.',
+        decisionTrace,
+        urls,
+      });
+      nextAuto = {
+        ...nextAuto,
+        nextActionAt: msFromNow(60 * 1000),
+      };
+    } else {
+      events.push({
+        action: 'cooling_defrost',
+        imei,
+        reason: decision.reason,
+        analysisEs: decisionTrace.analysisEs,
+        changeEs: decisionTrace.changeEs,
+        summaryEs: decisionTrace.summaryEs,
+        decisionTrace,
+        urls,
+        ...decision.meta,
+      });
+      appendDecisionLog(decisionTrace);
+      nextAuto = {
+        ...nextAuto,
+        coolingLastDefrostAtMs: Date.now(),
+        nextActionAt: msFromNow(TEMP_VERIFY_MS),
+      };
+    }
   } else {
     // Solo registrar evaluaciones “ninguna acción” cuando no es telemetría idéntica
     // ni glitch de ceros (evita ruido / datos erróneos en el resumen al cliente).
@@ -1375,15 +1559,29 @@ async function tickStopPlan(ctx, params, auto) {
       lastMaintainMs == null || lastMaintainMs >= STOP_PLAN_HOURLY_MS;
     if (shouldResendViolation || shouldSendHourly) {
       const urls = await sendStopPlanTipo10(ctx, STOP_PLAN_MAINTAIN_DATO);
-      events.push({
-        action: 'stop_plan_maintain_tipo10',
-        dato: STOP_PLAN_MAINTAIN_DATO,
-        urls,
-        reason: shouldResendViolation ? 'phase_consumption_high' : 'hourly_maintain',
-        violationMinutes: shouldResendViolation ? Math.round(violationMs / 60000) : undefined,
-        checks,
-      });
-      maintainSent = true;
+      const send = summarizeCommandSend(urls);
+      if (!send.anySent) {
+        events.push({
+          action: 'command_skipped_stale',
+          kind: 'stop_plan_maintain',
+          dato: STOP_PLAN_MAINTAIN_DATO,
+          urls,
+          reason: send.skipped[0]?.reason || 'telemetry_stale',
+          lastSeenUtcIso: send.skipped[0]?.lastSeenUtcIso ?? null,
+          serverNowUtcIso: send.skipped[0]?.serverNowUtcIso ?? null,
+          ageMinutes: send.skipped[0]?.ageMinutes ?? null,
+        });
+      } else {
+        events.push({
+          action: 'stop_plan_maintain_tipo10',
+          dato: STOP_PLAN_MAINTAIN_DATO,
+          urls,
+          reason: shouldResendViolation ? 'phase_consumption_high' : 'hourly_maintain',
+          violationMinutes: shouldResendViolation ? Math.round(violationMs / 60000) : undefined,
+          checks,
+        });
+        maintainSent = true;
+      }
     }
   }
 
