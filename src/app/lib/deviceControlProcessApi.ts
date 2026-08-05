@@ -216,6 +216,36 @@ export async function deleteControlSessionRecord(id: string): Promise<void> {
   await handle<{ data: { archived?: boolean; id: string } }>(res);
 }
 
+/** Superadmin: pausa/reanuda lógica Cooling (contador del proceso sigue). */
+export async function setCoolingIntervention(
+  sessionId: string,
+  active: boolean
+): Promise<DeviceControlSessionRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(sessionId)}/intervention`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ active }),
+  });
+  const json = await handle<{ data: DeviceControlSessionRow }>(res);
+  if (!json.data) throw new Error('sin respuesta');
+  return json.data;
+}
+
+/** Superadmin: comando en intervención — tipo 1 set_point, 8 defrost, 11 controlling_mode. */
+export async function sendCoolingInterventionCommand(
+  sessionId: string,
+  body: { tipo: 1 | 8 | 11; dato: number }
+): Promise<DeviceControlSessionRow> {
+  const res = await fetch(`${base()}/${encodeURIComponent(sessionId)}/intervention/command`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  const json = await handle<{ data: DeviceControlSessionRow }>(res);
+  if (!json.data) throw new Error('sin respuesta');
+  return json.data;
+}
+
 export async function restoreControlSession(id: string): Promise<DeviceControlSessionRow> {
   const res = await fetch(`${base()}/${encodeURIComponent(id)}/restore`, {
     method: 'POST',

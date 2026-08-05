@@ -720,7 +720,14 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
   try {
     const poll = adapter ? await adapter.sendEthylenePoll(imei) : null;
     if (poll) {
-      events.push({ action: 'ethylene_poll', url: poll.url, reason: 'steady_monitor', tipo: 0, dato: 1 });
+      events.push({
+        action: 'ethylene_poll',
+        url: poll.url,
+        reason: 'steady_monitor',
+        tipo: 0,
+        dato: 1,
+        target,
+      });
     }
   } catch (e) {
     events.push({
@@ -790,9 +797,11 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
         action: 'ethylene_skip_dose',
         reason: 'await_increment',
         effective,
+        lastReading: effective,
         target,
         baseline: eth.baselineBeforeDose,
         lastTipo5Dato: eth.lastTipo5Dato,
+        analysisEs: `Lectura ${effective} ppm < objetivo ${target} ppm; sin incremento vs baseline ${eth.baselineBeforeDose ?? '—'} ppm tras dosis → no se inyecta.`,
       });
     }
   }
@@ -808,9 +817,16 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
           baseline: effective,
           lastReading: effective,
           target,
+          remaining: Number((target - effective).toFixed(1)),
           reason: doseReason === 'fallback_no_increment' ? 'below_target_no_increment' : 'below_target_steady',
           doseReason,
           saturatedRead,
+          analysisEs:
+            doseReason === 'initial'
+              ? `Lectura ${effective} ppm < objetivo ${target} ppm → dosis inicial ${sent.doseLogical ?? sent.ppm}.`
+              : doseReason === 'fallback_no_increment'
+                ? `Sin incremento útil: lectura ${effective} ppm, objetivo ${target} ppm → dosis conservadora ${sent.doseLogical ?? sent.ppm}.`
+                : `Lectura ${effective} ppm < objetivo ${target} ppm → dosis proporcional ${sent.doseLogical ?? sent.ppm}.`,
         }),
       });
     } catch (e) {
@@ -867,7 +883,11 @@ async function tickEthyleneCycle(ctx, params, auto) {
           imei,
           ...ethyleneInjectionEventFields(sent, {
             baseline,
+            lastReading: baseline,
             value: baselineRaw,
+            target,
+            remaining: Number((target - baseline).toFixed(1)),
+            analysisEs: `Lectura ${baseline} ppm < objetivo ${target} ppm → dosis inicial ${sent.doseLogical ?? sent.ppm}.`,
           }),
         });
       } catch (e) {
@@ -882,7 +902,15 @@ async function tickEthyleneCycle(ctx, params, auto) {
         });
       }
     } else if (baseline != null && baseline >= target - 0.5) {
-      events.push({ action: 'ethylene_skip_dose', reason: 'at_target', baseline, target });
+      events.push({
+        action: 'ethylene_skip_dose',
+        reason: 'at_target',
+        baseline,
+        effective: baseline,
+        lastReading: baseline,
+        target,
+        analysisEs: `Lectura ${baseline} ppm ya alcanza objetivo ${target} ppm (±0.5); no se inyecta.`,
+      });
       return {
         auto: {
           ...auto,
@@ -973,8 +1001,15 @@ async function tickEthyleneCycle(ctx, params, auto) {
         action: 'ethylene_tipo5_proportional',
         imei,
         ...ethyleneInjectionEventFields(sent, {
+          baseline: eth.baselineBeforeDose ?? lastReading,
           lastReading,
           target,
+          remaining: Number((target - lastReading).toFixed(1)),
+          observedIncrement:
+            eth.baselineBeforeDose != null && Number.isFinite(Number(eth.baselineBeforeDose))
+              ? Number((lastReading - Number(eth.baselineBeforeDose)).toFixed(1))
+              : null,
+          analysisEs: `Lectura ${lastReading} ppm < objetivo ${target} ppm → dosis proporcional ${sent.doseLogical ?? sent.ppm}.`,
         }),
       });
     } catch (e) {
@@ -1678,6 +1713,12 @@ export async function tickGourmetControlContext(ctx) {
     };
     ctx.params = nextParams;
     await ctx.persist(nextParams);
+  }
+
+  // Intervención superadmin: pausa lógica Cooling (incl. controlling_mode forzado);
+  // el contador estimated_end_at del proceso sigue corriendo.
+  if (processType === 'Cooling' && auto.interventionActive) {
+    return;
   }
 
   if (auto.nextActionAt && new Date(auto.nextActionAt).getTime() > Date.now()) {

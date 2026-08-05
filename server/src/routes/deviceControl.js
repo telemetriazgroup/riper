@@ -2,7 +2,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { writeAudit } from '../auditLog.js';
 import { fireEmailNotification } from '../emailNotifications.js';
-import { requireSuperAdmin } from '../authMiddleware.js';
+import { requireSuperAdmin, requireSuperUser } from '../authMiddleware.js';
 import { maybeFinalizeDeviceControlDebounced } from '../autoFinalizeDueProcesses.js';
 import {
   filterRowsByPinnedFleetDeviceIds,
@@ -12,6 +12,10 @@ import {
 import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
 import { initGourmetProcessOnSessionStart, initStopPlanOnSessionStart, shouldInitAutomatedProcessControl, shouldInitStopPlanAutomation, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
+import {
+  sendCoolingInterventionCommand,
+  setCoolingInterventionActive,
+} from '../coolingIntervention.js';
 import { appendSessionTunnelEvent, appendTunnelEventLog, programmedSummaryFromParams } from '../tunnelEventLog.js';
 import { normalizeControlProcessParams, validateControlProcessParams, effectiveSessionParams, buildControlSnapshot } from '../controlProcessParams.js';
 
@@ -366,6 +370,72 @@ deviceControlRouter.post('/:id/restore', requireSuperAdmin, async (req, res) => 
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/**
+ * Superadmin: activar/desactivar modo intervención en Cooling activo.
+ * Pausa la lógica automática; el contador del proceso (estimated_end_at) continúa.
+ * Body: { active: boolean }
+ */
+deviceControlRouter.post('/:id/intervention', requireSuperUser, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'validation', message: 'id required' });
+    const active = Boolean(req.body?.active);
+    const row = await setCoolingInterventionActive(id, {
+      active,
+      userEmail: req.user?.email ?? req.user?.id,
+    });
+    await writeAudit(req, {
+      action: active ? 'device_control.intervention.start' : 'device_control.intervention.end',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: { device_id: row.device_id, process_type: row.process_type, active },
+    });
+    return res.json({ data: row });
+  } catch (e) {
+    const status = e.status || 500;
+    if (status >= 500) console.error(e);
+    return res.status(status).json({ error: status === 404 ? 'not_found' : 'intervention_error', message: String(e.message) });
+  }
+});
+
+/**
+ * Superadmin: comando durante intervención Cooling.
+ * Body: { tipo: 1|8|11, dato: number }
+ * 1 = set_point °C, 8 = defrost (dato 1), 11 = controlling_mode.
+ */
+deviceControlRouter.post('/:id/intervention/command', requireSuperUser, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    if (!id) return res.status(400).json({ error: 'validation', message: 'id required' });
+    const tipo = Number(req.body?.tipo);
+    const dato = req.body?.dato;
+    const result = await sendCoolingInterventionCommand(id, {
+      tipo,
+      dato,
+      userEmail: req.user?.email ?? req.user?.id,
+    });
+    await writeAudit(req, {
+      action: 'device_control.intervention.command',
+      entityType: 'device_control_session',
+      entityId: id,
+      meta: {
+        device_id: result.session.device_id,
+        tipo: result.tipo,
+        dato: result.dato,
+      },
+    });
+    return res.json({ data: result.session, urls: result.urls, tipo: result.tipo, dato: result.dato });
+  } catch (e) {
+    const status = e.status || 500;
+    if (status >= 500) console.error(e);
+    return res.status(status).json({
+      error: status === 404 ? 'not_found' : 'intervention_command_error',
+      message: String(e.message),
+      urls: e.urls,
+    });
   }
 });
 

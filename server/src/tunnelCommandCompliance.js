@@ -347,8 +347,13 @@ async function dispatchTunnelEthylene(job) {
         doseLogical: sent.doseLogical ?? sent.ppm,
         datoSent: sent.injectionMultiplier > 1 ? sent.datoSent : undefined,
         injectionMultiplier: sent.injectionMultiplier > 1 ? sent.injectionMultiplier : undefined,
+        baseline,
         baselineBeforeDose: baseline,
+        lastReading: baseline,
+        target,
+        remaining: Number((target - baseline).toFixed(1)),
         url: sent.step.url,
+        analysisEs: `Lectura ${baseline} ppm < objetivo ${target} ppm → dosis inicial ${sent.doseLogical ?? sent.ppm}.`,
       });
       meta = recordEthyleneDose({ ...meta, baselineBeforeDose: baseline }, sent.doseLogical ?? sent.ppm, baseline);
     } else if (baseline == null) {
@@ -728,11 +733,14 @@ async function verifyTunnelEthyleneJob(job) {
       doseLogical: sent.doseLogical ?? sent.ppm,
       datoSent: sent.injectionMultiplier > 1 ? sent.datoSent : undefined,
       injectionMultiplier: sent.injectionMultiplier > 1 ? sent.injectionMultiplier : undefined,
+      baseline: previousBaseline,
       baselineBeforeDose: previousBaseline,
       lastReading,
+      target,
       observedIncrement,
-      remaining: target - lastReading,
+      remaining: Number((target - lastReading).toFixed(1)),
       url: sent.step.url,
+      analysisEs: `Lectura ${lastReading} ppm < objetivo ${target} ppm (faltan ${Number((target - lastReading).toFixed(1))} ppm; incremento ${Number(observedIncrement.toFixed(1))} ppm) → dosis proporcional ${sent.doseLogical ?? sent.ppm}.`,
     });
     await updateJob(job.id, {
       status: 'waiting',

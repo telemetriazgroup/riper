@@ -1122,6 +1122,31 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_command_skipped_stale': 'Comando no enviado: equipo sin dato en vivo',
     'log_ctrl_reason_command_skipped_stale':
       'Último dato hace {{age}} min (límite 10). Comparación UTC: último={{lastUtc}} · servidor={{nowUtc}}. El equipo no está conectado; el comando no se ejecutaría.',
+    'log_ctrl_intervention_mode': 'Modo intervención',
+    'log_ctrl_reason_intervention_started':
+      'Intervención activada por {{by}}: lógica Cooling en pausa; el contador del proceso continúa.',
+    'log_ctrl_reason_intervention_ended':
+      'Intervención finalizada por {{by}}: control devuelto al automático Cooling.',
+    'log_ctrl_reason_intervention_setpoint':
+      'Intervención ({{by}}): set_point → {{dato}} °C.',
+    'log_ctrl_reason_intervention_defrost': 'Intervención ({{by}}): envío DEFROST.',
+    'log_ctrl_reason_intervention_controlling_mode':
+      'Intervención ({{by}}): controlling_mode → {{mode}}.',
+    'intervention_mode_title': 'Modo intervención',
+    'intervention_mode_active_banner':
+      'Lógica Cooling en pausa. El proceso sigue en contador. Superadmin puede ajustar set_point, controlling_mode y defrost.',
+    'intervention_mode_idle_hint':
+      'Pausa la lógica automática de Cooling sin detener el proceso. Luego puedes enviar set_point, modo de control y defrost.',
+    'intervention_start': 'Activar intervención',
+    'intervention_end': 'Devolver al automático',
+    'intervention_setpoint': 'Set point (°C)',
+    'intervention_controlling_mode': 'Controlling mode',
+    'intervention_send_setpoint': 'Enviar set point',
+    'intervention_send_mode': 'Enviar modo',
+    'intervention_send_defrost': 'Enviar DEFROST',
+    'intervention_started_toast': 'Modo intervención activo',
+    'intervention_ended_toast': 'Control devuelto al automático',
+    'intervention_command_toast': 'Comando de intervención enviado',
     'log_ctrl_cooling_eval': 'Cooling: evaluación sin comando',
     'log_ctrl_cooling_controlling_mode':
       'Cooling: controlling_mode → {{mode}} (actual {{current}})',
@@ -1148,9 +1173,11 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip_client': 'Sin inyección de etileno',
     'log_ctrl_ethylene_poll_client': 'Consulta de etileno',
     'log_ctrl_ethylene_idle_poll': 'Consulta periódica de etileno (equipo en línea)',
-    'log_ctrl_reason_ethylene_inject_client': 'Comando de inyección enviado (dato {{dato}}).',
-    'log_ctrl_reason_ethylene_skip_client': 'No se requiere inyección en este ciclo.',
-    'log_ctrl_reason_ethylene_poll_client': 'Consulta periódica del sensor de etileno.',
+    'log_ctrl_reason_ethylene_inject_client':
+      'Lectura {{baseline}} ppm < objetivo {{target}} ppm → se envía inyección con dato {{dato}}.',
+    'log_ctrl_reason_ethylene_skip_client':
+      'Lectura {{baseline}} ppm ya alcanza el objetivo {{target}} ppm; no se inyecta en este ciclo.',
+    'log_ctrl_reason_ethylene_poll_client': 'Consulta periódica del sensor de etileno. Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_idle_poll':
       'Consulta tipo 0 dato 1 por inactividad de comandos (>10 min) en equipos en línea.',
     'telemetry_view_as_client': 'Ver como cliente',
@@ -1199,22 +1226,37 @@ const translations: Record<Language, Record<string, string>> = {
       'Tras {{minutes}} min con fases ≥ 0.5 A: reenvío tipo 10 dato {{dato}}.',
     'log_ctrl_reason_stop_plan_end':
       'A {{minutes}} min del fin STOP PLAN: tipo 10 dato {{dato}} para preparar reanudación.',
-    'log_ctrl_reason_ethylene_initial': 'Lectura inicial {{baseline}} ppm < objetivo {{target}} ppm → dosis inicial {{dato}}.',
-    'log_ctrl_reason_ethylene_proportional': 'Lectura {{lastReading}} ppm < objetivo {{target}} ppm → dosis proporcional {{dato}}.',
+    'log_ctrl_reason_ethylene_initial':
+      'Lectura {{baseline}} ppm < objetivo de control {{target}} ppm → dosis inicial de prueba {{dato}}.',
+    'log_ctrl_reason_ethylene_proportional':
+      'Lectura {{lastReading}} ppm < objetivo de control {{target}} ppm → dosis proporcional {{dato}}.',
+    'log_ctrl_reason_ethylene_proportional_detail':
+      'Lectura {{lastReading}} ppm < objetivo {{target}} ppm (faltan {{remaining}} ppm; último incremento {{increment}} ppm) → dosis proporcional {{dato}}.',
     'log_ctrl_ethylene_inject_fallback': 'Inyección etileno de respaldo tipo 5, dato {{dato}}',
     'log_ctrl_reason_ethylene_fallback':
-      'Sin incremento tras dosis de prueba: lectura {{lastReading}} ppm, objetivo {{target}} ppm → dosis conservadora {{dato}}.',
+      'Sin incremento útil tras dosis previa: lectura {{lastReading}} ppm, objetivo {{target}} ppm → dosis conservadora {{dato}}.',
     'log_ctrl_ethylene_skip_await': 'Etileno bajo objetivo — esperando respuesta del sensor',
     'log_ctrl_reason_ethylene_skip_await':
-      'Lectura {{effective}} ppm < {{target}} ppm; tras dosis de prueba aún no hay incremento respecto a {{baseline}} ppm (ventana de calibración).',
-    'log_ctrl_reason_ethylene_at_target': 'Lectura {{baseline}} ppm ya alcanza objetivo {{target}} ppm; no se inyecta.',
+      'Lectura {{effective}} ppm < objetivo {{target}} ppm; tras la última dosis aún no hay incremento respecto a {{baseline}} ppm → no se inyecta (ventana de calibración).',
+    'log_ctrl_reason_ethylene_at_target':
+      'Lectura {{baseline}} ppm ya alcanza el objetivo de control {{target}} ppm (±0.5); no se inyecta.',
     'log_ctrl_reason_ethylene_poll': 'Poll tipo 0 para obtener lectura de etileno antes de decidir dosis.',
+    'log_ctrl_reason_ethylene_poll_target':
+      'Consulta del sensor de etileno para decidir inyección. Objetivo de control {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_monitor': 'Monitoreo continuo maduración: poll tipo 0 dato 1 (cada 3 min).',
+    'log_ctrl_reason_ethylene_steady_monitor_target':
+      'Monitoreo continuo de etileno (consulta periódica). Objetivo de control {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_read': 'Lectura {{value}} ppm en monitoreo continuo. Objetivo {{target}} ppm.',
+    'log_ctrl_reason_ethylene_steady_read_ok':
+      'Lectura {{value}} ppm ≥ objetivo {{target}} ppm (−0.5) → en rango; no se requiere inyección.',
+    'log_ctrl_reason_ethylene_steady_read_low':
+      'Lectura {{value}} ppm < objetivo {{target}} ppm → por debajo del control; se evalúa inyección.',
     'log_ctrl_reason_ethylene_read': 'Lectura {{value}} ppm (muestras: {{readings}}). Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_read_ignored_zero':
       'El sensor reportó 0 ppm tras inyección reciente; se mantiene {{effective}} ppm (raw {{raw}}). Sin inyección hasta nueva lectura válida. Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_manual': 'Comando manual de inyección de etileno.',
+    'log_ctrl_reason_ethylene_manual_detail':
+      'Inyección manual dato {{dato}}. Lectura {{reading}} ppm · objetivo de control {{target}} ppm.',
     'log_ctrl_reason_generic_data': 'Datos: {{data}}',
     'manual_control_logged': 'Cambios manuales registrados en Control de dispositivos.',
     'tunnel_cmd_states_title': 'Estado del control manual',
@@ -2681,6 +2723,31 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_command_skipped_stale': 'Command not sent: no live telemetry',
     'log_ctrl_reason_command_skipped_stale':
       'Last sample {{age}} min ago (limit 10). UTC compare: last={{lastUtc}} · server={{nowUtc}}. Device is offline; the command would not run.',
+    'log_ctrl_intervention_mode': 'Intervention mode',
+    'log_ctrl_reason_intervention_started':
+      'Intervention started by {{by}}: Cooling logic paused; process timer continues.',
+    'log_ctrl_reason_intervention_ended':
+      'Intervention ended by {{by}}: control returned to Cooling automation.',
+    'log_ctrl_reason_intervention_setpoint':
+      'Intervention ({{by}}): set_point → {{dato}} °C.',
+    'log_ctrl_reason_intervention_defrost': 'Intervention ({{by}}): DEFROST sent.',
+    'log_ctrl_reason_intervention_controlling_mode':
+      'Intervention ({{by}}): controlling_mode → {{mode}}.',
+    'intervention_mode_title': 'Intervention mode',
+    'intervention_mode_active_banner':
+      'Cooling logic paused. Process timer keeps running. Superadmin can adjust set_point, controlling_mode and defrost.',
+    'intervention_mode_idle_hint':
+      'Pause Cooling automation without stopping the process. Then send set_point, control mode and defrost.',
+    'intervention_start': 'Start intervention',
+    'intervention_end': 'Return to automatic',
+    'intervention_setpoint': 'Set point (°C)',
+    'intervention_controlling_mode': 'Controlling mode',
+    'intervention_send_setpoint': 'Send set point',
+    'intervention_send_mode': 'Send mode',
+    'intervention_send_defrost': 'Send DEFROST',
+    'intervention_started_toast': 'Intervention mode active',
+    'intervention_ended_toast': 'Control returned to automatic',
+    'intervention_command_toast': 'Intervention command sent',
     'log_ctrl_cooling_eval': 'Cooling: evaluation with no command',
     'log_ctrl_cooling_controlling_mode':
       'Cooling: controlling_mode → {{mode}} (current {{current}})',
@@ -2710,9 +2777,11 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip_client': 'No ethylene injection',
     'log_ctrl_ethylene_poll_client': 'Ethylene poll',
     'log_ctrl_ethylene_idle_poll': 'Periodic ethylene poll (online unit)',
-    'log_ctrl_reason_ethylene_inject_client': 'Injection command sent (value {{dato}}).',
-    'log_ctrl_reason_ethylene_skip_client': 'No injection required this cycle.',
-    'log_ctrl_reason_ethylene_poll_client': 'Periodic ethylene sensor poll.',
+    'log_ctrl_reason_ethylene_inject_client':
+      'Reading {{baseline}} ppm < control target {{target}} ppm → injection sent with value {{dato}}.',
+    'log_ctrl_reason_ethylene_skip_client':
+      'Reading {{baseline}} ppm already meets target {{target}} ppm; no injection this cycle.',
+    'log_ctrl_reason_ethylene_poll_client': 'Periodic ethylene sensor poll. Control target {{target}} ppm.',
     'log_ctrl_reason_ethylene_idle_poll':
       'Type 0 value 1 poll due to no commands (>10 min) on online units.',
     'telemetry_view_as_client': 'View as client',
@@ -2761,22 +2830,37 @@ const translations: Record<Language, Record<string, string>> = {
       'After {{minutes}} min with phases ≥ 0.5 A: resend type 10 value {{dato}}.',
     'log_ctrl_reason_stop_plan_end':
       'At {{minutes}} min before STOP PLAN end: type 10 value {{dato}} to prepare resume.',
-    'log_ctrl_reason_ethylene_initial': 'Initial reading {{baseline}} ppm < target {{target}} ppm → initial dose {{dato}}.',
-    'log_ctrl_reason_ethylene_proportional': 'Reading {{lastReading}} ppm < target {{target}} ppm → proportional dose {{dato}}.',
+    'log_ctrl_reason_ethylene_initial':
+      'Reading {{baseline}} ppm < control target {{target}} ppm → initial test dose {{dato}}.',
+    'log_ctrl_reason_ethylene_proportional':
+      'Reading {{lastReading}} ppm < control target {{target}} ppm → proportional dose {{dato}}.',
+    'log_ctrl_reason_ethylene_proportional_detail':
+      'Reading {{lastReading}} ppm < target {{target}} ppm ({{remaining}} ppm remaining; last increment {{increment}} ppm) → proportional dose {{dato}}.',
     'log_ctrl_ethylene_inject_fallback': 'Fallback ethylene injection type 5, value {{dato}}',
     'log_ctrl_reason_ethylene_fallback':
-      'No increment after test dose: reading {{lastReading}} ppm, target {{target}} ppm → conservative dose {{dato}}.',
+      'No useful increment after prior dose: reading {{lastReading}} ppm, target {{target}} ppm → conservative dose {{dato}}.',
     'log_ctrl_ethylene_skip_await': 'Ethylene below target — waiting for sensor response',
     'log_ctrl_reason_ethylene_skip_await':
-      'Reading {{effective}} ppm < {{target}} ppm; no increment yet vs test baseline {{baseline}} ppm (calibration window).',
-    'log_ctrl_reason_ethylene_at_target': 'Reading {{baseline}} ppm already meets target {{target}} ppm; no injection.',
+      'Reading {{effective}} ppm < target {{target}} ppm; no increment yet vs baseline {{baseline}} ppm after last dose → no injection (calibration window).',
+    'log_ctrl_reason_ethylene_at_target':
+      'Reading {{baseline}} ppm already meets control target {{target}} ppm (±0.5); no injection.',
     'log_ctrl_reason_ethylene_poll': 'Type 0 poll to read ethylene before deciding dose.',
+    'log_ctrl_reason_ethylene_poll_target':
+      'Ethylene sensor poll to decide injection. Control target {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_monitor': 'Continuous ripening monitor: type 0 poll value 1 (every 3 min).',
+    'log_ctrl_reason_ethylene_steady_monitor_target':
+      'Continuous ethylene monitor (periodic poll). Control target {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_read': 'Reading {{value}} ppm during continuous monitor. Target {{target}} ppm.',
+    'log_ctrl_reason_ethylene_steady_read_ok':
+      'Reading {{value}} ppm ≥ target {{target}} ppm (−0.5) → in range; no injection needed.',
+    'log_ctrl_reason_ethylene_steady_read_low':
+      'Reading {{value}} ppm < target {{target}} ppm → below control; injection will be evaluated.',
     'log_ctrl_reason_ethylene_read': 'Reading {{value}} ppm (samples: {{readings}}). Target {{target}} ppm.',
     'log_ctrl_reason_ethylene_read_ignored_zero':
       'Sensor reported 0 ppm after recent injection; keeping {{effective}} ppm (raw {{raw}}). No injection until a new valid reading. Target {{target}} ppm.',
     'log_ctrl_reason_ethylene_manual': 'Manual ethylene injection command.',
+    'log_ctrl_reason_ethylene_manual_detail':
+      'Manual injection value {{dato}}. Reading {{reading}} ppm · control target {{target}} ppm.',
     'log_ctrl_reason_generic_data': 'Data: {{data}}',
     'manual_control_logged': 'Manual changes saved to Device Control.',
     'tunnel_cmd_states_title': 'Manual control status',

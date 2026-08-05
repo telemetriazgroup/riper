@@ -380,12 +380,71 @@ const ETHYLENE_READ_ACTIONS = new Set([
   'read_ethylene_poll',
   'read_ethylene',
   'ethylene_skip_dose',
+  'ethylene_tipo5_initial',
+  'ethylene_tipo5_proportional',
+  'ethylene_tipo5_fallback',
+  'send_tipo5',
+  'send_tipo5_proportional',
+  'send_ethylene',
+  'retry_ethylene',
 ]);
 
 function injectionDatoForDisplay(ev: ProcessEventRow, detail: Record<string, unknown>): string {
   const logical = ev.doseLogical ?? detail.doseLogical;
   if (logical != null && logical !== '') return String(logical);
   return String(ev.dato ?? detail.dato ?? '—');
+}
+
+function fmtPpmField(v: unknown): string {
+  if (v == null || v === '' || v === '—') return '—';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return formatUiDecimal(Number(n.toFixed(1)), 1);
+}
+
+/** Campos de decisión de control de etileno (lectura / objetivo / dosis). */
+function ethyleneDecisionFields(
+  ev: ProcessEventRow,
+  detail: Record<string, unknown>,
+  displayOpts?: ProcessEventDisplayOpts
+) {
+  const readingRaw =
+    ev.lastReading ??
+    detail.lastReading ??
+    ev.effective ??
+    detail.effective ??
+    ev.baseline ??
+    detail.baseline ??
+    ev.baselineBeforeDose ??
+    detail.baselineBeforeDose ??
+    ev.value ??
+    detail.value;
+  const baselineRaw =
+    ev.baseline ?? detail.baseline ?? ev.baselineBeforeDose ?? detail.baselineBeforeDose ?? readingRaw;
+  const lastReadingRaw = ev.lastReading ?? detail.lastReading ?? readingRaw;
+  const targetRaw =
+    ev.target ?? detail.target ?? detail.target_value ?? displayOpts?.programmedEthyleneTarget ?? null;
+  const remainingRaw =
+    ev.remaining ??
+    detail.remaining ??
+    (targetRaw != null &&
+    lastReadingRaw != null &&
+    Number.isFinite(Number(targetRaw)) &&
+    Number.isFinite(Number(lastReadingRaw))
+      ? Number(targetRaw) - Number(lastReadingRaw)
+      : null);
+  const incrementRaw = ev.observedIncrement ?? detail.observedIncrement ?? null;
+  return {
+    dato: injectionDatoForDisplay(ev, detail),
+    reading: fmtPpmField(readingRaw),
+    baseline: fmtPpmField(baselineRaw),
+    lastReading: fmtPpmField(lastReadingRaw),
+    target: fmtPpmField(targetRaw),
+    remaining: fmtPpmField(remainingRaw),
+    increment: fmtPpmField(incrementRaw),
+    skipReason: String(ev.reason ?? detail.reason ?? 'at_target'),
+    doseReason: String(ev.doseReason ?? detail.doseReason ?? ''),
+  };
 }
 
 function modulateEthyleneForClientLog(
@@ -434,8 +493,10 @@ export function extractProcessEventTelemetry(
   if (ETHYLENE_READ_ACTIONS.has(action)) {
     const rawEthylene =
       parseTelemetryNumber(ev.effective ?? detail.effective) ??
+      parseTelemetryNumber(ev.lastReading ?? detail.lastReading) ??
       parseTelemetryNumber(ev.value ?? detail.value) ??
-      parseTelemetryNumber(ev.baseline ?? detail.baseline);
+      parseTelemetryNumber(ev.baseline ?? detail.baseline) ??
+      parseTelemetryNumber(ev.baselineBeforeDose ?? detail.baselineBeforeDose);
     if (clientFacingLog) {
       out.ethylene = modulateEthyleneForClientLog(rawEthylene, displayOpts);
     } else if (!clientSafe) {
@@ -598,6 +659,51 @@ export function summarizeProcessEventParts(
       reason: isAuto
         ? t('log_ctrl_reason_temp_auto_send', { target: datoFmt, results: resultsStr, count: n })
         : t('log_ctrl_reason_temp_manual_send', { target: datoFmt, count: n }),
+    };
+  }
+  if (
+    action === 'intervention_started' ||
+    action === 'intervention_ended' ||
+    action === 'intervention_setpoint' ||
+    action === 'intervention_defrost' ||
+    action === 'intervention_controlling_mode'
+  ) {
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    const by = String(ev.by ?? detail.by ?? '—');
+    if (action === 'intervention_started') {
+      return {
+        kind: 'control_temperature',
+        description: t('log_ctrl_intervention_mode'),
+        reason: analysisEs || t('log_ctrl_reason_intervention_started', { by }),
+      };
+    }
+    if (action === 'intervention_ended') {
+      return {
+        kind: 'control_temperature',
+        description: t('log_ctrl_intervention_mode'),
+        reason: analysisEs || t('log_ctrl_reason_intervention_ended', { by }),
+      };
+    }
+    if (action === 'intervention_setpoint') {
+      const dato = String(ev.dato ?? detail.dato ?? '—');
+      return {
+        kind: 'control_temperature',
+        description: t('log_ctrl_intervention_mode'),
+        reason: analysisEs || t('log_ctrl_reason_intervention_setpoint', { dato, by }),
+      };
+    }
+    if (action === 'intervention_defrost') {
+      return {
+        kind: 'control_temperature',
+        description: t('log_ctrl_intervention_mode'),
+        reason: analysisEs || t('log_ctrl_reason_intervention_defrost', { by }),
+      };
+    }
+    const mode = String(ev.dato ?? detail.dato ?? '—');
+    return {
+      kind: 'control_temperature',
+      description: t('log_ctrl_intervention_mode'),
+      reason: analysisEs || t('log_ctrl_reason_intervention_controlling_mode', { mode, by }),
     };
   }
   if (action === 'command_skipped_stale') {
@@ -806,97 +912,98 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_tipo5_initial' || action === 'send_tipo5') {
-    const dato = injectionDatoForDisplay(ev, detail);
-    if (clientSafe) {
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_inject_client', { dato }),
-        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
-      };
-    }
-    const baseline = String(ev.baseline ?? detail.baseline ?? '—');
-    const ethTarget = String(ev.target ?? detail.target ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
     return {
       kind,
-      description: t('log_ctrl_ethylene_inject', { dato }),
-      reason: t('log_ctrl_reason_ethylene_initial', { baseline, target: ethTarget, dato }),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
+        : t('log_ctrl_ethylene_inject', { dato: f.dato }),
+      reason:
+        analysisEs ||
+        t('log_ctrl_reason_ethylene_initial', {
+          baseline: f.baseline,
+          target: f.target,
+          dato: f.dato,
+        }),
     };
   }
-  if (action === 'ethylene_tipo5_proportional' || action === 'send_tipo5_proportional') {
-    const dato = injectionDatoForDisplay(ev, detail);
-    if (clientSafe) {
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_inject_client', { dato }),
-        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
-      };
-    }
-    const lastReading = String(ev.lastReading ?? detail.lastReading ?? '—');
-    const ethTarget = String(ev.target ?? detail.target ?? '—');
+  if (action === 'ethylene_tipo5_proportional' || action === 'send_tipo5_proportional' || action === 'retry_ethylene') {
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    const reasonKey =
+      f.increment !== '—' && f.remaining !== '—'
+        ? 'log_ctrl_reason_ethylene_proportional_detail'
+        : 'log_ctrl_reason_ethylene_proportional';
     return {
       kind,
-      description: t('log_ctrl_ethylene_inject', { dato }),
-      reason: t('log_ctrl_reason_ethylene_proportional', {
-        lastReading,
-        target: ethTarget,
-        dato,
-      }),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
+        : t('log_ctrl_ethylene_inject', { dato: f.dato }),
+      reason:
+        analysisEs ||
+        t(reasonKey, {
+          lastReading: f.lastReading,
+          target: f.target,
+          dato: f.dato,
+          remaining: f.remaining,
+          increment: f.increment,
+        }),
     };
   }
   if (action === 'ethylene_tipo5_fallback') {
-    const dato = injectionDatoForDisplay(ev, detail);
-    if (clientSafe) {
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_inject_client', { dato }),
-        reason: t('log_ctrl_reason_ethylene_inject_client', { dato }),
-      };
-    }
-    const lastReading = String(ev.lastReading ?? detail.lastReading ?? ev.effective ?? detail.effective ?? '—');
-    const ethTarget = String(ev.target ?? detail.target ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
     return {
       kind,
-      description: t('log_ctrl_ethylene_inject_fallback', { dato }),
-      reason: t('log_ctrl_reason_ethylene_fallback', { lastReading, target: ethTarget, dato }),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
+        : t('log_ctrl_ethylene_inject_fallback', { dato: f.dato }),
+      reason:
+        analysisEs ||
+        t('log_ctrl_reason_ethylene_fallback', {
+          lastReading: f.lastReading,
+          target: f.target,
+          dato: f.dato,
+        }),
     };
   }
   if (action === 'ethylene_skip_dose') {
-    if (clientSafe) {
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    if (f.skipReason === 'await_increment') {
       return {
         kind,
-        description: t('log_ctrl_ethylene_skip_client'),
-        reason: t('log_ctrl_reason_ethylene_skip_client'),
-      };
-    }
-    const skipReason = String(ev.reason ?? detail.reason ?? 'at_target');
-    if (skipReason === 'await_increment') {
-      const effective = String(ev.effective ?? detail.effective ?? '—');
-      const ethTarget = String(ev.target ?? detail.target ?? '—');
-      const baseline = String(ev.baseline ?? detail.baseline ?? '—');
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_skip_await'),
-        reason: t('log_ctrl_reason_ethylene_skip_await', { effective, target: ethTarget, baseline }),
+        description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip_await'),
+        reason:
+          analysisEs ||
+          t('log_ctrl_reason_ethylene_skip_await', {
+            effective: f.reading,
+            target: f.target,
+            baseline: f.baseline,
+          }),
       };
     }
     return {
       kind,
-      description: t('log_ctrl_ethylene_skip'),
-      reason: t('log_ctrl_reason_ethylene_at_target', {
-        baseline: String(ev.baseline ?? detail.baseline ?? '—'),
-        target: String(ev.target ?? detail.target ?? '—'),
-      }),
+      description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip'),
+      reason:
+        analysisEs ||
+        t('log_ctrl_reason_ethylene_at_target', {
+          baseline: f.baseline !== '—' ? f.baseline : f.reading,
+          target: f.target,
+        }),
     };
   }
   if (action === 'ethylene_poll' || action === 'poll_tipo0') {
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const isMonitor = ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor';
     return {
       kind,
       description: t('log_ctrl_ethylene_poll_client'),
-      reason: clientSafe
-        ? t('log_ctrl_reason_ethylene_poll_client')
-        : ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor'
-          ? t('log_ctrl_reason_ethylene_steady_monitor')
-          : t('log_ctrl_reason_ethylene_poll'),
+      reason: isMonitor
+        ? t('log_ctrl_reason_ethylene_steady_monitor_target', { target: f.target })
+        : t('log_ctrl_reason_ethylene_poll_target', { target: f.target }),
     };
   }
   if (action === 'ethylene_idle_poll') {
@@ -907,56 +1014,84 @@ export function summarizeProcessEventParts(
     };
   }
   if (action === 'ethylene_read_ignored_zero' || action === 'read_ethylene_ignored_zero') {
-    if (clientSafe) {
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_poll_client'),
-        reason: t('log_ctrl_reason_ethylene_poll_client'),
-      };
-    }
-    const effective = String(ev.effective ?? detail.effective ?? '—');
-    const raw = String(ev.value ?? detail.value ?? '0');
-    const ethTarget = String(ev.target ?? detail.target ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const raw = fmtPpmField(ev.value ?? detail.value ?? '0');
     return {
       kind,
-      description: t('log_ctrl_ethylene_read_ignored_zero', { raw, effective }),
-      reason: t('log_ctrl_reason_ethylene_read_ignored_zero', { raw, effective, target: ethTarget }),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_poll_client')
+        : t('log_ctrl_ethylene_read_ignored_zero', { raw, effective: f.reading }),
+      reason: t('log_ctrl_reason_ethylene_read_ignored_zero', {
+        raw,
+        effective: f.reading,
+        target: f.target,
+      }),
     };
   }
   if (action === 'ethylene_read' || action === 'read_ethylene_poll' || action === 'read_ethylene') {
-    if (clientSafe) {
-      return {
-        kind,
-        description: t('log_ctrl_ethylene_poll_client'),
-        reason: t('log_ctrl_reason_ethylene_poll_client'),
-      };
-    }
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
     const readings = Array.isArray(ev.readings ?? detail.readings)
-      ? (ev.readings ?? detail.readings as unknown[]).join(', ')
-      : '';
-    const value = String(ev.value ?? detail.value ?? '—');
-    const ethTarget = String(ev.target ?? detail.target ?? '—');
+      ? (ev.readings ?? (detail.readings as unknown[])).join(', ')
+      : Array.isArray(ev.nonZeroReadings ?? detail.nonZeroReadings)
+        ? (ev.nonZeroReadings ?? (detail.nonZeroReadings as unknown[])).join(', ')
+        : '';
+    const value = f.reading !== '—' ? f.reading : fmtPpmField(ev.value ?? detail.value);
     const isMonitor = ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor';
+    const inRange = ev.inRange === true || detail.inRange === true;
     return {
       kind,
-      description: t('log_ctrl_ethylene_read', { value }),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_poll_client')
+        : t('log_ctrl_ethylene_read', { value }),
       reason: isMonitor
-        ? t('log_ctrl_reason_ethylene_steady_read', { value, target: ethTarget })
-        : t('log_ctrl_reason_ethylene_read', { value, readings, target: ethTarget }),
+        ? t(
+            inRange
+              ? 'log_ctrl_reason_ethylene_steady_read_ok'
+              : 'log_ctrl_reason_ethylene_steady_read_low',
+            { value, target: f.target }
+          )
+        : t('log_ctrl_reason_ethylene_read', { value, readings, target: f.target }),
     };
   }
   if (action === 'send_ethylene') {
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
     return {
       kind,
-      description: t('log_ctrl_ethylene_inject', { dato: String(detail.dato ?? ev.dato ?? '—') }),
-      reason: t('log_ctrl_reason_ethylene_manual'),
+      description: clientSafe
+        ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
+        : t('log_ctrl_ethylene_inject', { dato: f.dato }),
+      reason:
+        f.target !== '—' || f.reading !== '—'
+          ? t('log_ctrl_reason_ethylene_manual_detail', {
+              dato: f.dato,
+              reading: f.reading,
+              target: f.target,
+            })
+          : t('log_ctrl_reason_ethylene_manual'),
     };
   }
   if (action === 'completed') {
+    const completedReason = String(detail.reason ?? ev.reason ?? '');
+    if (
+      completedReason === 'ethylene_already_at_target' ||
+      completedReason === 'ethylene_target_reached' ||
+      completedReason === 'ethylene_target_reached_after_poll' ||
+      completedReason === 'ethylene_no_delta_needed'
+    ) {
+      const f = ethyleneDecisionFields(ev, detail, displayOpts);
+      return {
+        kind,
+        description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip'),
+        reason: t('log_ctrl_reason_ethylene_at_target', {
+          baseline: f.baseline !== '—' ? f.baseline : f.reading,
+          target: f.target,
+        }),
+      };
+    }
     return {
       kind,
       description: t('log_ctrl_command_completed'),
-      reason: t('control_process_ev_completed', { reason: String(detail.reason ?? ev.reason ?? '') }),
+      reason: t('control_process_ev_completed', { reason: completedReason }),
     };
   }
   if (action === 'failed') {
@@ -1196,6 +1331,7 @@ export function processAutomationPhaseLabel(
   deviceId?: string | null
 ): string | null {
   if (!auto) return null;
+  if (auto.interventionActive) return t('log_ctrl_intervention_mode');
   const phase = String(auto.phase ?? '');
   const mode = String(auto.mode ?? '');
   const tunnel = isGourmetTunnelAggregateDeviceId(deviceId);

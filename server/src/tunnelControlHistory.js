@@ -44,13 +44,26 @@ function buildEventLogFromJobs(jobs, prevLog = []) {
       const key = stepEventKey(job.id, idx, step);
       if (seen.has(key)) return;
       seen.add(key);
+      const detail = { ...step, action: undefined, at: undefined };
+      // Objetivo del job de control (etileno/temp/etc.) para explicar la decisión en bitácora.
+      if (detail.target == null && job.target_value != null && Number.isFinite(Number(job.target_value))) {
+        detail.target = Number(job.target_value);
+      }
+      if (
+        detail.lastReading == null &&
+        job.last_read_value != null &&
+        Number.isFinite(Number(job.last_read_value))
+      ) {
+        detail.lastReading = Number(job.last_read_value);
+      }
       log.push({
         key,
         at: step.at ?? null,
         jobId: job.id,
         kind: job.kind,
         action: step.action ?? null,
-        detail: { ...step, action: undefined, at: undefined },
+        target: detail.target ?? null,
+        detail,
       });
     });
   }
