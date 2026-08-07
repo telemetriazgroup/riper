@@ -1122,6 +1122,12 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_command_skipped_stale': 'Comando no enviado: equipo sin dato en vivo',
     'log_ctrl_reason_command_skipped_stale':
       'Último dato hace {{age}} min (límite 10). Comparación UTC: último={{lastUtc}} · servidor={{nowUtc}}. El equipo no está conectado; el comando no se ejecutaría.',
+    'ethylene_supply_warn_title': 'Posible falta de suministro de etileno',
+    'ethylene_supply_warn_desc':
+      'El nivel de gas de etileno no ha subido pese a que se está inyectando. Verifique si la alimentación de gas está cerrada o revise el suministro: es muy probable que se haya terminado.',
+    'ethylene_supply_warn_stats':
+      'Inyecciones ≥ {{hours}} h · dosis sumadas {{doseSum}} · lectura {{firstPpm}} → {{lastPpm}} ppm',
+    'ethylene_supply_warn_ack': 'Entendido',
     'log_ctrl_intervention_mode': 'Modo intervención',
     'log_ctrl_reason_intervention_started':
       'Intervención activada por {{by}}: lógica Cooling en pausa; el contador del proceso continúa.',
@@ -2723,6 +2729,12 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_command_skipped_stale': 'Command not sent: no live telemetry',
     'log_ctrl_reason_command_skipped_stale':
       'Last sample {{age}} min ago (limit 10). UTC compare: last={{lastUtc}} · server={{nowUtc}}. Device is offline; the command would not run.',
+    'ethylene_supply_warn_title': 'Possible ethylene supply shortage',
+    'ethylene_supply_warn_desc':
+      'Ethylene gas level has not risen even though injection is running. Check whether the gas feed valve is closed or inspect the supply — it is very likely empty.',
+    'ethylene_supply_warn_stats':
+      'Injections ≥ {{hours}} h · summed dose {{doseSum}} · reading {{firstPpm}} → {{lastPpm}} ppm',
+    'ethylene_supply_warn_ack': 'Understood',
     'log_ctrl_intervention_mode': 'Intervention mode',
     'log_ctrl_reason_intervention_started':
       'Intervention started by {{by}}: Cooling logic paused; process timer continues.',

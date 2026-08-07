@@ -28,6 +28,7 @@ import { GOURMET_TUNEL_DEVICE_ID } from '@/app/lib/tunelUnido';
 import { isGourmetSession } from '@/app/lib/gourmet';
 import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import { EthyleneSupplyWarningDialog } from '@/app/components/EthyleneSupplyWarningDialog';
 
 interface TunnelDeviceDetailProps {
   device: Device;
@@ -167,6 +168,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
+      <EthyleneSupplyWarningDialog deviceId={GOURMET_TUNEL_DEVICE_ID} />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack} title={t('back')}>

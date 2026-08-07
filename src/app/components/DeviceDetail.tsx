@@ -22,6 +22,7 @@ import { TunnelCommandCompliancePanel } from '@/app/components/TunnelCommandComp
 import { isGourmetSession } from '@/app/lib/gourmet';
 import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
+import { EthyleneSupplyWarningDialog } from '@/app/components/EthyleneSupplyWarningDialog';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -118,6 +119,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
+      <EthyleneSupplyWarningDialog deviceId={deviceId} />
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
