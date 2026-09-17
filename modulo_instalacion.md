@@ -269,3 +269,10 @@ Orden: **I0 → I1 → I3 (solo evidencia)** ya aporta valor; **I2 + I4** comple
 | Sin historial de instalaciones | Consulta + PDF por evento |
 
 **Próximo paso:** implementar **I0 + I1** (tablas + API + upload) y luego **I2–I4**.
+
+
+implicancia de inyeccion de etileno 
+
+tenemos el proceso  de maduracion/ripener  que funciona muy bien , el sistema de dosificacion de gas de etileno activa un rele cada n segundos dependiendo del comando , existe un caso donde se programa el set a 150 ppm y se envia una dosis , se activa el rele por los segundos programados , hay veces que existe un evento critico donde el rele se activa y se queda pegado y se sigue inyectando gas , entonces los niveles de etileno suben muy por encima de los niveles . entonces debemos detectar ese evento , ejemplo lo porgramamos a 150 y supera en 20% 180 ppm automaticamente se envia un segundo de inyeccion dado as que el rele  es muy posible que este pegado y seigue inyectando gas , ya  que la orden de 1 segundo lo que significa es que por 1 segundo se active y se vuelva a desactivar  . despues verificamos por 10 minutos que la tendencia no sea alsista , ejemplo se registra que se va inyectar 5 segundos en el proceso de maduracion porque estada en 141 y debe llegar a 150 , ha pasado 3 minutos y esta en 161 , sigue pasando el tiempo y esta en 181 , y no se envio mas comando que el ultimo que fue 5 segundos y sigue subiendo se envia el comando de un segundo ya que se presume que el rele se quedo pegado , todo este evento suspende el control normal y prioriza mantener la estabilidad d elos niveles de gases si despues de 10 minutos sigue subiendo de froma desproporcionada se vuelve a enviar 1 segundo nomas . y si supero los 270 de lectura se procede a relizar un ciclo de ventilacion , donde por 15 minutos se ventila se abre el avl a 200 y hasta tener lecturas de 20% mas del set es donde volvemos al control original .
+
+**Diseño técnico / implicancias / plan de implementación:** ver [`error_gas.md`](./error_gas.md).

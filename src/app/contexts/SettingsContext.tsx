@@ -1227,6 +1227,24 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip_client': 'Sin inyección de etileno',
     'log_ctrl_ethylene_poll_client': 'Consulta de etileno',
     'log_ctrl_ethylene_idle_poll': 'Consulta periódica de etileno (equipo en línea)',
+    'log_ctrl_ethylene_safety_pulse': 'Seguridad etileno: pulso anti-relé (1 s)',
+    'log_ctrl_ethylene_safety_vent': 'Seguridad etileno: ventilación de emergencia (AVL 200)',
+    'log_ctrl_ethylene_safety_vent_end': 'Seguridad etileno: fin de ventilación de emergencia',
+    'log_ctrl_ethylene_safety_cleared': 'Seguridad etileno: niveles estabilizados',
+    'log_ctrl_ethylene_safety_error': 'Seguridad etileno: error de comando',
+    'log_ctrl_reason_ethylene_safety_pulse':
+      'Lectura {{effective}} ppm > 120% del set {{target}} ppm → pulso físico 1 s para despegar relé.',
+    'log_ctrl_reason_ethylene_safety_vent':
+      'Lectura {{effective}} ppm ≥ 270 → ventilación AVL 200 de emergencia.',
+    'log_ctrl_reason_ethylene_safety_vent_end': 'Fin de la ventilación de emergencia por etileno.',
+    'log_ctrl_reason_ethylene_safety_cleared': 'Se reanuda el control normal de etileno.',
+    'log_ctrl_ethylene_safety_phase_watch': 'Seguridad etileno (vigilancia)',
+    'log_ctrl_ethylene_safety_phase_vent': 'Seguridad etileno (ventilación)',
+    'ethylene_safety_banner_title': 'Seguridad etileno activa',
+    'ethylene_safety_banner_watch':
+      'Posible relé pegado: control de dosis normal suspendido. Vigilando tendencia ~10 min.',
+    'ethylene_safety_banner_vent':
+      'Lectura ≥ 270 ppm: ventilación de emergencia AVL 200. No se inyecta etileno.',
     'log_ctrl_reason_ethylene_inject_client':
       'Lectura {{baseline}} ppm < objetivo {{target}} ppm → se envía inyección con dato {{dato}}.',
     'log_ctrl_reason_ethylene_skip_client':
@@ -2909,6 +2927,24 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_skip_client': 'No ethylene injection',
     'log_ctrl_ethylene_poll_client': 'Ethylene poll',
     'log_ctrl_ethylene_idle_poll': 'Periodic ethylene poll (online unit)',
+    'log_ctrl_ethylene_safety_pulse': 'Ethylene safety: unstick pulse (1 s)',
+    'log_ctrl_ethylene_safety_vent': 'Ethylene safety: emergency ventilation (AVL 200)',
+    'log_ctrl_ethylene_safety_vent_end': 'Ethylene safety: emergency ventilation ended',
+    'log_ctrl_ethylene_safety_cleared': 'Ethylene safety: levels stabilized',
+    'log_ctrl_ethylene_safety_error': 'Ethylene safety: command error',
+    'log_ctrl_reason_ethylene_safety_pulse':
+      'Reading {{effective}} ppm > 120% of set {{target}} ppm → physical 1 s pulse to unstick relay.',
+    'log_ctrl_reason_ethylene_safety_vent':
+      'Reading {{effective}} ppm ≥ 270 → emergency AVL 200 ventilation.',
+    'log_ctrl_reason_ethylene_safety_vent_end': 'End of ethylene emergency ventilation.',
+    'log_ctrl_reason_ethylene_safety_cleared': 'Normal ethylene control resumed.',
+    'log_ctrl_ethylene_safety_phase_watch': 'Ethylene safety (watch)',
+    'log_ctrl_ethylene_safety_phase_vent': 'Ethylene safety (ventilate)',
+    'ethylene_safety_banner_title': 'Ethylene safety active',
+    'ethylene_safety_banner_watch':
+      'Possible stuck relay: normal dosing suspended. Watching trend ~10 min.',
+    'ethylene_safety_banner_vent':
+      'Reading ≥ 270 ppm: emergency AVL 200 ventilation. Ethylene injection blocked.',
     'log_ctrl_reason_ethylene_inject_client':
       'Reading {{baseline}} ppm < control target {{target}} ppm → injection sent with value {{dato}}.',
     'log_ctrl_reason_ethylene_skip_client':

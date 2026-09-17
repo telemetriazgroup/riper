@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, Loader2, PauseCircle, PlayCircle, Snowflake, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, Loader2, PauseCircle, PlayCircle, Snowflake, XCircle } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
@@ -55,8 +55,12 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   const automation = (session?.params?.processAutomation ?? null) as Record<string, unknown> | null;
   const autoActive = isAutomatedControlProcess(session);
   const interventionActive = Boolean(automation?.interventionActive);
+  const ethyleneSafety = automation?.ethyleneSafety as { phase?: string; reason?: string } | null | undefined;
+  const ethyleneSafetyActive = Boolean(ethyleneSafety?.phase);
   const isCoolingActive =
     session?.status === 'active' && String(session?.process_type || '') === 'Cooling';
+  const isRipeningActive =
+    session?.status === 'active' && String(session?.process_type || '') === 'Ripening';
 
   useEffect(() => {
     if (!isCoolingActive || !session?.params) return;
@@ -323,6 +327,20 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {isRipeningActive && ethyleneSafetyActive && (
+          <div className="mt-4 rounded-lg border border-rose-300 dark:border-rose-800 bg-rose-50/90 dark:bg-rose-950/40 p-3">
+            <p className="text-xs font-semibold uppercase text-rose-900 dark:text-rose-200 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {t('ethylene_safety_banner_title')}
+            </p>
+            <p className="text-xs text-rose-900/80 dark:text-rose-100/80 mt-1 leading-relaxed">
+              {ethyleneSafety?.phase === 'ventilate'
+                ? t('ethylene_safety_banner_vent')
+                : t('ethylene_safety_banner_watch')}
+            </p>
           </div>
         )}
 

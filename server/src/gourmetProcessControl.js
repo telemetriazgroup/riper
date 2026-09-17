@@ -31,6 +31,13 @@ import {
   isCoolingDynamicLogicEnabled,
 } from './coolingControlLogic.js';
 import { isCommandTelemetryStaleError } from './commandTelemetryGate.js';
+import {
+  ETHYLENE_SAFETY_POLL_MS,
+  ETHYLENE_STUCK_PULSE_DATO,
+  ETHYLENE_VENT_AVL,
+  evaluateEthyleneSafety,
+  isEthyleneSafetyActive,
+} from './ethyleneSafety.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
@@ -271,6 +278,100 @@ async function fanOutSend(ctx, units, tipo, dato) {
     urls.push(await sendOneCommand(adapter, unitId, tipo, dato));
   }
   return urls;
+}
+
+/**
+ * Seguridad etileno (relé pegado / runaway). Ejecuta pulsos físicos y ventilación.
+ * @returns {{ auto, events, suspendNormal: boolean }}
+ */
+async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
+  const evaluated = evaluateEthyleneSafety({
+    target,
+    reading: effective,
+    safety: auto.ethyleneSafety ?? null,
+    now: Date.now(),
+  });
+
+  for (const action of evaluated.actions) {
+    if (action.type === 'pulse') {
+      try {
+        const urls = await sendCommandTargets(ctx, 5, ETHYLENE_STUCK_PULSE_DATO);
+        events.push({
+          action: 'ethylene_safety_unstick_pulse',
+          source: 'ethylene_safety',
+          tipo: 5,
+          dato: ETHYLENE_STUCK_PULSE_DATO,
+          physicalDato: ETHYLENE_STUCK_PULSE_DATO,
+          urls,
+          target,
+          effective,
+          overshootThreshold: evaluated.safety?.overshootThreshold ?? null,
+          reason: action.reason,
+          analysisEs: `Seguridad etileno: lectura ${effective} ppm > ${evaluated.safety?.overshootThreshold ?? '—'} (120% set ${target}). Pulso 1 s para despegar relé.`,
+        });
+      } catch (e) {
+        events.push({
+          action: 'ethylene_safety_pulse_error',
+          message: String(e.message),
+          reason: action.reason,
+        });
+      }
+    } else if (action.type === 'vent_start') {
+      try {
+        const urls = await sendCommandTargets(ctx, 6, ETHYLENE_VENT_AVL);
+        events.push({
+          action: 'ethylene_safety_emergency_vent',
+          source: 'ethylene_safety',
+          tipo: 6,
+          dato: ETHYLENE_VENT_AVL,
+          urls,
+          target,
+          effective,
+          reason: action.reason,
+          analysisEs: `Seguridad etileno: lectura ${effective} ppm ≥ 270 → ventilación AVL ${ETHYLENE_VENT_AVL} (emergencia).`,
+        });
+      } catch (e) {
+        events.push({
+          action: 'ethylene_safety_vent_error',
+          message: String(e.message),
+          reason: action.reason,
+        });
+      }
+    } else if (action.type === 'vent_end') {
+      events.push({
+        action: 'ethylene_safety_vent_end',
+        source: 'ethylene_safety',
+        target,
+        effective,
+        reason: action.reason,
+        analysisEs: `Seguridad etileno: fin de ventilación de emergencia (${action.reason}).`,
+      });
+    } else if (action.type === 'clear') {
+      events.push({
+        action: 'ethylene_safety_cleared',
+        source: 'ethylene_safety',
+        target,
+        effective,
+        reason: action.reason,
+        analysisEs: `Seguridad etileno: niveles estabilizados; se reanuda control normal.`,
+      });
+    }
+  }
+
+  const nextAuto = {
+    ...auto,
+    ethylene: eth,
+    ethyleneSafety: evaluated.safety,
+  };
+  if (evaluated.suspendNormal || evaluated.safety) {
+    nextAuto.nextActionAt = msFromNow(evaluated.pollMs || ETHYLENE_SAFETY_POLL_MS);
+  }
+
+  return {
+    auto: nextAuto,
+    events,
+    suspendNormal: evaluated.suspendNormal,
+  };
 }
 
 async function allUnitsMatch(ctx, units, field, target, tolerance) {
@@ -780,9 +881,22 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
     };
   }
 
+  const safetyResult = await applyEthyleneSafety(ctx, auto, eth, effective, target, events);
+  if (safetyResult.suspendNormal) {
+    return { auto: safetyResult.auto, events: safetyResult.events, rescheduled: true };
+  }
+  // Mantener streak de confirmación aunque aún no suspenda.
+  auto = { ...safetyResult.auto };
+  eth = auto.ethylene ?? eth;
+
   if (effective == null || !Number.isFinite(effective) || effective >= target - 0.5 || !adapter) {
     return {
-      auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) },
+      auto: {
+        ...auto,
+        ethylene: eth,
+        ethyleneSafety: auto.ethyleneSafety ?? null,
+        nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS),
+      },
       events,
       rescheduled: true,
     };
@@ -843,7 +957,12 @@ async function tickEthyleneSteadyMonitor(ctx, params, auto) {
   }
 
   return {
-    auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS) },
+    auto: {
+      ...auto,
+      ethylene: eth,
+      ethyleneSafety: auto.ethyleneSafety ?? null,
+      nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS),
+    },
     events,
     rescheduled: true,
   };
@@ -881,6 +1000,14 @@ async function tickEthyleneCycle(ctx, params, auto) {
     const resolved = resolveEthyleneReading(baselineRaw, eth);
     eth = applyEthyleneReadingToMeta(eth, resolved);
     const baseline = resolved.effective;
+
+    const safetyAtStart = await applyEthyleneSafety(ctx, auto, eth, baseline, target, events);
+    if (safetyAtStart.suspendNormal) {
+      return { auto: safetyAtStart.auto, events: safetyAtStart.events, rescheduled: true };
+    }
+    auto = { ...safetyAtStart.auto };
+    eth = auto.ethylene ?? eth;
+    events = safetyAtStart.events;
 
     if (baseline != null && baseline < target - 0.5 && adapter && resolved.canInject) {
       try {
@@ -975,12 +1102,21 @@ async function tickEthyleneCycle(ctx, params, auto) {
 
   const effective = resolved.effective;
 
+  const safetyMid = await applyEthyleneSafety(ctx, auto, eth, effective, target, events);
+  if (safetyMid.suspendNormal) {
+    return { auto: safetyMid.auto, events: safetyMid.events, rescheduled: true };
+  }
+  auto = { ...safetyMid.auto };
+  eth = auto.ethylene ?? eth;
+  events = safetyMid.events;
+
   if (effective != null && effective >= target - 0.5) {
     return {
       auto: {
         ...auto,
         mode: 'steady',
         ethylene: { ...eth, cycleStartedAt: null, lastMonitorAt: nowIso(), lastReading: effective },
+        ethyleneSafety: auto.ethyleneSafety ?? null,
         nextActionAt: msFromNow(ETHYLENE_STEADY_MONITOR_MS),
       },
       events,
@@ -990,7 +1126,12 @@ async function tickEthyleneCycle(ctx, params, auto) {
 
   if (resolved.ignoredZero || resolved.history.length < ETHYLENE_READINGS_NEEDED || eth.pollRound < 4) {
     return {
-      auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS) },
+      auto: {
+        ...auto,
+        ethylene: eth,
+        ethyleneSafety: auto.ethyleneSafety ?? null,
+        nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS),
+      },
       events,
       rescheduled: true,
     };
@@ -1034,7 +1175,12 @@ async function tickEthyleneCycle(ctx, params, auto) {
   }
 
   return {
-    auto: { ...auto, ethylene: eth, nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS) },
+    auto: {
+      ...auto,
+      ethylene: eth,
+      ethyleneSafety: auto.ethyleneSafety ?? null,
+      nextActionAt: msFromNow(ETHYLENE_POLL_INTERVAL_MS),
+    },
     events,
     rescheduled: true,
   };
@@ -1122,6 +1268,15 @@ async function tickRipening(ctx, params, auto) {
     Date.now() - new Date(auto.lastHourlyReviewAt).getTime() >= HOURLY_REVIEW_MS;
 
   if (hourlyDue && auto.mode === 'steady' && String(ctx.process_type) === 'Ripening') {
+    if (isEthyleneSafetyActive(auto.ethyleneSafety)) {
+      const eth = await tickEthyleneCycle(ctx, params, auto);
+      await patchAutomation(ctx, () => ({
+        ...eth.auto,
+        lastHourlyReviewAt: auto.lastHourlyReviewAt,
+        newEvents: eth.events,
+      }));
+      return;
+    }
     auto = {
       ...initGourmetProcessAutomation(ctx),
       mode: 'sequential',

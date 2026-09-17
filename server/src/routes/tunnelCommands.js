@@ -106,6 +106,12 @@ tunnelCommandsRouter.post('/apply-manual', async (req, res) => {
 
     return res.status(201).json({ batchId, jobs });
   } catch (e) {
+    if (e?.code === 'ethylene_safety_active' || e?.message === 'ethylene_safety_active') {
+      return res.status(409).json({
+        error: 'ethylene_safety_active',
+        message: 'Ethylene safety active: manual ethylene dose blocked',
+      });
+    }
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });
   }

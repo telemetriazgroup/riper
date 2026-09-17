@@ -23,6 +23,7 @@ import {
   recordEthyleneDose,
   resolveEthyleneReading,
 } from './ethyleneReading.js';
+import { isEthyleneSafetyActive } from './ethyleneSafety.js';
 
 export const ETHYLENE_VERIFY_DELAY_MS = 4 * 60 * 1000;
 export const ETHYLENE_POLL_INTERVAL_MS = 2 * 60 * 1000;
@@ -191,6 +192,21 @@ function buildJobMeta(deviceId, kind, target) {
   return meta;
 }
 
+/** True si hay sesión Ripening activa con seguridad etileno (relé / runaway). */
+export async function deviceHasActiveEthyleneSafety(deviceId) {
+  const id = String(deviceId || '').trim();
+  if (!id) return false;
+  const { rows } = await pool.query(
+    `SELECT params FROM app_device_control_sessions
+     WHERE device_id = $1 AND status = 'active' AND archived_at IS NULL
+     ORDER BY updated_at DESC
+     LIMIT 1`,
+    [id]
+  );
+  const safety = rows[0]?.params?.processAutomation?.ethyleneSafety;
+  return isEthyleneSafetyActive(safety);
+}
+
 /**
  * @param {{ client?: import('pg').PoolClient, userId: string, deviceId: string, commands: Record<string, number> }} opts
  */
@@ -198,6 +214,14 @@ export async function createTunnelCommandJobs({ client, userId, deviceId, comman
   const db = client ?? pool;
   const batchId = randomUUID();
   const jobs = [];
+
+  if (commands?.ethylene != null && Number.isFinite(Number(commands.ethylene))) {
+    if (await deviceHasActiveEthyleneSafety(deviceId)) {
+      const err = new Error('ethylene_safety_active');
+      err.code = 'ethylene_safety_active';
+      throw err;
+    }
+  }
 
   for (const [kind, cfg] of Object.entries(KIND_CONFIG)) {
     const raw = commands[kind];
@@ -305,6 +329,21 @@ async function dispatchLegacyEthylene(job) {
 }
 
 async function dispatchTunnelEthylene(job) {
+  if (await deviceHasActiveEthyleneSafety(job.device_id)) {
+    const steps = appendStep(job.steps ?? [], {
+      action: 'error',
+      reason: 'ethylene_safety_active',
+      message: 'ethylene_safety_active',
+    });
+    await updateJob(job.id, {
+      status: 'failed',
+      steps,
+      last_error: 'ethylene_safety_active',
+      completed_at: nowIso(),
+    });
+    return;
+  }
+
   const imei = resolveEthyleneImei(job);
   const target = Number(job.target_value);
   const tolerance = Number(job.tolerance);

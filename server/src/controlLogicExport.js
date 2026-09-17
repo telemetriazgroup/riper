@@ -214,6 +214,19 @@ export async function buildControlLogicExport() {
           rule:
             'Tras ajustar límite CO₂, si lectura > objetivo + 0.5 % y AVL < 30, enviar tipo 6 dato 220 (solo si admin lo activó).',
         },
+        stuckRelaySafety: {
+          overshootRatio: 1.2,
+          pulsePhysicalDato: 1,
+          watchMs: 10 * 60 * 1000,
+          runawayPpm: 270,
+          ventAvl: 200,
+          ventDurationMs: 15 * 60 * 1000,
+          overshootConfirmReads: 2,
+          maxPulses: 3,
+          pollMs: 2 * 60 * 1000,
+          rule:
+            'Si lectura ≥ 120% del set (2 lecturas) → pulso físico tipo 5 dato=1 (sin multiplier), suspende dosis normal, vigila 10 min; si ≥270 → AVL 200 ~15 min.',
+        },
       },
     },
     ethyleneReading: {

@@ -290,6 +290,12 @@ const ETH_ACTIONS = new Set([
   'read_ethylene_poll',
   'retry_ethylene',
   'ethylene_idle_poll',
+  'ethylene_safety_unstick_pulse',
+  'ethylene_safety_emergency_vent',
+  'ethylene_safety_vent_end',
+  'ethylene_safety_cleared',
+  'ethylene_safety_pulse_error',
+  'ethylene_safety_vent_error',
 ]);
 const VENT_ACTIONS = new Set([
   'check_ventilation_avl',
@@ -995,6 +1001,50 @@ export function summarizeProcessEventParts(
         }),
     };
   }
+  if (action === 'ethylene_safety_unstick_pulse') {
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    const effective = String(ev.effective ?? detail.effective ?? '—');
+    const target = String(ev.target ?? detail.target ?? '—');
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_pulse'),
+      reason:
+        analysisEs ||
+        t('log_ctrl_reason_ethylene_safety_pulse', { effective, target }),
+    };
+  }
+  if (action === 'ethylene_safety_emergency_vent') {
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    const effective = String(ev.effective ?? detail.effective ?? '—');
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_vent'),
+      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_vent', { effective }),
+    };
+  }
+  if (action === 'ethylene_safety_vent_end') {
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_vent_end'),
+      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_vent_end'),
+    };
+  }
+  if (action === 'ethylene_safety_cleared') {
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_cleared'),
+      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_cleared'),
+    };
+  }
+  if (action === 'ethylene_safety_pulse_error' || action === 'ethylene_safety_vent_error') {
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_error'),
+      reason: String(ev.message ?? detail.message ?? ''),
+    };
+  }
   if (action === 'ethylene_poll' || action === 'poll_tipo0') {
     const f = ethyleneDecisionFields(ev, detail, displayOpts);
     const isMonitor = ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor';
@@ -1393,6 +1443,9 @@ export function processAutomationPhaseLabel(
 ): string | null {
   if (!auto) return null;
   if (auto.interventionActive) return t('log_ctrl_intervention_mode');
+  const safety = auto.ethyleneSafety as { phase?: string } | null | undefined;
+  if (safety?.phase === 'ventilate') return t('log_ctrl_ethylene_safety_phase_vent');
+  if (safety?.phase === 'watch_rise') return t('log_ctrl_ethylene_safety_phase_watch');
   const phase = String(auto.phase ?? '');
   const mode = String(auto.mode ?? '');
   const tunnel = isGourmetTunnelAggregateDeviceId(deviceId);
