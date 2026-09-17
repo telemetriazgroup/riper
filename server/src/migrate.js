@@ -350,6 +350,58 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_device_time
   ON app_device_telemetry_samples (device_id, sampled_at DESC);
 `;
 
+/** Instalación / cambio de balón de etileno + prueba de calibración. */
+const SQL_ETHYLENE_INSTALLATIONS = `
+CREATE TABLE IF NOT EXISTS app_ethylene_installations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  device_id VARCHAR(128) NOT NULL,
+  user_id UUID NULL REFERENCES app_users(id) ON DELETE SET NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'documented',
+  notes TEXT NULL,
+  flowmeter_lpm NUMERIC(8,2) NULL,
+  test_target_ppm NUMERIC(6,2) NULL,
+  test_started_at TIMESTAMPTZ NULL,
+  test_completed_at TIMESTAMPTZ NULL,
+  test_elapsed_seconds INT NULL,
+  test_total_injection_seconds NUMERIC(12,2) NOT NULL DEFAULT 0,
+  test_baseline_ppm NUMERIC(8,2) NULL,
+  test_final_ppm NUMERIC(8,2) NULL,
+  test_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+  notified_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_eth_install_device_time
+  ON app_ethylene_installations (device_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_eth_install_status
+  ON app_ethylene_installations (status, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_ethylene_installation_photos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  installation_id UUID NOT NULL REFERENCES app_ethylene_installations(id) ON DELETE CASCADE,
+  kind VARCHAR(32) NOT NULL,
+  file_path VARCHAR(1024) NOT NULL,
+  original_name VARCHAR(512) NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_eth_install_photos
+  ON app_ethylene_installation_photos (installation_id);
+
+CREATE TABLE IF NOT EXISTS app_ethylene_installation_doses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  installation_id UUID NOT NULL REFERENCES app_ethylene_installations(id) ON DELETE CASCADE,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  dose_ppm NUMERIC(8,2) NOT NULL,
+  physical_dato NUMERIC(8,2) NULL,
+  reading_before NUMERIC(8,2) NULL,
+  reading_after NUMERIC(8,2) NULL,
+  injection_seconds NUMERIC(10,2) NULL,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_eth_install_doses
+  ON app_ethylene_installation_doses (installation_id, occurred_at ASC);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -388,6 +440,7 @@ export async function runMigrate() {
     await client.query(SQL_DEVICE_ETHYLENE_CONFIG);
     await client.query(SQL_CONTROL_BITACORA);
     await client.query(SQL_DEVICE_REGISTRY);
+    await client.query(SQL_ETHYLENE_INSTALLATIONS);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

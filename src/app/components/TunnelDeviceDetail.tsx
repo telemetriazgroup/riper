@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import type { Device } from '@/app/data';
-import { ArrowLeft, Layers, Package, Edit2, Check, X, Loader2, BarChart2, ClipboardList, LayoutDashboard } from 'lucide-react';
+import { ArrowLeft, Layers, Package, Edit2, Check, X, Loader2, BarChart2, ClipboardList, LayoutDashboard, Beaker } from 'lucide-react';
 import { Button } from '@/app/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/app/components/ui/Card';
 import { useSettings } from '@/app/contexts/SettingsContext';
@@ -29,6 +29,8 @@ import { isGourmetSession } from '@/app/lib/gourmet';
 import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { EthyleneSupplyWarningDialog } from '@/app/components/EthyleneSupplyWarningDialog';
+import { EthyleneInstallNoticeDialog } from '@/app/components/EthyleneInstallNoticeDialog';
+import { EthyleneInstallationPanel } from '@/app/components/EthyleneInstallationPanel';
 
 interface TunnelDeviceDetailProps {
   device: Device;
@@ -81,7 +83,7 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
     }
   };
   const [controlMode, setControlMode] = useState('manual');
-  const [activeView, setActiveView] = useState<'operation' | 'analysis' | 'log'>('operation');
+  const [activeView, setActiveView] = useState<'operation' | 'analysis' | 'log' | 'installation'>('operation');
   const tunnel = device.tunnel;
   const [selectedUnits, setSelectedUnits] = useState<string[]>(() => defaultGourmetTunnelSelectedUnits());
 
@@ -169,6 +171,10 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
       <EthyleneSupplyWarningDialog deviceId={GOURMET_TUNEL_DEVICE_ID} />
+      <EthyleneInstallNoticeDialog
+        deviceId={GOURMET_TUNEL_DEVICE_ID}
+        onOpenInstallation={() => setActiveView('installation')}
+      />
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack} title={t('back')}>
@@ -293,6 +299,18 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
               <ClipboardList className="h-4 w-4" />
               <span className="hidden sm:inline">{t('event_log')}</span>
             </Tabs.Trigger>
+            <Tabs.Trigger
+              value="installation"
+              className={clsx(
+                'flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                activeView === 'installation'
+                  ? 'bg-card text-violet-700 dark:text-violet-300 shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Beaker className="h-4 w-4" />
+              <span className="hidden sm:inline">{t('install_tab')}</span>
+            </Tabs.Trigger>
           </Tabs.List>
         </Tabs.Root>
       </div>
@@ -406,6 +424,8 @@ export const TunnelDeviceDetail: React.FC<TunnelDeviceDetailProps> = ({
         </>
       ) : activeView === 'log' ? (
         <EventLog deviceId={GOURMET_TUNEL_DEVICE_ID} />
+      ) : activeView === 'installation' ? (
+        <EthyleneInstallationPanel deviceId={GOURMET_TUNEL_DEVICE_ID} />
       ) : (
         <div className="space-y-6">
           <div className="bg-card p-6 rounded-lg border border-border shadow-sm min-h-[400px]">

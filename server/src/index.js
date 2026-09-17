@@ -36,6 +36,8 @@ import { controlLogicRouter } from './routes/controlLogic.js';
 import { emailNotificationsRouter } from './routes/emailNotifications.js';
 import { controlAutomationRouter } from './routes/controlAutomation.js';
 import { deviceEthyleneConfigRouter } from './routes/deviceEthyleneConfig.js';
+import { ethyleneInstallationsRouter } from './routes/ethyleneInstallations.js';
+import { resumeActiveInstallationTests } from './ethyleneInstallation.js';
 import {
   finalizeDueRipeningProcesses,
   finalizeDueDeviceControlSessions,
@@ -108,6 +110,7 @@ async function main() {
   app.use('/api/v1/email-notifications', authMiddleware, emailNotificationsRouter);
   app.use('/api/v1/control-automation', authMiddleware, controlAutomationRouter);
   app.use('/api/v1/device-ethylene-config', authMiddleware, deviceEthyleneConfigRouter);
+  app.use('/api/v1/ethylene-installations', authMiddleware, ethyleneInstallationsRouter);
 
   app.use((err, _req, res, _next) => {
     console.error(err);
@@ -117,6 +120,8 @@ async function main() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[api] listening on :${PORT}`);
   });
+
+  resumeActiveInstallationTests().catch((e) => console.warn('[eth-install] resume', e.message));
 
   setInterval(() => {
     Promise.all([finalizeDueRipeningProcesses(), finalizeDueDeviceControlSessions()]).catch((e) =>

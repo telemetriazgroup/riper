@@ -4,11 +4,17 @@ export const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-JWT_SECRET-
 
 export function authMiddleware(req, res, next) {
   const h = req.headers.authorization;
-  if (!h || !h.startsWith('Bearer ')) {
+  const q =
+    typeof req.query?.access_token === 'string'
+      ? req.query.access_token
+      : typeof req.query?.token === 'string'
+        ? req.query.token
+        : null;
+  const token = h && h.startsWith('Bearer ') ? h.slice(7) : q;
+  if (!token) {
     return res.status(401).json({ error: 'unauthorized', message: 'missing token' });
   }
   try {
-    const token = h.slice(7);
     const payload = jwt.verify(token, JWT_SECRET);
     req.user = {
       id: payload.sub,

@@ -4,7 +4,7 @@ import { useDevice, useDeviceHistory } from '@/app/hooks/useDevices';
 import { TelemetryCharts } from './TelemetryCharts';
 import { ControlPanel } from './ControlPanel';
 import { EventLog } from './EventLog';
-import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Battery, Thermometer, Calendar, Loader2, BarChart2, LayoutDashboard, Zap, ClipboardList, Beaker } from 'lucide-react';
 import { Button } from './ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { clsx } from 'clsx';
@@ -23,11 +23,13 @@ import { isGourmetSession } from '@/app/lib/gourmet';
 import { showManualCommandStatesPanel } from '@/app/lib/fleetDemo';
 import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import { EthyleneSupplyWarningDialog } from '@/app/components/EthyleneSupplyWarningDialog';
+import { EthyleneInstallNoticeDialog } from '@/app/components/EthyleneInstallNoticeDialog';
+import { EthyleneInstallationPanel } from '@/app/components/EthyleneInstallationPanel';
 
 interface DeviceDetailProps {
   deviceId: string;
   onBack: () => void;
-  initialView?: 'operation' | 'analysis' | 'log';
+  initialView?: 'operation' | 'analysis' | 'log' | 'installation';
   /** Abre la vista Seguimiento / procesos para crear seguimiento con receta. */
   onGoToCreateTracking?: () => void;
 }
@@ -120,6 +122,10 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
       <EthyleneSupplyWarningDialog deviceId={deviceId} />
+      <EthyleneInstallNoticeDialog
+        deviceId={deviceId}
+        onOpenInstallation={() => setActiveView('installation')}
+      />
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
@@ -196,6 +202,16 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
               >
                 <ClipboardList className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('event_log')}</span>
+              </Tabs.Trigger>
+              <Tabs.Trigger 
+                value="installation" 
+                className={clsx(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all",
+                  activeView === 'installation' ? "bg-card text-violet-700 dark:text-violet-300 shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Beaker className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('install_tab')}</span>
               </Tabs.Trigger>
             </Tabs.List>
           </Tabs.Root>
@@ -417,6 +433,10 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
       ) : activeView === 'log' ? (
         <div className="min-h-[400px]">
           <EventLog deviceId={deviceId} />
+        </div>
+      ) : activeView === 'installation' ? (
+        <div className="min-h-[400px]">
+          <EthyleneInstallationPanel deviceId={deviceId} />
         </div>
       ) : (
         <div className="bg-white p-6 rounded-lg border shadow-sm min-h-[600px]">
