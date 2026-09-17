@@ -2,6 +2,7 @@ import express from 'express';
 import { pool } from '../db.js';
 import { writeAudit } from '../auditLog.js';
 import { fireEmailNotification } from '../emailNotifications.js';
+import { canControlDevice } from '../deviceRegistry.js';
 import { requireSuperAdmin, requireSuperUser } from '../authMiddleware.js';
 import { maybeFinalizeDeviceControlDebounced } from '../autoFinalizeDueProcesses.js';
 import {
@@ -134,6 +135,18 @@ deviceControlRouter.post('/start', async (req, res) => {
   }
   if (isViewer(req)) {
     return res.status(403).json({ error: 'forbidden', message: 'viewers cannot start control sessions' });
+  }
+
+  const controlGate = await canControlDevice(deviceId, {
+    allowDegraded: req.user?.role === 'superadmin',
+  });
+  if (!controlGate.ok && req.user?.role !== 'superadmin') {
+    return res.status(503).json({
+      error: 'device_not_ready',
+      message: 'Control limited: device not online in the last 30 minutes or fleet API unavailable',
+      reason: controlGate.reason,
+      ageMinutes: controlGate.ageMinutes ?? null,
+    });
   }
 
   const started = startedAtRaw ? new Date(String(startedAtRaw)) : new Date();

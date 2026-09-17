@@ -40,6 +40,7 @@ import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevi
 import { isManualProcesoLabel, controlPanelTabFromProcessType } from '@/app/lib/madurador';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
 import { isActivePanelProcess } from '@/app/lib/controlProcessDisplay';
+import { isFleetDegraded } from '@/app/lib/fleetListMeta';
 import { ActiveProcessProgrammedPanel } from '@/app/components/ActiveProcessProgrammedPanel';
 import {
   MANUAL_TARGET_TEMP_EXTENDED_MIN_C,
@@ -139,14 +140,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   const isStandby = minsSinceLastSeen > 30 && !isOffline;
   const isPoweredOff = device?.telemetry.power_state === 0;
   
-  // Processes require device to be ONLINE and POWERED ON
-  const areProcessesDisabled = isOffline || isStandby || isPoweredOff;
+  // Processes require device to be ONLINE and POWERED ON; also block when fleet is degraded (no live API).
+  const fleetDegraded = isFleetDegraded();
+  const areProcessesDisabled = isOffline || isStandby || isPoweredOff || fleetDegraded;
   const processModesBlockedByFollow = followBlocksAutomatedPanel;
   const processModesDisabled =
     areProcessesDisabled || processModesBlockedByFollow || !canOperateDeviceControl();
 
   return (
     <Card className="h-full">
+      {fleetDegraded || isStandby ? (
+        <div className="px-4 py-2 border-b border-amber-200 bg-amber-50 text-xs text-amber-950 flex items-center gap-2">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          {t('control_limited_offline')}
+        </div>
+      ) : null}
       <div className="border-b border-border">
         <div className="flex overflow-x-auto no-scrollbar">
           {modes.map((m) => {

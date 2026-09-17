@@ -23,6 +23,13 @@ import {
   demoMaduradorEmpresaIdentificadores,
 } from '../demoMaduradorFleet.js';
 import { sanitizeMaduradorRowAgainstZeroGlitch } from '../telemetrySanity.js';
+import {
+  listRegistryPayloads,
+  listTelemetrySamples,
+  queueUpsertDevicesFromMaduradorRows,
+  getRegistryDevice,
+  TELEMETRY_UI_HOURS,
+} from '../deviceRegistry.js';
 
 export const maduradorRouter = express.Router();
 
@@ -37,8 +44,55 @@ function sanitizeDispositivosRows(rows) {
   });
 }
 
-function jsonDispositivos(res, rows) {
-  return res.json({ data: sanitizeDispositivosRows(rows) });
+/**
+ * Respuesta live: sanitiza, upsert registry (async) y JSON con meta.
+ */
+function jsonDispositivos(res, rows, meta = {}) {
+  const data = sanitizeDispositivosRows(rows);
+  const empresa = meta.empresaIdentificador ?? null;
+  const fleetKey = meta.fleetKey ?? null;
+  queueUpsertDevicesFromMaduradorRows(data, {
+    empresaIdentificador: empresa,
+    fleetKey,
+    source: 'madurador',
+  });
+  return res.json({
+    data,
+    meta: {
+      source: 'live',
+      degraded: false,
+      count: data.length,
+      ...(empresa ? { empresa_identificador: empresa } : {}),
+    },
+  });
+}
+
+/** Respuesta degradada desde registry; nunca 502 si hay filas. */
+async function jsonDispositivosDegraded(res, scope, reason = 'upstream_unavailable') {
+  try {
+    const snap = await listRegistryPayloads(scope);
+    if (!snap.count) {
+      return res.status(502).json({
+        error: 'madurador_upstream',
+        message: reason,
+        meta: { source: 'registry', degraded: true, registry_count: 0 },
+      });
+    }
+    const data = sanitizeDispositivosRows(snap.rows);
+    return res.json({
+      data,
+      meta: {
+        source: 'registry',
+        degraded: true,
+        reason,
+        upstream_fetched_at: snap.upstream_fetched_at,
+        registry_count: snap.count,
+      },
+    });
+  } catch (e) {
+    console.error('[madurador] registry fallback', e);
+    return res.status(502).json({ error: 'madurador_upstream', message: reason });
+  }
 }
 
 /** Empresa “ancha” lista completa upstream (solo superadmin), p. ej. 2001. */
@@ -296,24 +350,32 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         }
       }
 
-      return jsonDispositivos(res, merged);
+      if (!merged.length && listWide === null) {
+        return jsonDispositivosDegraded(res, { fleetKey: 'superadmin' }, 'upstream superadmin all failed');
+      }
+      return jsonDispositivos(res, merged, { fleetKey: 'superadmin' });
     }
 
     if (isDemoMaduradorFleetEmail(email)) {
       const idents = demoMaduradorEmpresaIdentificadores();
       if (!idents.length) {
-        return jsonDispositivos(res, []);
+        return jsonDispositivos(res, [], { fleetKey: 'demo-madurador' });
       }
       let merged = [];
+      let anyOk = false;
       for (const id of idents) {
         const list = await fetchMaduradorDispositivosList(base, id, ctrl);
         if (list === null) {
           console.error('[madurador] demo-madurador upstream failed', id);
           continue;
         }
+        anyOk = true;
         merged = mergeDispositivosRows(merged, list);
       }
-      return jsonDispositivos(res, merged);
+      if (!anyOk) {
+        return jsonDispositivosDegraded(res, { fleetKey: 'demo-madurador' }, 'upstream demo-madurador');
+      }
+      return jsonDispositivos(res, merged, { fleetKey: 'demo-madurador' });
     }
 
     if (isUltraorganicsFleetEmail(email)) {
@@ -350,7 +412,14 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         const humidity = byImei.get(ultraorganicsHumidityImei(panelId));
         return packageUltraorganicsFleetRow(primary, humidity, panelId);
       }).filter(Boolean);
-      return jsonDispositivos(res, out);
+      if (!out.length && !merged.length) {
+        return jsonDispositivosDegraded(
+          res,
+          { deviceIds: ULTRAORGANICS_IMEI_ORDER },
+          'upstream ultraorganics'
+        );
+      }
+      return jsonDispositivos(res, out, { fleetKey: 'ultraorganics' });
     }
 
     if (isThermoKingFleetEmail(email)) {
@@ -359,10 +428,17 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const listTk = await fetchMaduradorDispositivosList(base, tkIdent, ctrl);
       if (listTk === null) {
         console.error('[madurador] thermoking upstream failed', tkIdent);
-        return res.status(502).json({ error: 'madurador_upstream', message: `upstream thermoking ${tkIdent}` });
+        return jsonDispositivosDegraded(
+          res,
+          { deviceIds: [pinImei] },
+          `upstream thermoking ${tkIdent}`
+        );
       }
       const filtered = filterRowsByImeiExact(listTk, pinImei);
-      return jsonDispositivos(res, filtered);
+      return jsonDispositivos(res, filtered, {
+        empresaIdentificador: tkIdent,
+        fleetKey: 'thermoking',
+      });
     }
 
     if (isGreenyardFleetEmail(email)) {
@@ -370,13 +446,20 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const listGy = await fetchMaduradorDispositivosList(base, gyIdent, ctrl);
       if (listGy === null) {
         console.error('[madurador] greenyard upstream failed', gyIdent);
-        return res.status(502).json({ error: 'madurador_upstream', message: `upstream greenyard ${gyIdent}` });
+        return jsonDispositivosDegraded(
+          res,
+          { deviceIds: greenyardDeviceImeis() },
+          `upstream greenyard ${gyIdent}`
+        );
       }
       const allow = greenyardDeviceImeis();
       const data = greenyardFilterNormalOperationEnabled()
         ? filterMaduradorRowsNormalOperation(filterRowsByImeiAllowlistOrdered(listGy, allow))
         : filterRowsByImeiAllowlistOrdered(listGy, allow);
-      return jsonDispositivos(res, data);
+      return jsonDispositivos(res, data, {
+        empresaIdentificador: gyIdent,
+        fleetKey: 'greenyard',
+      });
     }
 
     if (isGourmetTradingFleetEmail(email)) {
@@ -384,11 +467,18 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       const listGt = await fetchMaduradorDispositivosList(base, gtIdent, ctrl);
       if (listGt === null) {
         console.error('[madurador] gourmet trading upstream failed', gtIdent);
-        return res.status(502).json({ error: 'madurador_upstream', message: `upstream gourmet ${gtIdent}` });
+        return jsonDispositivosDegraded(
+          res,
+          { deviceIds: gourmetTradingMaduradorFleetImeis() },
+          `upstream gourmet ${gtIdent}`
+        );
       }
       const allow = gourmetTradingMaduradorFleetImeis();
       const data = filterRowsByImeiAllowlistOrdered(listGt, allow);
-      return jsonDispositivos(res, data);
+      return jsonDispositivos(res, data, {
+        empresaIdentificador: gtIdent,
+        fleetKey: 'gourmet',
+      });
     }
 
     const { rows } = await pool.query(
@@ -405,7 +495,11 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
 
     if (!r.ok) {
       console.error('[madurador] upstream', r.status, url);
-      return res.status(502).json({ error: 'madurador_upstream', message: `upstream ${r.status}` });
+      return jsonDispositivosDegraded(
+        res,
+        { empresaIdentificador: ident },
+        `upstream ${r.status}`
+      );
     }
 
     const text = await r.text();
@@ -414,16 +508,100 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       json = text ? JSON.parse(text) : [];
     } catch (e) {
       console.error('[madurador] json', e);
-      return res.status(502).json({ error: 'madurador_parse', message: 'invalid json' });
+      return jsonDispositivosDegraded(res, { empresaIdentificador: ident }, 'invalid json');
     }
 
     if (!Array.isArray(json)) {
-      return jsonDispositivos(res, []);
+      return jsonDispositivos(res, [], { empresaIdentificador: ident });
     }
 
-    return jsonDispositivos(res, filterRowsByImeiIdentificadorSuffix(json, ident));
+    return jsonDispositivos(res, filterRowsByImeiIdentificadorSuffix(json, ident), {
+      empresaIdentificador: ident,
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'server_error', message: String(e.message) });
+  }
+});
+
+/**
+ * Histórico local (samples) — respaldo cuando falla buscar_datos_madurador_rango.
+ * GET /api/v1/madurador/telemetry/:deviceId?hours=12
+ */
+maduradorRouter.get('/telemetry/:deviceId', async (req, res) => {
+  try {
+    const deviceId = String(req.params.deviceId || '').trim();
+    if (!deviceId) {
+      return res.status(400).json({ error: 'validation', message: 'deviceId required' });
+    }
+    const hoursRaw = Number(req.query.hours);
+    const hours = Number.isFinite(hoursRaw) && hoursRaw > 0 ? Math.min(hoursRaw, 48) : TELEMETRY_UI_HOURS;
+    let samples = await listTelemetrySamples(deviceId, { hours });
+    if (!samples.length) {
+      const reg = await getRegistryDevice(deviceId);
+      if (reg?.payload && reg.last_seen_at) {
+        const m = reg.payload?.ultimo_dato && typeof reg.payload.ultimo_dato === 'object'
+          ? reg.payload.ultimo_dato
+          : reg.payload;
+        samples = [
+          {
+            sampled_at: reg.last_seen_at,
+            metrics: {
+              temp: m?.temperatura ?? m?.temp ?? null,
+              supply: m?.supply ?? null,
+              return: m?.return ?? null,
+              humidity: m?.humedad ?? m?.humidity ?? null,
+              ethylene: m?.etileno ?? m?.ethylene ?? null,
+              co2: m?.co2 ?? null,
+              set_point: m?.set_point ?? null,
+            },
+            source: 'registry_snapshot',
+          },
+        ];
+      }
+    }
+    const points = samples.map((s) => {
+      const m = s.metrics && typeof s.metrics === 'object' ? s.metrics : {};
+      const n = (v) => {
+        const x = Number(v);
+        return Number.isFinite(x) ? x : 0;
+      };
+      return {
+        timestamp: s.sampled_at ? new Date(s.sampled_at).toISOString() : null,
+        temp_supply_1: n(m.supply ?? m.temp),
+        return_air: n(m.return ?? m.temp),
+        evaporation_coil: 0,
+        condensation_coil: 0,
+        compress_coil_1: 0,
+        ambient_air: 0,
+        cargo_1_temp: null,
+        cargo_2_temp: null,
+        cargo_3_temp: null,
+        cargo_4_temp: null,
+        relative_humidity: n(m.humidity),
+        avl_pct: 0,
+        line_voltage: 0,
+        line_frequency: 0,
+        co2_reading: m.co2 != null ? n(m.co2) : null,
+        o2_reading: null,
+        set_point: n(m.set_point),
+        capacity_load: 0,
+        power_state: 0,
+        humidity_set_point: 0,
+        set_point_o2: null,
+        set_point_co2: null,
+        sp_ethyleno: 0,
+        ethylene: m.ethylene != null ? n(m.ethylene) : null,
+        iCtrlRip: 0,
+        power_kwh: null,
+      };
+    });
+    return res.json({
+      data: points,
+      meta: { source: 'registry', hours, count: points.length },
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'server_error', message: String(e.message) });
   }
 });

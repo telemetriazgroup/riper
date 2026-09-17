@@ -6,6 +6,7 @@ import { isGourmetSession } from '@/app/lib/gourmet';
 import { isFleetDemoSession, isUltraorganicsSession, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
 import { getToken } from '@/app/lib/auth';
 import { devicesToProcessFollowPayload, syncDeviceProcessFollow } from '@/app/lib/deviceProcessFollowApi';
+import { getFleetListMeta } from '@/app/lib/fleetListMeta';
 
 function devicesSwrKey(): string {
   if (isFleetDemoSession()) return 'fleetDemo:/api/devices';
@@ -55,11 +56,15 @@ export function useDevices() {
     return () => clearTimeout(t);
   }, [data]);
 
+  const fleetMeta = getFleetListMeta();
+
   return {
     devices: data || [],
     isLoading,
     isError: error,
     mutate,
+    fleetDegraded: fleetMeta.degraded,
+    fleetMeta,
   };
 }
 

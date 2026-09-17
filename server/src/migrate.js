@@ -316,6 +316,40 @@ CREATE INDEX IF NOT EXISTS idx_bitacora_action
   ON app_control_bitacora (action, occurred_at DESC);
 `;
 
+/** Inventario local + samples de telemetría (respaldo si falla Madurador). */
+const SQL_DEVICE_REGISTRY = `
+CREATE TABLE IF NOT EXISTS app_device_registry (
+  device_id VARCHAR(128) PRIMARY KEY,
+  empresa_identificador VARCHAR(64) NULL,
+  fleet_keys TEXT[] NOT NULL DEFAULT '{}',
+  display_name VARCHAR(255) NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  last_seen_at TIMESTAMPTZ NULL,
+  last_online_at TIMESTAMPTZ NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  upstream_fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  source VARCHAR(64) NOT NULL DEFAULT 'madurador',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_device_registry_empresa
+  ON app_device_registry (empresa_identificador);
+CREATE INDEX IF NOT EXISTS idx_device_registry_last_seen
+  ON app_device_registry (last_seen_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_device_registry_fetched
+  ON app_device_registry (upstream_fetched_at DESC);
+
+CREATE TABLE IF NOT EXISTS app_device_telemetry_samples (
+  id BIGSERIAL PRIMARY KEY,
+  device_id VARCHAR(128) NOT NULL REFERENCES app_device_registry(device_id) ON DELETE CASCADE,
+  sampled_at TIMESTAMPTZ NOT NULL,
+  metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
+  source VARCHAR(64) NOT NULL DEFAULT 'madurador_list',
+  UNIQUE (device_id, sampled_at, source)
+);
+CREATE INDEX IF NOT EXISTS idx_telemetry_device_time
+  ON app_device_telemetry_samples (device_id, sampled_at DESC);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -353,6 +387,7 @@ export async function runMigrate() {
     await client.query(SQL_CONTROL_AUTOMATION_CONFIG);
     await client.query(SQL_DEVICE_ETHYLENE_CONFIG);
     await client.query(SQL_CONTROL_BITACORA);
+    await client.query(SQL_DEVICE_REGISTRY);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

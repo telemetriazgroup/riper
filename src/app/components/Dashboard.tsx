@@ -20,7 +20,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
-  const { devices, isLoading, isError, mutate } = useDevices();
+  const { devices, isLoading, isError, mutate, fleetDegraded, fleetMeta } = useDevices();
   const { byDeviceId: panelSessionsByDevice } = useFleetActiveControlMap();
   const { byDeviceId: ripeningTrackingByDevice } = useFleetRipeningTrackingMap();
   const { t, formatTemp, formatDateTime, formatDateShort, formatFileTimestamp } = useSettings();
@@ -293,6 +293,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ onSelectDevice }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {fleetDegraded ? (
+        <div
+          className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 flex gap-3 items-start"
+          role="status"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-medium">{t('fleet_degraded_title')}</p>
+            <p className="text-amber-900/90 mt-0.5">
+              {t('fleet_degraded_desc')}
+              {fleetMeta.upstream_fetched_at
+                ? ` · ${t('fleet_degraded_last_sync')}: ${formatDateTime(fleetMeta.upstream_fetched_at)}`
+                : ''}
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h2 className="text-lg font-semibold text-foreground hidden sm:block">{t('dashboard')}</h2>
         <Button

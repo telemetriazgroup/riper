@@ -161,6 +161,12 @@ const translations: Record<Language, Record<string, string>> = {
     'connection': 'Conexión',
     'equipment': 'Equipo',
     'error_loading_devices': 'Error al cargar dispositivos',
+    'fleet_degraded_title': 'Mostrando último estado conocido',
+    'fleet_degraded_desc':
+      'La API de dispositivos no está disponible. Se muestran los últimos datos guardados en Ripener. El control queda limitado hasta recuperar el enlace en vivo.',
+    'fleet_degraded_last_sync': 'Última sync',
+    'control_limited_offline':
+      'Control limitado: el equipo no tiene conexión en vivo en los últimos 30 minutos o la API de flota no responde.',
 
     // Device Detail
     'device_not_found': 'Dispositivo no encontrado',
@@ -1795,6 +1801,12 @@ const translations: Record<Language, Record<string, string>> = {
     'connection': 'Connection',
     'equipment': 'Equipment',
     'error_loading_devices': 'Error loading devices',
+    'fleet_degraded_title': 'Showing last known status',
+    'fleet_degraded_desc':
+      'The devices API is unavailable. Showing the last data saved in Ripener. Control stays limited until live link is restored.',
+    'fleet_degraded_last_sync': 'Last sync',
+    'control_limited_offline':
+      'Control limited: device has no live connection in the last 30 minutes or the fleet API is down.',
 
     // Device Detail
     'device_not_found': 'Device not found',

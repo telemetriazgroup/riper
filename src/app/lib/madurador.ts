@@ -572,7 +572,24 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
   const root = RIPENER_API_URL.replace(/\/$/, '');
   const res = await fetch(`${root}/api/v1/madurador/dispositivos`, { headers: authHeaders() });
   if (!res.ok) throw new Error(`madurador: ${res.status}`);
-  const body = (await res.json()) as { data?: unknown };
+  const body = (await res.json()) as {
+    data?: unknown;
+    meta?: {
+      source?: string;
+      degraded?: boolean;
+      reason?: string;
+      upstream_fetched_at?: string | null;
+      registry_count?: number;
+    };
+  };
+  const { setFleetListMeta } = await import('@/app/lib/fleetListMeta');
+  setFleetListMeta({
+    source: body.meta?.source === 'registry' ? 'registry' : 'live',
+    degraded: Boolean(body.meta?.degraded),
+    reason: body.meta?.reason,
+    upstream_fetched_at: body.meta?.upstream_fetched_at ?? null,
+    registry_count: body.meta?.registry_count,
+  });
   const raw = Array.isArray(body.data) ? body.data : [];
   const list: Device[] = [];
   for (const r of raw) {
@@ -881,15 +898,22 @@ export async function fetchMaduradorRangoHistoryForImei(
   }
   const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) {
+    const local = await fetchLocalTelemetryHistory(imeiTrim, options).catch(() => null);
+    if (local?.points?.length) return local;
     const t = await res.text().catch(() => '');
     throw new Error(t || `madurador_rango: ${res.status}`);
   }
   const text = await res.text();
-  if (!text.trim())
+  if (!text.trim()) {
+    const local = await fetchLocalTelemetryHistory(imeiTrim, options).catch(() => null);
+    if (local?.points?.length) return local;
     return { cantidad_datos: 0, points: [], rawDatos: options.includeRawDatos ? [] : undefined };
+  }
   const json: unknown = JSON.parse(text);
   const { cantidad_datos, datos } = parseBuscarDatosRangoJson(json);
   if (cantidad_datos === 0 || !datos.length) {
+    const local = await fetchLocalTelemetryHistory(imeiTrim, options).catch(() => null);
+    if (local?.points?.length) return local;
     return { cantidad_datos, points: [], rawDatos: options.includeRawDatos ? [] : undefined };
   }
   const points = datos
@@ -907,6 +931,30 @@ export async function fetchMaduradorRangoHistoryForImei(
     points,
     rawDatos: options.includeRawDatos ? datos : undefined,
   };
+}
+
+/** Histórico desde app_device_telemetry_samples (Ripener). */
+async function fetchLocalTelemetryHistory(
+  imei: string,
+  options: MaduradorRangoFetchOptions = {}
+): Promise<{ cantidad_datos: number; points: HistoryPoint[]; rawDatos?: Record<string, unknown>[] }> {
+  const root = RIPENER_API_URL.replace(/\/$/, '');
+  let hours = 12;
+  if (options.fecha_inicio && options.fecha_fin) {
+    const a = new Date(options.fecha_inicio).getTime();
+    const b = new Date(options.fecha_fin).getTime();
+    if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+      hours = Math.min(48, Math.max(1, Math.ceil((b - a) / 3600000)));
+    }
+  }
+  const res = await fetch(
+    `${root}/api/v1/madurador/telemetry/${encodeURIComponent(imei)}?hours=${hours}`,
+    { headers: authHeaders() }
+  );
+  if (!res.ok) throw new Error(`local_telemetry: ${res.status}`);
+  const body = (await res.json()) as { data?: HistoryPoint[] };
+  const points = Array.isArray(body.data) ? body.data : [];
+  return { cantidad_datos: points.length, points };
 }
 
 /** Úsese historial real por rango si aplica (flota demo, identificador Madurador, ULTRAORGANICS). */
