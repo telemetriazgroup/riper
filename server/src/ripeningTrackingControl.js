@@ -71,15 +71,23 @@ async function tickTrackingRow(row) {
     controlParams = {
       ...controlParams,
       processAutomation: auto,
-      tunnelEventLog: appendTunnelEventLog(payload, {
-        action: phaseChanged && prevIndex != null ? 'tracking_phase_change' : 'process_automation_started',
-        source: 'tracking_automation',
-        processType,
-        phaseType: phaseInfo.currentType,
-        phaseLabel: phaseInfo.currentLabel,
-        phaseIndex: phaseInfo.currentIndex,
-        trackingId: row.id,
-      }),
+      tunnelEventLog: appendTunnelEventLog(
+        payload,
+        {
+          action: phaseChanged && prevIndex != null ? 'tracking_phase_change' : 'process_automation_started',
+          source: 'tracking_automation',
+          processType,
+          phaseType: phaseInfo.currentType,
+          phaseLabel: phaseInfo.currentLabel,
+          phaseIndex: phaseInfo.currentIndex,
+          trackingId: row.id,
+        },
+        {
+          deviceId,
+          trackingId: row.id,
+          processType,
+        }
+      ),
     };
     payload.trackingControl = {
       phaseIndex: phaseInfo.currentIndex,
@@ -92,6 +100,7 @@ async function tickTrackingRow(row) {
 
   const ctx = {
     device_id: deviceId,
+    tracking_id: row.id,
     process_type: processType,
     estimated_end_at: phaseInfo.phaseEndAt,
     params: controlParams,

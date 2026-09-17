@@ -219,15 +219,23 @@ deviceControlRouter.post('/start', async (req, res) => {
 
     const startParams = {
       ...params,
-      tunnelEventLog: appendTunnelEventLog(params, {
-        action: 'process_started',
-        source: 'control_panel',
-        processType,
-        displayLabel,
-        startedBy: req.user?.email ?? req.user?.id,
-        programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
-        controlSnapshot: buildControlSnapshot(params),
-      }),
+      tunnelEventLog: appendTunnelEventLog(
+        params,
+        {
+          action: 'process_started',
+          source: 'control_panel',
+          processType,
+          displayLabel,
+          startedBy: req.user?.email ?? req.user?.id,
+          programmedSummary: programmedSummaryFromParams(params, processType) || displayLabel,
+          controlSnapshot: buildControlSnapshot(params),
+        },
+        {
+          deviceId,
+          processType,
+          userEmail: req.user?.email ?? null,
+        }
+      ),
     };
 
     const { rows } = await client.query(
@@ -309,12 +317,47 @@ deviceControlRouter.post('/start', async (req, res) => {
 
 /**
  * Listado global (solo lectura diferenciando permisos en el cliente).
+ * Por defecto omite bitácora embebida (tunnelEventLog / coolingDecisionLog / tunnelJobs)
+ * para no bloquear la carga de flota. ?view=full solo para admin/superadmin.
  */
+function slimSessionParamsForList(params) {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return params ?? {};
+  const auto = params.processAutomation && typeof params.processAutomation === 'object'
+    ? params.processAutomation
+    : null;
+  const slimAuto = auto
+    ? {
+        phase: auto.phase ?? null,
+        mode: auto.mode ?? null,
+        interventionActive: Boolean(auto.interventionActive),
+        nextActionAt: auto.nextActionAt ?? null,
+        processType: auto.processType ?? null,
+      }
+    : undefined;
+  return {
+    setPoint: params.setPoint ?? params.set_point ?? null,
+    humiditySetPoint: params.humiditySetPoint ?? params.humidity_set_point ?? null,
+    ethylene: params.ethylene ?? params.ethylene_injection_programmed ?? null,
+    co2: params.co2 ?? params.co2_limit ?? null,
+    durationHours: params.durationHours ?? null,
+    tunnelOverallStatus: params.tunnelOverallStatus ?? null,
+    tunnelSyncedAt: params.tunnelSyncedAt ?? null,
+    tunnelCommandBatchId: params.tunnelCommandBatchId ?? null,
+    source: params.source ?? null,
+    ...(slimAuto ? { processAutomation: slimAuto } : {}),
+  };
+}
+
 deviceControlRouter.get('/sessions', async (req, res) => {
   try {
     const includeArchived = parseIncludeArchived(req);
     if (includeArchived && req.user?.role !== 'superadmin') {
       return res.status(403).json({ error: 'forbidden', message: 'includeArchived requires superadmin' });
+    }
+    const view = String(req.query.view || 'summary').trim().toLowerCase();
+    const wantFull = view === 'full';
+    if (wantFull && req.user?.role !== 'superadmin' && req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'forbidden', message: 'view=full requires admin' });
     }
     const { rows } = await pool.query(
       `SELECT s.*,
@@ -335,12 +378,13 @@ deviceControlRouter.get('/sessions', async (req, res) => {
       data = filterRowsByPinnedFleetDeviceIds(req.user.email, rows, (r) => r.device_id);
     }
     data = data.map((row) => {
-      if (row?.params) {
-        return { ...row, params: effectiveSessionParams(row) };
+      const effective = row?.params ? effectiveSessionParams(row) : row?.params;
+      if (wantFull) {
+        return { ...row, params: effective };
       }
-      return row;
+      return { ...row, params: slimSessionParamsForList(effective) };
     });
-    return res.json({ data });
+    return res.json({ data, view: wantFull ? 'full' : 'summary' });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: 'server_error', message: String(e.message) });

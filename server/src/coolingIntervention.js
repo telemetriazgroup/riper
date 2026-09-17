@@ -124,15 +124,24 @@ export async function setCoolingInterventionActive(sessionId, { active, userEmai
   };
   nextParams = {
     ...nextParams,
-    tunnelEventLog: appendTunnelEventLog(nextParams, {
-      source: 'intervention',
-      action: want ? 'intervention_started' : 'intervention_ended',
-      by: email,
-      processType: 'Cooling',
-      analysisEs: want
-        ? 'Modo intervención activado: lógica Cooling en pausa; el contador del proceso continúa.'
-        : 'Modo intervención finalizado: control devuelto al automático Cooling.',
-    }),
+    tunnelEventLog: appendTunnelEventLog(
+      nextParams,
+      {
+        source: 'intervention',
+        action: want ? 'intervention_started' : 'intervention_ended',
+        by: email,
+        processType: 'Cooling',
+        analysisEs: want
+          ? 'Modo intervención activado: lógica Cooling en pausa; el contador del proceso continúa.'
+          : 'Modo intervención finalizado: control devuelto al automático Cooling.',
+      },
+      {
+        deviceId: session.device_id,
+        sessionId: session.id,
+        processType: 'Cooling',
+        userEmail: email,
+      }
+    ),
   };
 
   await saveSessionParams(session.id, nextParams);
@@ -240,16 +249,25 @@ export async function sendCoolingInterventionCommand(sessionId, { tipo, dato, us
   };
   nextParams = {
     ...nextParams,
-    tunnelEventLog: appendTunnelEventLog(nextParams, {
-      source: 'intervention',
-      action,
-      by: email,
-      tipo: t,
-      dato: formatted,
-      urls,
-      processType: 'Cooling',
-      analysisEs,
-    }),
+    tunnelEventLog: appendTunnelEventLog(
+      nextParams,
+      {
+        source: 'intervention',
+        action,
+        by: email,
+        tipo: t,
+        dato: formatted,
+        urls,
+        processType: 'Cooling',
+        analysisEs,
+      },
+      {
+        deviceId: session.device_id,
+        sessionId: session.id,
+        processType: 'Cooling',
+        userEmail: email,
+      }
+    ),
   };
 
   await saveSessionParams(session.id, nextParams);

@@ -284,6 +284,38 @@ CREATE TABLE IF NOT EXISTS app_device_ethylene_config (
 CREATE INDEX IF NOT EXISTS idx_app_device_ethylene_config_updated ON app_device_ethylene_config (updated_at DESC);
 `;
 
+/** Bitácora de control (separada de params JSONB de sesión). */
+const SQL_CONTROL_BITACORA = `
+CREATE TABLE IF NOT EXISTS app_control_bitacora (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  occurred_at TIMESTAMPTZ NOT NULL,
+  device_id VARCHAR(128) NOT NULL,
+  session_id UUID NULL REFERENCES app_device_control_sessions(id) ON DELETE SET NULL,
+  tracking_id UUID NULL REFERENCES app_ripening_processes(id) ON DELETE SET NULL,
+  source VARCHAR(64) NOT NULL DEFAULT 'control',
+  action VARCHAR(96) NOT NULL,
+  kind VARCHAR(64) NULL,
+  process_type VARCHAR(32) NULL,
+  summary TEXT NULL,
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  user_email VARCHAR(320) NULL,
+  legacy_key VARCHAR(240) UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bitacora_device_time
+  ON app_control_bitacora (device_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bitacora_time
+  ON app_control_bitacora (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bitacora_session
+  ON app_control_bitacora (session_id, occurred_at DESC)
+  WHERE session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bitacora_tracking
+  ON app_control_bitacora (tracking_id, occurred_at DESC)
+  WHERE tracking_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_bitacora_action
+  ON app_control_bitacora (action, occurred_at DESC);
+`;
+
 /** Actualiza CHECK de role para incluir superadmin */
 async function migrateRoleConstraint(client) {
   await client.query(`
@@ -320,6 +352,7 @@ export async function runMigrate() {
     await client.query(SQL_EMAIL_NOTIFICATIONS);
     await client.query(SQL_CONTROL_AUTOMATION_CONFIG);
     await client.query(SQL_DEVICE_ETHYLENE_CONFIG);
+    await client.query(SQL_CONTROL_BITACORA);
     await migrateRoleConstraint(client);
     await client.query('COMMIT');
     console.log('[migrate] OK');

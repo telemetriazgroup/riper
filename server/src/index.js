@@ -27,6 +27,7 @@ import { deviceNamesRouter } from './routes/deviceNames.js';
 import { deviceProcessFollowRouter } from './routes/deviceProcessFollow.js';
 import { ripeningProcessesRouter, ensureRipeningUploadDirs } from './routes/ripeningProcesses.js';
 import { deviceControlRouter } from './routes/deviceControl.js';
+import { bitacoraRouter } from './routes/bitacora.js';
 import { auditRouter } from './routes/audit.js';
 import { companiesRouter } from './routes/companies.js';
 import { tunnelCommandsRouter } from './routes/tunnelCommands.js';
@@ -98,6 +99,7 @@ async function main() {
   app.use('/api/v1/device-process-follow', authMiddleware, deviceProcessFollowRouter);
   app.use('/api/v1/ripening-processes', authMiddleware, ripeningProcessesRouter);
   app.use('/api/v1/device-control', authMiddleware, deviceControlRouter);
+  app.use('/api/v1/bitacora', authMiddleware, bitacoraRouter);
   app.use('/api/v1/audit', authMiddleware, auditRouter);
   app.use('/api/v1/companies', authMiddleware, companiesRouter);
   app.use('/api/v1/alarm-codes', authMiddleware, alarmCodesRouter);

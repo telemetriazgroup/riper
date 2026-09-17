@@ -19,7 +19,7 @@ import {
 } from './ultraorganicsFleet.js';
 import { sendEthylenePollCommand } from './tunelControlClient.js';
 import { sendTermoKingEthylenePollCommand } from './termokingControlClient.js';
-import { appendSessionTunnelEvent } from './tunnelEventLog.js';
+import { appendSessionTunnelEvent, appendTunnelEventLog } from './tunnelEventLog.js';
 
 let pollCursor = 0;
 
@@ -81,9 +81,10 @@ async function appendIdlePollToBitacora(imei, poll) {
     const deviceId = String(row.payload?.deviceId ?? '').trim();
     if (!deviceIdRelatesToImei(deviceId, imei)) continue;
     const payload = row.payload && typeof row.payload === 'object' ? { ...row.payload } : {};
-    const log = Array.isArray(payload.tunnelEventLog) ? [...payload.tunnelEventLog] : [];
-    log.push({ at: new Date().toISOString(), ...entry });
-    payload.tunnelEventLog = log.slice(-500);
+    payload.tunnelEventLog = appendTunnelEventLog(payload, entry, {
+      deviceId,
+      trackingId: row.id,
+    });
     payload.tunnelSyncedAt = new Date().toISOString();
     await pool.query(
       `UPDATE app_ripening_processes SET payload = $1::jsonb, updated_at = now() WHERE id = $2::uuid`,

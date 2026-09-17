@@ -165,24 +165,52 @@ export async function completeControlProcess(id: string): Promise<DeviceControlS
   return json.data;
 }
 
+const SESSIONS_LIST_CACHE_TTL_MS = 8_000;
+const sessionsListCache = new Map<string, { at: number; data: DeviceControlSessionRow[] }>();
+const sessionsListInflight = new Map<string, Promise<DeviceControlSessionRow[]>>();
+
 export async function listControlSessions(opts?: { includeArchived?: boolean }): Promise<DeviceControlSessionRow[]> {
-  const u = new URL(`${base()}/sessions`);
-  if (opts?.includeArchived) u.searchParams.set('includeArchived', '1');
-  const res = await fetch(u.toString(), { headers: authHeaders() });
-  const json = await handle<{ data: DeviceControlSessionRow[] }>(res);
-  let rows = (json.data ?? []).map((r) => ({
-    ...r,
-    archived_at: r.archived_at ?? null,
-  }));
-  if (isUltraorganicsSession()) {
-    const allow = new Set(getUltraorganicsAllImeis());
-    rows = rows.filter((r) => allow.has(String(r.device_id ?? '').trim()));
+  const includeArchived = Boolean(opts?.includeArchived);
+  const cacheKey = includeArchived ? 'archived' : 'default';
+
+  const hit = sessionsListCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < SESSIONS_LIST_CACHE_TTL_MS) {
+    return hit.data;
   }
-  if (shouldShowSimulatedInkapackingFleet()) {
-    rows = rows.filter((r) => !isSimulatedInkapackingDevice(String(r.device_id ?? '').trim()));
-    rows = [...rows, ...listSimulatedControlSessions()];
-  }
-  return rows;
+  const pending = sessionsListInflight.get(cacheKey);
+  if (pending) return pending;
+
+  const promise = (async () => {
+    const u = new URL(`${base()}/sessions`);
+    if (includeArchived) u.searchParams.set('includeArchived', '1');
+    const res = await fetch(u.toString(), { headers: authHeaders() });
+    const json = await handle<{ data: DeviceControlSessionRow[] }>(res);
+    let rows = (json.data ?? []).map((r) => ({
+      ...r,
+      archived_at: r.archived_at ?? null,
+    }));
+    if (isUltraorganicsSession()) {
+      const allow = new Set(getUltraorganicsAllImeis());
+      rows = rows.filter((r) => allow.has(String(r.device_id ?? '').trim()));
+    }
+    if (shouldShowSimulatedInkapackingFleet()) {
+      rows = rows.filter((r) => !isSimulatedInkapackingDevice(String(r.device_id ?? '').trim()));
+      rows = [...rows, ...listSimulatedControlSessions()];
+    }
+    sessionsListCache.set(cacheKey, { at: Date.now(), data: rows });
+    return rows;
+  })().finally(() => {
+    sessionsListInflight.delete(cacheKey);
+  });
+
+  sessionsListInflight.set(cacheKey, promise);
+  return promise;
+}
+
+/** Invalida caché corta de listado (tras start/cancel/complete). */
+export function invalidateControlSessionsListCache() {
+  sessionsListCache.clear();
+  sessionsListInflight.clear();
 }
 
 export const CONTROL_SESSIONS_LIST_SWR_KEY = 'device-control-sessions';

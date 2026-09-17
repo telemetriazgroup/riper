@@ -2,6 +2,7 @@ import useSWR, { mutate as swrMutate } from 'swr';
 import {
   listControlSessions,
   CONTROL_SESSIONS_LIST_SWR_KEY,
+  invalidateControlSessionsListCache,
   type DeviceControlSessionRow,
 } from '@/app/lib/deviceControlProcessApi';
 import { isGreenyardSession, isUltraorganicsSession } from '@/app/lib/fleetDemo';
@@ -28,6 +29,7 @@ export function useControlSessionsList(includeArchived = false) {
 
 /** Tras crear/editar/archivar/restaurar — revalidar todas las variantes del listado. */
 export function revalidateControlSessionsList() {
+  invalidateControlSessionsListCache();
   return swrMutate(
     (key) =>
       Array.isArray(key) && key.length >= 2 && key[0] === CONTROL_SESSIONS_LIST_SWR_KEY

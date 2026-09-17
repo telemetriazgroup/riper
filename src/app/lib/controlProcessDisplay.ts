@@ -1294,6 +1294,67 @@ export function processActionLogEntriesFromTracking(
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
+/** Eventos desde tabla app_control_bitacora (últimas N horas). */
+export function processActionLogEntriesFromBitacora(
+  deviceId: string,
+  rows: Array<{
+    id: string;
+    occurred_at: string | null;
+    action: string;
+    source?: string;
+    kind?: string | null;
+    process_type?: string | null;
+    summary?: string | null;
+    payload?: Record<string, unknown>;
+    user_email?: string | null;
+  }>,
+  t: (key: string, replacements?: Record<string, string>) => string,
+  formatTemp: (c: number) => string = (c) => String(c),
+  displayOpts?: ProcessEventDisplayOpts
+): LogEvent[] {
+  const id = String(deviceId).trim();
+  const entries: LogEvent[] = [];
+  for (const row of rows) {
+    if (!row?.occurred_at) continue;
+    const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+    const ev: ProcessEventRow = {
+      key: row.id,
+      at: row.occurred_at,
+      action: row.action,
+      source: row.source,
+      kind: row.kind ?? undefined,
+      processType: row.process_type ?? undefined,
+      summaryEs: row.summary ?? undefined,
+      analysisEs: row.summary ?? undefined,
+      by: row.user_email ?? undefined,
+      ...payload,
+      detail: payload,
+    };
+    const parts = summarizeProcessEventParts(ev, t, displayOpts);
+    const telemetry = extractProcessEventTelemetry(ev, {
+      ...displayOpts,
+      deviceId: displayOpts?.deviceId ?? id,
+    });
+    const phase =
+      (typeof payload.displayLabel === 'string' && payload.displayLabel) ||
+      row.process_type ||
+      undefined;
+    entries.push({
+      id: `bit-${row.id}`,
+      type: 'event',
+      timestamp: row.occurred_at,
+      kind: parts.kind,
+      description: parts.description,
+      detail: parts.reason ?? phase,
+      phase,
+      ...telemetry,
+    });
+  }
+  return entries.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+}
+
 export function processEventLogFromParams(params: Record<string, unknown>): ProcessEventRow[] {
   const p = params?.process_type != null ? params : sessionParamsObject(params);
   const raw = p.tunnelEventLog ?? (Array.isArray(params) ? params : undefined);

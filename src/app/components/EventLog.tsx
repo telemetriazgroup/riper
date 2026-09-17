@@ -17,12 +17,20 @@ import { getMockEventLog, type LogEntry, type LogEvent, type EventKind } from '@
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
-import { processActionLogEntriesForDevice, processActionLogEntriesFromTracking } from '@/app/lib/controlProcessDisplay';
+import { useDeviceBitacora } from '@/app/hooks/useDeviceBitacora';
+import {
+  processActionLogEntriesForDevice,
+  processActionLogEntriesFromBitacora,
+  processActionLogEntriesFromTracking,
+} from '@/app/lib/controlProcessDisplay';
 import { resolveEthyleneDisplayTargetPpm } from '@/app/lib/ethyleneDisplayPolicy';
 
 interface EventLogProps {
   deviceId: string;
 }
+
+/** Ventana en vivo de bitácora (detalle de equipo). */
+const BITACORA_LIVE_HOURS = 12;
 
 const CONTROL_KINDS = new Set<EventKind>([
   'process_action',
@@ -111,6 +119,7 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
   const [filter, setFilter] = useState<'all' | 'control' | 'samplings'>('all');
   const { sessions } = useControlSessionsList(false);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
+  const { rows: bitacoraRows } = useDeviceBitacora(deviceId, BITACORA_LIVE_HOURS);
 
   const panelActiveSession = useMemo(
     () => sessions.find((s) => s.device_id === deviceId && s.status === 'active') ?? null,
@@ -138,9 +147,15 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
     [programmedEthyleneTarget, deviceId]
   );
 
-  const processActions = useMemo(
+  /** Lifecycle (start/cancel/complete) desde sesiones slim; eventos de acción desde bitácora. */
+  const lifecycleActions = useMemo(
     () => processActionLogEntriesForDevice(deviceId, sessions, t, formatTemp, clientLogDisplayOpts),
     [deviceId, sessions, t, formatTemp, clientLogDisplayOpts]
+  );
+
+  const bitacoraActions = useMemo(
+    () => processActionLogEntriesFromBitacora(deviceId, bitacoraRows, t, formatTemp, clientLogDisplayOpts),
+    [deviceId, bitacoraRows, t, formatTemp, clientLogDisplayOpts]
   );
 
   const trackingActions = useMemo(
@@ -157,10 +172,34 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
 
   const rawLog = useMemo(() => {
     const mock = getMockEventLog(deviceId);
-    const merged = [...mock, ...processActions, ...trackingActions];
+    const cutoff = Date.now() - BITACORA_LIVE_HOURS * 60 * 60 * 1000;
+    const withinWindow = (ts: string) => {
+      const tms = new Date(ts).getTime();
+      return Number.isFinite(tms) && tms >= cutoff;
+    };
+    // Preferir bitácora DB; tracking embebido solo si aún no migró (dedupe por timestamp+desc).
+    const seen = new Set<string>();
+    const merged: LogEntry[] = [];
+    const pushUnique = (e: LogEntry) => {
+      if (!withinWindow(e.timestamp) && e.type === 'event' && isControlKind((e as LogEvent).kind)) {
+        // lifecycle fuera de 12h: omitir en vista en vivo
+        return;
+      }
+      const key =
+        e.type === 'event'
+          ? `${e.timestamp}|${(e as LogEvent).kind}|${(e as LogEvent).description}`
+          : `${e.timestamp}|sampling`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      merged.push(e);
+    };
+    for (const e of mock) pushUnique(e);
+    for (const e of bitacoraActions) pushUnique(e);
+    for (const e of lifecycleActions) pushUnique(e);
+    for (const e of trackingActions) pushUnique(e);
     merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     return merged;
-  }, [deviceId, processActions, trackingActions]);
+  }, [deviceId, bitacoraActions, lifecycleActions, trackingActions]);
 
   const log = useMemo(() => {
     if (filter === 'control') {
@@ -178,7 +217,9 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
             <ClipboardList className="h-5 w-5 text-blue-600" />
             <div>
               <h3 className="font-semibold text-gray-900">{t('event_log')}</h3>
-              <p className="text-xs text-gray-500">{t('event_log_desc')}</p>
+              <p className="text-xs text-gray-500">
+                {t('event_log_desc')} · {BITACORA_LIVE_HOURS}h
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">

@@ -1,4 +1,6 @@
 import { pool } from './db.js';
+import { isBitacoraDualWriteEnabled, queueBitacoraEvent } from './bitacora.js';
+import { TUNNEL_EVENT_LOG_EMBEDDED_MAX } from './tunnelEventLog.js';
 
 function nowIso() {
   return new Date().toISOString();
@@ -99,7 +101,7 @@ export async function syncControlSessionForTunnelBatch(batchId) {
   if (!jobs.length) return;
 
   const { rows: sessions } = await pool.query(
-    `SELECT id, params FROM app_device_control_sessions
+    `SELECT id, device_id, process_type, params FROM app_device_control_sessions
      WHERE params->>'tunnelCommandBatchId' = $1
      ORDER BY created_at DESC
      LIMIT 1`,
@@ -113,16 +115,39 @@ export async function syncControlSessionForTunnelBatch(batchId) {
       ? session.params
       : {};
 
+  const prevLog = Array.isArray(prevParams.tunnelEventLog) ? prevParams.tunnelEventLog : [];
+  const prevKeys = new Set(prevLog.map((e) => e?.key).filter(Boolean));
+
   const jobSnapshots = jobs.map(summarizeJob);
-  const eventLog = buildEventLogFromJobs(jobs, prevParams.tunnelEventLog);
+  const eventLog = buildEventLogFromJobs(jobs, prevLog);
   const overallStatus = deriveOverallTunnelStatus(jobs);
+
+  for (const ev of eventLog) {
+    if (!ev || typeof ev !== 'object') continue;
+    if (ev.key && prevKeys.has(ev.key)) continue;
+    queueBitacoraEvent({
+      deviceId: session.device_id,
+      sessionId: session.id,
+      processType: session.process_type,
+      occurredAt: ev.at,
+      entry: ev,
+      source: ev.source ?? 'tunnel_api',
+      action: ev.action,
+      kind: ev.kind,
+      legacyKey: ev.key ? `${session.device_id}|${ev.key}`.slice(0, 240) : undefined,
+    });
+  }
+
+  const embeddedLog = isBitacoraDualWriteEnabled()
+    ? eventLog.slice(-TUNNEL_EVENT_LOG_EMBEDDED_MAX)
+    : prevLog;
 
   const nextParams = {
     ...prevParams,
     source: prevParams.source ?? 'tunnel_api',
     tunnelCommandBatchId: id,
-    tunnelJobs: jobSnapshots,
-    tunnelEventLog: eventLog,
+    tunnelJobs: isBitacoraDualWriteEnabled() ? jobSnapshots : (prevParams.tunnelJobs ?? jobSnapshots),
+    tunnelEventLog: embeddedLog,
     tunnelOverallStatus: overallStatus,
     tunnelSyncedAt: nowIso(),
   };

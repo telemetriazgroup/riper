@@ -316,8 +316,13 @@ function ventilationEndCo2Dato(params) {
   return null;
 }
 
-function appendLog(params, entry) {
-  return appendTunnelEventLog(params, { source: 'process_automation', ...entry });
+function appendLog(params, entry, ctx = null) {
+  return appendTunnelEventLog(params, entry, {
+    deviceId: ctx?.device_id,
+    sessionId: ctx?.session_id,
+    trackingId: ctx?.tracking_id,
+    processType: ctx?.process_type ?? params?.process_type,
+  });
 }
 
 async function saveSessionParams(sessionId, nextParams) {
@@ -334,7 +339,10 @@ async function patchAutomation(ctx, patchFn) {
   const { newEvents = [], ...auto } = result;
   let nextParams = { ...params, processAutomation: auto, tunnelSyncedAt: nowIso() };
   for (const ev of newEvents) {
-    nextParams = { ...nextParams, tunnelEventLog: appendLog(nextParams, ev) };
+    nextParams = {
+      ...nextParams,
+      tunnelEventLog: appendLog(nextParams, { source: 'process_automation', ...ev }, ctx),
+    };
   }
   ctx.params = nextParams;
   await ctx.persist(nextParams);
@@ -1690,6 +1698,7 @@ function controlCtxFromSession(session, persistFn) {
   const params = effectiveSessionParams(session);
   return {
     device_id,
+    session_id: session.id,
     process_type: session.process_type,
     estimated_end_at: session.estimated_end_at,
     params,
