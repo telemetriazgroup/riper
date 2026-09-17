@@ -60,4 +60,65 @@ export async function listDeviceBitacora(
   return handle<ControlBitacoraListResult>(res);
 }
 
+/** Consulta por rango de fechas (máx. 90 días en servidor). */
+export async function queryBitacoraRange(opts: {
+  deviceId: string;
+  from: string;
+  to: string;
+  cursor?: string;
+  limit?: number;
+  action?: string;
+  processType?: string;
+  includePayload?: boolean;
+}): Promise<ControlBitacoraListResult> {
+  const u = new URL(base());
+  u.searchParams.set('deviceId', opts.deviceId);
+  u.searchParams.set('from', opts.from);
+  u.searchParams.set('to', opts.to);
+  if (opts.cursor) u.searchParams.set('cursor', opts.cursor);
+  if (opts.limit != null) u.searchParams.set('limit', String(opts.limit));
+  if (opts.action) u.searchParams.set('action', opts.action);
+  if (opts.processType) u.searchParams.set('processType', opts.processType);
+  u.searchParams.set('includePayload', opts.includePayload === false ? '0' : '1');
+  const res = await fetch(u.toString(), { headers: authHeaders() });
+  return handle<ControlBitacoraListResult>(res);
+}
+
+export function bitacoraRowsToCsv(rows: ControlBitacoraRow[]): string {
+  const esc = (v: unknown) => {
+    const s = v == null ? '' : String(v);
+    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+  const header = [
+    'occurred_at',
+    'device_id',
+    'action',
+    'kind',
+    'process_type',
+    'source',
+    'summary',
+    'user_email',
+  ];
+  const lines = [header.join(',')];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.occurred_at,
+        r.device_id,
+        r.action,
+        r.kind,
+        r.process_type,
+        r.source,
+        r.summary,
+        r.user_email,
+      ]
+        .map(esc)
+        .join(',')
+    );
+  }
+  return lines.join('\n');
+}
+
 export const DEVICE_BITACORA_SWR_KEY = 'device-control-bitacora';
+export const BITACORA_MAX_RANGE_DAYS = 90;

@@ -380,9 +380,9 @@ Así un fallo o lentitud del módulo de bitácora **no frena** el mapa de equipo
 - [x] Script `server/src/migrateBitacora.js` (`npm run migrate:bitacora`)
 - [x] Dual-write desde `appendTunnelEventLog` / reemplazo
 - [x] `EventLog` → solo últimas 12 h vía API bitácora
-- [ ] Página/módulo consulta por rango de fechas + i18n
+- [x] Página/módulo consulta por rango de fechas + i18n
 - [x] `/sessions` deja de devolver `tunnelEventLog` (view=summary)
-- [ ] Purga JSON legado tras validación en staging (`migrate:bitacora --purge`)
+- [ ] Purga JSON legado en prod: `node src/migrateBitacora.js --purge` (tras reiniciar API sin dual-write)
 - [ ] Medir Network: flota sin MB de bitácora; bitácora 12 h &lt; ~200–500 KB típico
 
 ### 6.10 Resumen del cambio para el equipo

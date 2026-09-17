@@ -9,11 +9,10 @@ export const BITACORA_DEFAULT_HOURS = 12;
 export const BITACORA_MAX_RANGE_DAYS = 90;
 export const BITACORA_PAGE_LIMIT = 100;
 
-/** Dual-write JSON+tabla. 0 = solo tabla (cuando UI ya lee de DB). Default 1. */
+/** Dual-write JSON+tabla. Solo si BITACORA_DUAL_WRITE=1. Default: solo tabla. */
 export function isBitacoraDualWriteEnabled() {
   const v = process.env.BITACORA_DUAL_WRITE;
-  if (v === '0' || v === 'false') return false;
-  return true;
+  return v === '1' || v === 'true';
 }
 
 function toIso(v) {

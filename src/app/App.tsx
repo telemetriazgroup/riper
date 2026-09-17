@@ -11,6 +11,7 @@ import { UserProfile } from '@/app/components/UserProfile';
 import { DetailedUserManual } from '@/app/components/DetailedUserManual';
 import { CompaniesPage } from '@/app/components/CompaniesPage';
 import { AuditLog } from '@/app/components/AuditLog';
+import { BitacoraQueryPage } from '@/app/components/BitacoraQueryPage';
 import { EmailNotificationsPage } from '@/app/components/EmailNotificationsPage';
 import { ThermoKingAlarmsPage } from '@/app/components/ThermoKingAlarmsPage';
 import { Toaster, toast } from 'sonner';
@@ -157,6 +158,8 @@ function AppContent() {
         return <UsersList />;
       case 'profile':
         return <UserProfile onProfileUpdated={refreshSession} />;
+      case 'bitacora':
+        return <BitacoraQueryPage />;
       case 'manual':
         return <DetailedUserManual />;
       case 'audit':
