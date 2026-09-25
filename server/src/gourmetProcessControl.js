@@ -38,6 +38,8 @@ import {
   evaluateEthyleneSafety,
   isEthyleneSafetyActive,
 } from './ethyleneSafety.js';
+import { evaluateEthyleneSupplyWarning } from './ethyleneSupplyWarning.js';
+import { fireEmailNotification } from './emailNotifications.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
@@ -464,9 +466,56 @@ async function patchAutomation(ctx, patchFn) {
       tunnelEventLog: appendLog(nextParams, { source: 'process_automation', ...ev }, ctx),
     };
   }
+  nextParams = maybeAnnotateEthyleneSupplyWarn(ctx, nextParams);
   ctx.params = nextParams;
   await ctx.persist(nextParams);
-  return auto;
+  return nextParams.processAutomation ?? auto;
+}
+
+/**
+ * Si inyecciones prolongadas sin subida de ppm → correo ethylene_no_supply (una vez por ciclo).
+ */
+function maybeAnnotateEthyleneSupplyWarn(ctx, params) {
+  const processType = String(ctx?.process_type || params?.process_type || '').trim();
+  if (processType !== 'Ripening') return params;
+
+  const auto = params.processAutomation && typeof params.processAutomation === 'object'
+    ? { ...params.processAutomation }
+    : {};
+  const evalResult = evaluateEthyleneSupplyWarning(params);
+  if (!evalResult.warn || !evalResult.firstInjectionAt) return params;
+
+  const alreadySent = String(auto.ethyleneSupplyWarnEmailAt || '') === evalResult.firstInjectionAt;
+  if (alreadySent) return params;
+
+  auto.ethyleneSupplyWarnEmailAt = evalResult.firstInjectionAt;
+  auto.ethyleneSupplyWarn = {
+    at: nowIso(),
+    firstInjectionAt: evalResult.firstInjectionAt,
+    sumDoseLogical: evalResult.sumDoseLogical,
+    durationMs: evalResult.durationMs,
+    risePpm: evalResult.risePpm,
+  };
+
+  const deviceId = String(ctx?.device_id || '').trim();
+  if (deviceId) {
+    fireEmailNotification({
+      deviceId,
+      eventType: 'ethylene_no_supply',
+      meta: {
+        processType,
+        firstInjectionAt: evalResult.firstInjectionAt,
+        sumDoseLogical: evalResult.sumDoseLogical,
+        durationHours: Number((evalResult.durationMs / 3600000).toFixed(2)),
+        risePpm: evalResult.risePpm,
+        injectionCount: evalResult.injectionCount,
+        message:
+          'Se detectaron inyecciones de etileno prolongadas sin subida útil del nivel. Verifique suministro / válvula de gas.',
+      },
+    });
+  }
+
+  return { ...params, processAutomation: auto };
 }
 
 export function initGourmetProcessAutomation(session) {

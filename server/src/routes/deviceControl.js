@@ -600,6 +600,18 @@ deviceControlRouter.post('/:id/cancel', async (req, res) => {
       entityId: id,
       meta: { device_id: upd[0]?.device_id, process_type: upd[0]?.process_type },
     });
+    if (upd[0]?.device_id) {
+      fireEmailNotification({
+        deviceId: upd[0].device_id,
+        eventType: 'process_cancel',
+        actorEmail: req.user?.email,
+        meta: {
+          processType: upd[0].process_type,
+          displayLabel: upd[0].display_label,
+          source: 'user_cancelled',
+        },
+      });
+    }
     return res.json({ data: upd[0] });
   } catch (e) {
     console.error(e);

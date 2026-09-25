@@ -61,13 +61,17 @@ emailNotificationsRouter.get('/config', async (_req, res) => {
 emailNotificationsRouter.put('/config', async (req, res) => {
   const body = req.body || {};
   const fromEmail = String(body.from_email ?? body.fromEmail ?? '').trim();
-  const provider = String(body.provider || 'resend').trim().toLowerCase() || 'resend';
+  const providerRaw = String(body.provider || 'gmail').trim().toLowerCase() || 'gmail';
+  const provider = providerRaw === 'resend' ? 'resend' : 'gmail';
   const enabled = body.enabled === true;
   const apiKeyRaw = body.api_key ?? body.apiKey;
   const clearApiKey = apiKeyRaw === '' || apiKeyRaw === null;
 
   if (enabled && !fromEmail) {
     return res.status(400).json({ error: 'validation', message: 'from_email required when enabled' });
+  }
+  if (enabled && provider === 'gmail' && fromEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail)) {
+    return res.status(400).json({ error: 'validation', message: 'valid Gmail / Google Workspace email required' });
   }
 
   try {

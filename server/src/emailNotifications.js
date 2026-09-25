@@ -10,19 +10,23 @@ import { resolvePowerState } from './powerState.js';
 export const EMAIL_EVENT_TYPES = [
   'manual_control',
   'process_start',
+  'process_cancel',
   'tracking_start',
   'phase_complete',
   'tracking_complete',
   'sampling',
+  'ethylene_no_supply',
 ];
 
 const EVENT_LABELS = {
   manual_control: 'Control manual',
   process_start: 'Inicio de proceso',
+  process_cancel: 'Cancelación de proceso',
   tracking_start: 'Inicio de seguimiento',
-  phase_complete: 'Etapa / proceso completado',
+  phase_complete: 'Término / proceso completado',
   tracking_complete: 'Seguimiento completado',
   sampling: 'Registro de muestra',
+  ethylene_no_supply: 'Sin inyección de etileno (suministro)',
 };
 
 function escHtml(s) {

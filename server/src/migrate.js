@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS app_email_config (
   id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   from_email VARCHAR(255) NOT NULL DEFAULT '',
   api_key TEXT NOT NULL DEFAULT '',
-  provider VARCHAR(32) NOT NULL DEFAULT 'resend',
+  provider VARCHAR(32) NOT NULL DEFAULT 'gmail',
   enabled BOOLEAN NOT NULL DEFAULT FALSE,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -243,7 +243,7 @@ INSERT INTO app_email_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 CREATE TABLE IF NOT EXISTS app_email_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name VARCHAR(255) NOT NULL,
-  events JSONB NOT NULL DEFAULT '["manual_control","process_start","tracking_start","phase_complete","tracking_complete","sampling"]'::jsonb,
+  events JSONB NOT NULL DEFAULT '["manual_control","process_start","process_cancel","tracking_start","phase_complete","tracking_complete","sampling","ethylene_no_supply"]'::jsonb,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

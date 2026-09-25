@@ -4,10 +4,14 @@ import { authHeaders, clearAuth } from '@/app/lib/auth';
 export type EmailEventType =
   | 'manual_control'
   | 'process_start'
+  | 'process_cancel'
   | 'tracking_start'
   | 'phase_complete'
   | 'tracking_complete'
-  | 'sampling';
+  | 'sampling'
+  | 'ethylene_no_supply';
+
+export type EmailProvider = 'gmail' | 'resend';
 
 export interface EmailConfig {
   from_email: string;
@@ -61,6 +65,7 @@ export async function fetchEmailConfig(): Promise<EmailConfig> {
 export async function updateEmailConfig(payload: {
   from_email: string;
   enabled: boolean;
+  provider?: EmailProvider;
   api_key?: string;
 }): Promise<EmailConfig> {
   const res = await fetch(`${base()}/config`, {
@@ -134,10 +139,12 @@ export function eventTypeLabel(t: (k: string) => string, event: EmailEventType):
   const map: Record<EmailEventType, string> = {
     manual_control: t('email_event_manual_control'),
     process_start: t('email_event_process_start'),
+    process_cancel: t('email_event_process_cancel'),
     tracking_start: t('email_event_tracking_start'),
     phase_complete: t('email_event_phase_complete'),
     tracking_complete: t('email_event_tracking_complete'),
     sampling: t('email_event_sampling'),
+    ethylene_no_supply: t('email_event_ethylene_no_supply'),
   };
   return map[event] || event;
 }

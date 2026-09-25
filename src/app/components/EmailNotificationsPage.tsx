@@ -26,6 +26,7 @@ import {
   type EmailConfig,
   type EmailEventType,
   type EmailGroup,
+  type EmailProvider,
 } from '@/app/lib/emailNotificationsApi';
 import { toast } from 'sonner';
 
@@ -36,6 +37,7 @@ export function EmailNotificationsPage() {
   const [config, setConfig] = useState<EmailConfig | null>(null);
   const [fromEmail, setFromEmail] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [provider, setProvider] = useState<EmailProvider>('gmail');
   const [enabled, setEnabled] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
   const [testTo, setTestTo] = useState('');
@@ -59,6 +61,7 @@ export function EmailNotificationsPage() {
       const [cfg, grp] = await Promise.all([fetchEmailConfig(), fetchEmailGroups()]);
       setConfig(cfg);
       setFromEmail(cfg.from_email || '');
+      setProvider(cfg.provider === 'resend' ? 'resend' : 'gmail');
       setEnabled(cfg.enabled);
       setGroups(grp.groups);
       setEventTypes(grp.eventTypes);
@@ -76,9 +79,15 @@ export function EmailNotificationsPage() {
   const handleSaveConfig = async () => {
     setSavingConfig(true);
     try {
-      const payload: { from_email: string; enabled: boolean; api_key?: string } = {
+      const payload: {
+        from_email: string;
+        enabled: boolean;
+        provider: EmailProvider;
+        api_key?: string;
+      } = {
         from_email: fromEmail.trim(),
         enabled,
+        provider,
       };
       if (apiKey.trim()) payload.api_key = apiKey.trim();
       const updated = await updateEmailConfig(payload);
@@ -200,6 +209,21 @@ export function EmailNotificationsPage() {
           <CardTitle>{t('email_config_section')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email-provider">{t('email_provider_label')}</Label>
+            <select
+              id="email-provider"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white max-w-md"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value === 'resend' ? 'resend' : 'gmail')}
+            >
+              <option value="gmail">{t('email_provider_gmail')}</option>
+              <option value="resend">{t('email_provider_resend')}</option>
+            </select>
+            <p className="text-xs text-gray-500">
+              {provider === 'gmail' ? t('email_gmail_help') : t('email_resend_help')}
+            </p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="email-from">{t('email_from_label')}</Label>
@@ -209,18 +233,26 @@ export function EmailNotificationsPage() {
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                 value={fromEmail}
                 onChange={(e) => setFromEmail(e.target.value)}
-                placeholder="notificaciones@empresa.com"
+                placeholder={provider === 'gmail' ? 'cuenta@gmail.com' : 'notificaciones@empresa.com'}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email-api-key">{t('email_api_key_label')}</Label>
+              <Label htmlFor="email-api-key">
+                {provider === 'gmail' ? t('email_gmail_app_password_label') : t('email_api_key_label')}
+              </Label>
               <input
                 id="email-api-key"
                 type="password"
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={config?.has_api_key ? config.api_key_hint : 're_...'}
+                placeholder={
+                  config?.has_api_key
+                    ? config.api_key_hint
+                    : provider === 'gmail'
+                      ? 'xxxx xxxx xxxx xxxx'
+                      : 're_...'
+                }
               />
               {config?.has_api_key && (
                 <p className="text-xs text-gray-500">{t('email_api_key_hint')}</p>

@@ -929,6 +929,7 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
   if (String(row.status || '').toLowerCase() === 'completed') {
     return res.status(403).json({ error: 'process_completed', message: 'process is finalized; editing is disabled' });
   }
+  const isAdminTier = role === 'superadmin' || role === 'admin';
   const editableStatus = ['active', 'paused'].includes(String(row.status || '').toLowerCase());
   if (bodyPayload != null && isAdminTier && !editableStatus) {
     return res.status(403).json({ error: 'process_not_editable', message: 'process cannot be edited in this state' });
@@ -951,7 +952,6 @@ ripeningProcessesRouter.patch('/:id', async (req, res) => {
     }
   }
 
-  const isAdminTier = role === 'superadmin' || role === 'admin';
   const basePayload =
     row.payload != null && typeof row.payload === 'object' ? { ...row.payload } : {};
   let mergedPayload = basePayload;
