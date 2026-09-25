@@ -296,6 +296,7 @@ async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
     if (action.type === 'pulse') {
       try {
         const urls = await sendCommandTargets(ctx, 5, ETHYLENE_STUCK_PULSE_DATO);
+        const reason = action.reason || 'pulse';
         events.push({
           action: 'ethylene_safety_unstick_pulse',
           source: 'ethylene_safety',
@@ -306,8 +307,11 @@ async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
           target,
           effective,
           overshootThreshold: evaluated.safety?.overshootThreshold ?? null,
-          reason: action.reason,
-          analysisEs: `Seguridad etileno: lectura ${effective} ppm > ${evaluated.safety?.overshootThreshold ?? '—'} (120% set ${target}). Pulso 1 s para despegar relé.`,
+          thr20: evaluated.safety?.thr20 ?? null,
+          thr60: evaluated.safety?.thr60 ?? null,
+          thr100: evaluated.safety?.thr100 ?? null,
+          reason,
+          analysisEs: `Seguridad etileno (${reason}): lectura ${effective ?? 'nula'} ppm / set ${target} ppm → pulso físico 1 s.`,
         });
       } catch (e) {
         events.push({
@@ -328,7 +332,7 @@ async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
           target,
           effective,
           reason: action.reason,
-          analysisEs: `Seguridad etileno: lectura ${effective} ppm ≥ 270 → ventilación AVL ${ETHYLENE_VENT_AVL} (emergencia).`,
+          analysisEs: `Seguridad etileno: lectura ${effective} ppm ≥ 410 → ventilación AVL ${ETHYLENE_VENT_AVL} por 20 min.`,
         });
       } catch (e) {
         events.push({
@@ -344,7 +348,19 @@ async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
         target,
         effective,
         reason: action.reason,
-        analysisEs: `Seguridad etileno: fin de ventilación de emergencia (${action.reason}).`,
+        analysisEs: `Seguridad etileno: fin de ventilación (${action.reason}). Sin reinfiltración hasta caída brusca.`,
+      });
+    } else if (action.type === 'consult_null') {
+      const last = evaluated.safety?.lastKnownReading;
+      events.push({
+        action: 'ethylene_safety_consult_null',
+        source: 'ethylene_safety',
+        target,
+        effective: null,
+        lastKnownReading: last ?? null,
+        phase: evaluated.safety?.phase ?? null,
+        reason: action.reason,
+        analysisEs: `Seguridad etileno: lectura nula en consulta; se mantiene último valor conocido ${last ?? '—'} ppm.`,
       });
     } else if (action.type === 'clear') {
       events.push({
@@ -353,7 +369,10 @@ async function applyEthyleneSafety(ctx, auto, eth, effective, target, events) {
         target,
         effective,
         reason: action.reason,
-        analysisEs: `Seguridad etileno: niveles estabilizados; se reanuda control normal.`,
+        analysisEs:
+          action.reason === 'drastic_drop'
+            ? `Seguridad etileno: caída brusca detectada (${effective} ppm); se reanuda control normal.`
+            : `Seguridad etileno: niveles estabilizados; se reanuda control normal.`,
       });
     }
   }

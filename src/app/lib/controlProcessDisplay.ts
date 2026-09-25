@@ -296,6 +296,7 @@ const ETH_ACTIONS = new Set([
   'ethylene_safety_cleared',
   'ethylene_safety_pulse_error',
   'ethylene_safety_vent_error',
+  'ethylene_safety_consult_null',
 ]);
 const VENT_ACTIONS = new Set([
   'check_ventilation_avl',
@@ -408,44 +409,76 @@ function fmtPpmField(v: unknown): string {
   return formatUiDecimal(Number(n.toFixed(1)), 1);
 }
 
+function parsePpmNumber(v: unknown): number | undefined {
+  if (v == null || v === '' || v === '—') return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Motivo client-safe: nunca preferir analysisEs crudo (fuga de desviación real). */
+function ethyleneReasonText(
+  clientSafe: boolean,
+  analysisEs: string,
+  fallback: string
+): string {
+  if (clientSafe) return fallback;
+  return analysisEs.trim() || fallback;
+}
+
 /** Campos de decisión de control de etileno (lectura / objetivo / dosis). */
 function ethyleneDecisionFields(
   ev: ProcessEventRow,
   detail: Record<string, unknown>,
   displayOpts?: ProcessEventDisplayOpts
 ) {
-  const readingRaw =
-    ev.lastReading ??
-    detail.lastReading ??
-    ev.effective ??
-    detail.effective ??
-    ev.baseline ??
-    detail.baseline ??
-    ev.baselineBeforeDose ??
-    detail.baselineBeforeDose ??
-    ev.value ??
-    detail.value;
-  const baselineRaw =
-    ev.baseline ?? detail.baseline ?? ev.baselineBeforeDose ?? detail.baselineBeforeDose ?? readingRaw;
-  const lastReadingRaw = ev.lastReading ?? detail.lastReading ?? readingRaw;
+  const clientFacing =
+    displayOpts?.clientFacingLog === true || useClientSafeEventDisplay(displayOpts);
+  const readingRawNum =
+    parsePpmNumber(ev.lastReading ?? detail.lastReading) ??
+    parsePpmNumber(ev.effective ?? detail.effective) ??
+    parsePpmNumber(ev.baseline ?? detail.baseline) ??
+    parsePpmNumber(ev.baselineBeforeDose ?? detail.baselineBeforeDose) ??
+    parsePpmNumber(ev.value ?? detail.value);
+  const baselineRawNum =
+    parsePpmNumber(ev.baseline ?? detail.baseline) ??
+    parsePpmNumber(ev.baselineBeforeDose ?? detail.baselineBeforeDose) ??
+    readingRawNum;
+  const lastReadingRawNum =
+    parsePpmNumber(ev.lastReading ?? detail.lastReading) ?? readingRawNum;
   const targetRaw =
     ev.target ?? detail.target ?? detail.target_value ?? displayOpts?.programmedEthyleneTarget ?? null;
+  const targetNum = parsePpmNumber(targetRaw);
+
+  const readingDisp = clientFacing
+    ? (modulateEthyleneForClientLog(readingRawNum, {
+        ...displayOpts,
+        clientFacingLog: true,
+      }) ?? (displayOpts?.programmedEthyleneTarget != null ? undefined : readingRawNum))
+    : readingRawNum;
+  const baselineDisp = clientFacing
+    ? (modulateEthyleneForClientLog(baselineRawNum, {
+        ...displayOpts,
+        clientFacingLog: true,
+      }) ?? (displayOpts?.programmedEthyleneTarget != null ? undefined : baselineRawNum))
+    : baselineRawNum;
+  const lastReadingDisp = clientFacing
+    ? (modulateEthyleneForClientLog(lastReadingRawNum, {
+        ...displayOpts,
+        clientFacingLog: true,
+      }) ?? (displayOpts?.programmedEthyleneTarget != null ? undefined : lastReadingRawNum))
+    : lastReadingRawNum;
+
   const remainingRaw =
     ev.remaining ??
     detail.remaining ??
-    (targetRaw != null &&
-    lastReadingRaw != null &&
-    Number.isFinite(Number(targetRaw)) &&
-    Number.isFinite(Number(lastReadingRaw))
-      ? Number(targetRaw) - Number(lastReadingRaw)
-      : null);
+    (targetNum != null && lastReadingDisp != null ? targetNum - lastReadingDisp : null);
   const incrementRaw = ev.observedIncrement ?? detail.observedIncrement ?? null;
   return {
     dato: injectionDatoForDisplay(ev, detail),
-    reading: fmtPpmField(readingRaw),
-    baseline: fmtPpmField(baselineRaw),
-    lastReading: fmtPpmField(lastReadingRaw),
-    target: fmtPpmField(targetRaw),
+    reading: fmtPpmField(readingDisp),
+    baseline: fmtPpmField(baselineDisp),
+    lastReading: fmtPpmField(lastReadingDisp),
+    target: fmtPpmField(targetNum),
     remaining: fmtPpmField(remainingRaw),
     increment: fmtPpmField(incrementRaw),
     skipReason: String(ev.reason ?? detail.reason ?? 'at_target'),
@@ -458,8 +491,10 @@ function modulateEthyleneForClientLog(
   displayOpts?: ProcessEventDisplayOpts
 ): number | undefined {
   if (raw == null) return undefined;
-  if (displayOpts?.clientFacingLog !== true) return raw;
-  const target = displayOpts.programmedEthyleneTarget;
+  const clientFacing =
+    displayOpts?.clientFacingLog === true || useClientSafeEventDisplay(displayOpts);
+  if (!clientFacing) return raw;
+  const target = displayOpts?.programmedEthyleneTarget;
   if (target == null || !Number.isFinite(target) || target <= 0) return undefined;
   const modulated = modulateGourmetEthyleneDisplayPpm(raw, target);
   if (modulated == null) return undefined;
@@ -503,7 +538,7 @@ export function extractProcessEventTelemetry(
       parseTelemetryNumber(ev.value ?? detail.value) ??
       parseTelemetryNumber(ev.baseline ?? detail.baseline) ??
       parseTelemetryNumber(ev.baselineBeforeDose ?? detail.baselineBeforeDose);
-    if (clientFacingLog) {
+    if (clientFacingLog || clientSafe) {
       out.ethylene = modulateEthyleneForClientLog(rawEthylene, displayOpts);
     } else if (!clientSafe) {
       out.ethylene = rawEthylene;
@@ -925,13 +960,21 @@ export function summarizeProcessEventParts(
       description: clientSafe
         ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
         : t('log_ctrl_ethylene_inject', { dato: f.dato }),
-      reason:
-        analysisEs ||
-        t('log_ctrl_reason_ethylene_initial', {
-          baseline: f.baseline,
-          target: f.target,
-          dato: f.dato,
-        }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_inject_client', {
+              baseline: f.baseline,
+              target: f.target,
+              dato: f.dato,
+            })
+          : t('log_ctrl_reason_ethylene_initial', {
+              baseline: f.baseline,
+              target: f.target,
+              dato: f.dato,
+            })
+      ),
     };
   }
   if (action === 'ethylene_tipo5_proportional' || action === 'send_tipo5_proportional' || action === 'retry_ethylene') {
@@ -946,15 +989,23 @@ export function summarizeProcessEventParts(
       description: clientSafe
         ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
         : t('log_ctrl_ethylene_inject', { dato: f.dato }),
-      reason:
-        analysisEs ||
-        t(reasonKey, {
-          lastReading: f.lastReading,
-          target: f.target,
-          dato: f.dato,
-          remaining: f.remaining,
-          increment: f.increment,
-        }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_inject_client', {
+              baseline: f.lastReading,
+              target: f.target,
+              dato: f.dato,
+            })
+          : t(reasonKey, {
+              lastReading: f.lastReading,
+              target: f.target,
+              dato: f.dato,
+              remaining: f.remaining,
+              increment: f.increment,
+            })
+      ),
     };
   }
   if (action === 'ethylene_tipo5_fallback') {
@@ -965,13 +1016,21 @@ export function summarizeProcessEventParts(
       description: clientSafe
         ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
         : t('log_ctrl_ethylene_inject_fallback', { dato: f.dato }),
-      reason:
-        analysisEs ||
-        t('log_ctrl_reason_ethylene_fallback', {
-          lastReading: f.lastReading,
-          target: f.target,
-          dato: f.dato,
-        }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_inject_client', {
+              baseline: f.lastReading,
+              target: f.target,
+              dato: f.dato,
+            })
+          : t('log_ctrl_reason_ethylene_fallback', {
+              lastReading: f.lastReading,
+              target: f.target,
+              dato: f.dato,
+            })
+      ),
     };
   }
   if (action === 'ethylene_skip_dose') {
@@ -981,45 +1040,71 @@ export function summarizeProcessEventParts(
       return {
         kind,
         description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip_await'),
-        reason:
-          analysisEs ||
-          t('log_ctrl_reason_ethylene_skip_await', {
-            effective: f.reading,
-            target: f.target,
-            baseline: f.baseline,
-          }),
+        reason: ethyleneReasonText(
+          clientSafe,
+          analysisEs,
+          clientSafe
+            ? t('log_ctrl_reason_ethylene_skip_client', {
+                baseline: f.reading,
+                target: f.target,
+              })
+            : t('log_ctrl_reason_ethylene_skip_await', {
+                effective: f.reading,
+                target: f.target,
+                baseline: f.baseline,
+              })
+        ),
       };
     }
     return {
       kind,
       description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip'),
-      reason:
-        analysisEs ||
-        t('log_ctrl_reason_ethylene_at_target', {
-          baseline: f.baseline !== '—' ? f.baseline : f.reading,
-          target: f.target,
-        }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_skip_client', {
+              baseline: f.baseline !== '—' ? f.baseline : f.reading,
+              target: f.target,
+            })
+          : t('log_ctrl_reason_ethylene_at_target', {
+              baseline: f.baseline !== '—' ? f.baseline : f.reading,
+              target: f.target,
+            })
+      ),
     };
   }
   if (action === 'ethylene_safety_unstick_pulse') {
     const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
-    const effective = String(ev.effective ?? detail.effective ?? '—');
-    const target = String(ev.target ?? detail.target ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const effective = String(ev.effective ?? detail.effective ?? f.reading);
+    const target = String(ev.target ?? detail.target ?? f.target);
     return {
       kind,
       description: t('log_ctrl_ethylene_safety_pulse'),
-      reason:
-        analysisEs ||
-        t('log_ctrl_reason_ethylene_safety_pulse', { effective, target }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_poll_client', { target: f.target })
+          : t('log_ctrl_reason_ethylene_safety_pulse', { effective, target })
+      ),
     };
   }
   if (action === 'ethylene_safety_emergency_vent') {
     const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
-    const effective = String(ev.effective ?? detail.effective ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    const effective = String(ev.effective ?? detail.effective ?? f.reading);
     return {
       kind,
       description: t('log_ctrl_ethylene_safety_vent'),
-      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_vent', { effective }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t('log_ctrl_reason_ethylene_poll_client', { target: f.target })
+          : t('log_ctrl_reason_ethylene_safety_vent', { effective })
+      ),
     };
   }
   if (action === 'ethylene_safety_vent_end') {
@@ -1027,7 +1112,18 @@ export function summarizeProcessEventParts(
     return {
       kind,
       description: t('log_ctrl_ethylene_safety_vent_end'),
-      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_vent_end'),
+      reason: ethyleneReasonText(clientSafe, analysisEs, t('log_ctrl_reason_ethylene_safety_vent_end')),
+    };
+  }
+  if (action === 'ethylene_safety_consult_null') {
+    const last = String(ev.lastKnownReading ?? detail.lastKnownReading ?? '—');
+    const f = ethyleneDecisionFields(ev, detail, displayOpts);
+    return {
+      kind,
+      description: t('log_ctrl_ethylene_safety_consult_null'),
+      reason: clientSafe
+        ? t('log_ctrl_reason_ethylene_poll_client', { target: f.target })
+        : t('log_ctrl_reason_ethylene_safety_consult_null', { last }),
     };
   }
   if (action === 'ethylene_safety_cleared') {
@@ -1035,14 +1131,16 @@ export function summarizeProcessEventParts(
     return {
       kind,
       description: t('log_ctrl_ethylene_safety_cleared'),
-      reason: analysisEs || t('log_ctrl_reason_ethylene_safety_cleared'),
+      reason: ethyleneReasonText(clientSafe, analysisEs, t('log_ctrl_reason_ethylene_safety_cleared')),
     };
   }
   if (action === 'ethylene_safety_pulse_error' || action === 'ethylene_safety_vent_error') {
     return {
       kind,
       description: t('log_ctrl_ethylene_safety_error'),
-      reason: String(ev.message ?? detail.message ?? ''),
+      reason: clientSafe
+        ? t('log_ctrl_reason_ethylene_poll_client', { target: '—' })
+        : String(ev.message ?? detail.message ?? ''),
     };
   }
   if (action === 'ethylene_poll' || action === 'poll_tipo0') {
@@ -1071,11 +1169,13 @@ export function summarizeProcessEventParts(
       description: clientSafe
         ? t('log_ctrl_ethylene_poll_client')
         : t('log_ctrl_ethylene_read_ignored_zero', { raw, effective: f.reading }),
-      reason: t('log_ctrl_reason_ethylene_read_ignored_zero', {
-        raw,
-        effective: f.reading,
-        target: f.target,
-      }),
+      reason: clientSafe
+        ? t('log_ctrl_reason_ethylene_poll_client', { target: f.target })
+        : t('log_ctrl_reason_ethylene_read_ignored_zero', {
+            raw,
+            effective: f.reading,
+            target: f.target,
+          }),
     };
   }
   if (action === 'ethylene_read' || action === 'read_ethylene_poll' || action === 'read_ethylene') {
@@ -1088,19 +1188,31 @@ export function summarizeProcessEventParts(
     const value = f.reading !== '—' ? f.reading : fmtPpmField(ev.value ?? detail.value);
     const isMonitor = ev.reason === 'steady_monitor' || detail.reason === 'steady_monitor';
     const inRange = ev.inRange === true || detail.inRange === true;
+    const analysisEs = String(ev.analysisEs ?? detail.analysisEs ?? '').trim();
     return {
       kind,
       description: clientSafe
         ? t('log_ctrl_ethylene_poll_client')
         : t('log_ctrl_ethylene_read', { value }),
-      reason: isMonitor
-        ? t(
-            inRange
-              ? 'log_ctrl_reason_ethylene_steady_read_ok'
-              : 'log_ctrl_reason_ethylene_steady_read_low',
-            { value, target: f.target }
-          )
-        : t('log_ctrl_reason_ethylene_read', { value, readings, target: f.target }),
+      reason: ethyleneReasonText(
+        clientSafe,
+        analysisEs,
+        clientSafe
+          ? t(
+              inRange
+                ? 'log_ctrl_reason_ethylene_steady_read_ok_client'
+                : 'log_ctrl_reason_ethylene_poll_client',
+              { value, target: f.target }
+            )
+          : isMonitor
+            ? t(
+                inRange
+                  ? 'log_ctrl_reason_ethylene_steady_read_ok'
+                  : 'log_ctrl_reason_ethylene_steady_read_low',
+                { value, target: f.target }
+              )
+            : t('log_ctrl_reason_ethylene_read', { value, readings, target: f.target })
+      ),
     };
   }
   if (action === 'send_ethylene') {
@@ -1110,8 +1222,13 @@ export function summarizeProcessEventParts(
       description: clientSafe
         ? t('log_ctrl_ethylene_inject_client', { dato: f.dato })
         : t('log_ctrl_ethylene_inject', { dato: f.dato }),
-      reason:
-        f.target !== '—' || f.reading !== '—'
+      reason: clientSafe
+        ? t('log_ctrl_reason_ethylene_inject_client', {
+            baseline: f.reading,
+            target: f.target,
+            dato: f.dato,
+          })
+        : f.target !== '—' || f.reading !== '—'
           ? t('log_ctrl_reason_ethylene_manual_detail', {
               dato: f.dato,
               reading: f.reading,
@@ -1132,10 +1249,15 @@ export function summarizeProcessEventParts(
       return {
         kind,
         description: clientSafe ? t('log_ctrl_ethylene_skip_client') : t('log_ctrl_ethylene_skip'),
-        reason: t('log_ctrl_reason_ethylene_at_target', {
-          baseline: f.baseline !== '—' ? f.baseline : f.reading,
-          target: f.target,
-        }),
+        reason: clientSafe
+          ? t('log_ctrl_reason_ethylene_skip_client', {
+              baseline: f.baseline !== '—' ? f.baseline : f.reading,
+              target: f.target,
+            })
+          : t('log_ctrl_reason_ethylene_at_target', {
+              baseline: f.baseline !== '—' ? f.baseline : f.reading,
+              target: f.target,
+            }),
       };
     }
     return {
@@ -1445,7 +1567,10 @@ export function processAutomationPhaseLabel(
   if (auto.interventionActive) return t('log_ctrl_intervention_mode');
   const safety = auto.ethyleneSafety as { phase?: string } | null | undefined;
   if (safety?.phase === 'ventilate') return t('log_ctrl_ethylene_safety_phase_vent');
-  if (safety?.phase === 'watch_rise') return t('log_ctrl_ethylene_safety_phase_watch');
+  if (safety?.phase === 'consult' || safety?.phase === 'watch_rise') {
+    return t('log_ctrl_ethylene_safety_phase_watch');
+  }
+  if (safety?.phase === 'hold_no_inject') return t('log_ctrl_ethylene_safety_phase_hold');
   const phase = String(auto.phase ?? '');
   const mode = String(auto.mode ?? '');
   const tunnel = isGourmetTunnelAggregateDeviceId(deviceId);

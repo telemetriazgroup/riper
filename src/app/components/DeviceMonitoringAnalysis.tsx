@@ -60,9 +60,15 @@ import {
 import { inferCurrentNextPhase, mapRowToProcessView } from '@/app/lib/ripeningProcessMappers';
 import { getStoredUser } from '@/app/lib/auth';
 import { canRegisterRipeningSampling } from '@/app/lib/permissions';
-import { postRipeningSampling, fetchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
+import { postRipeningSampling, fetchRipeningProcess, patchRipeningProcess } from '@/app/lib/ripeningProcessesApi';
 import { RipeningSamplingModal, type SamplingType, type SamplingParameter } from '@/app/components/RipeningSamplingModal';
 import { toast } from 'sonner';
+import {
+  applyEthyleneDisplayPolicyToHistory,
+  isUnfilteredEthyleneViewer,
+} from '@/app/lib/ethyleneDisplayPolicy';
+import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
+import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 
 interface DeviceMonitoringAnalysisProps {
   deviceId: string;
@@ -108,6 +114,12 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
   const [chartTab, setChartTab] = useState<'environment' | 'gases'>('environment');
   const [samplingModalOpen, setSamplingModalOpen] = useState(false);
   const [samplingSaving, setSamplingSaving] = useState(false);
+  const canToggleEthyleneView = isUnfilteredEthyleneViewer();
+  /** Vista gráfica: admin ve crudo por defecto; cliente siempre regulado si faultless activo. */
+  const [previewAsClient, setPreviewAsClient] = useState(!canToggleEthyleneView);
+  const [faultlessBusy, setFaultlessBusy] = useState(false);
+  const { session: panelSession } = useDeviceControlSession(deviceId);
+  const { sessions: controlSessions } = useControlSessionsList(false);
 
   const canRegisterSampling =
     activeTracking?.process?.status === 'active' && canRegisterRipeningSampling();
@@ -166,15 +178,40 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
 
   const pruebaCaMonitoring = isPruebaCaMonitoringDevice(trackingDeviceId);
 
+  const faultlessEnabledForClient = useMemo(() => {
+    const flag = (activeTracking?.process?.payload as { ethyleneClientDisplay?: { faultlessEnabled?: boolean } } | undefined)
+      ?.ethyleneClientDisplay?.faultlessEnabled;
+    return flag !== false;
+  }, [activeTracking?.process?.payload]);
+
+  const showClientEthylene =
+    !canToggleEthyleneView || previewAsClient
+      ? faultlessEnabledForClient
+      : false;
+
   const chartRows = useMemo(() => {
     const pts = rangoData?.points ?? [];
     if (!pts.length) return [];
+
+    const clientPts = applyEthyleneDisplayPolicyToHistory(pts, {
+      deviceId,
+      trackingProcess: activeTracking?.process ?? null,
+      panelActiveSession: panelSession,
+      sessions: controlSessions,
+      view: { viewAsClient: true },
+    });
+
     const tempPulp = pts.map((p: HistoryPoint) => chartNullIfZero(p.return_air));
     const tempAir = pts.map((p: HistoryPoint) => chartNullIfZero(p.temp_supply_1));
     const rawEth = pts.map((p: HistoryPoint) => p.ethylene);
-    const eth = pruebaCaMonitoring
+    const clientEth = clientPts.map((p) => p.ethylene);
+    const ethRawSan = pruebaCaMonitoring
       ? clampPruebaCaEthyleneSeries(rawEth)
       : sanitizeEthylenePpmSeries(rawEth);
+    const ethClientSan = pruebaCaMonitoring
+      ? clampPruebaCaEthyleneSeries(clientEth)
+      : sanitizeEthylenePpmSeries(clientEth);
+    const ethShown = showClientEthylene ? ethClientSan : ethRawSan;
     const co2San = sanitizeCo2PercentSeries(pts.map((p: HistoryPoint) => p.co2_reading));
     const co2 = co2San.map((v) => (v === 0 ? null : v));
     const o2 = pts.map((p: HistoryPoint) => chartNullIfZero(p.o2_reading));
@@ -183,11 +220,102 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
       ts: p.timestamp,
       temp_pulp: tempPulp[i],
       temp_air: tempAir[i],
-      ethylene: eth[i],
+      ethylene: ethShown[i],
+      ethylene_raw: ethRawSan[i],
+      ethylene_client: ethClientSan[i],
       co2: co2[i],
       o2: o2[i],
     }));
-  }, [rangoData?.points, pruebaCaMonitoring, displayTimeZone, language]);
+  }, [
+    rangoData?.points,
+    pruebaCaMonitoring,
+    displayTimeZone,
+    language,
+    deviceId,
+    activeTracking?.process,
+    panelSession,
+    controlSessions,
+    showClientEthylene,
+  ]);
+
+  const persistDualSeriesForReport = React.useCallback(async () => {
+    const proc = activeTracking?.process;
+    if (!proc?.id || !chartRows.length) return;
+    const dual = chartRows
+      .filter((r) => r.ethylene_raw != null || r.ethylene_client != null)
+      .map((r) => ({
+        at: r.ts,
+        ethylene_raw: r.ethylene_raw ?? null,
+        ethylene_client: r.ethylene_client ?? null,
+      }));
+    // Muestrear para no inflar el payload (máx ~400 puntos).
+    const step = Math.max(1, Math.ceil(dual.length / 400));
+    const sampled = dual.filter((_, i) => i % step === 0);
+    try {
+      const prev = (proc.payload && typeof proc.payload === 'object' ? proc.payload : {}) as Record<
+        string,
+        unknown
+      >;
+      const prevDisp =
+        prev.ethyleneClientDisplay && typeof prev.ethyleneClientDisplay === 'object'
+          ? (prev.ethyleneClientDisplay as Record<string, unknown>)
+          : {};
+      await patchRipeningProcess(proc.id, {
+        payload: {
+          ...prev,
+          ethyleneClientDisplay: {
+            ...prevDisp,
+            faultlessEnabled: faultlessEnabledForClient,
+            dualSeriesUpdatedAt: new Date().toISOString(),
+            dualSeries: sampled,
+          },
+        },
+      });
+      await mutateTracking();
+    } catch {
+      /* no bloquear UI */
+    }
+  }, [activeTracking?.process, chartRows, faultlessEnabledForClient, mutateTracking]);
+
+  React.useEffect(() => {
+    if (!chartRows.length || !activeTracking?.process?.id) return;
+    const t = window.setTimeout(() => void persistDualSeriesForReport(), 2500);
+    return () => window.clearTimeout(t);
+  }, [chartRows.length, activeTracking?.process?.id, persistDualSeriesForReport]);
+
+  const onToggleFaultlessForClient = async (enabled: boolean) => {
+    const proc = activeTracking?.process;
+    if (!proc?.id) return;
+    setFaultlessBusy(true);
+    try {
+      const prev = (proc.payload && typeof proc.payload === 'object' ? proc.payload : {}) as Record<
+        string,
+        unknown
+      >;
+      const prevDisp =
+        prev.ethyleneClientDisplay && typeof prev.ethyleneClientDisplay === 'object'
+          ? (prev.ethyleneClientDisplay as Record<string, unknown>)
+          : {};
+      await patchRipeningProcess(proc.id, {
+        payload: {
+          ...prev,
+          ethyleneClientDisplay: {
+            ...prevDisp,
+            faultlessEnabled: enabled,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      });
+      await mutateTracking();
+      toast.success(
+        enabled ? t('detail_monitoring_faultless_on') : t('detail_monitoring_faultless_off')
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setFaultlessBusy(false);
+    }
+  };
 
   const metrics = useMemo(() => {
     const raw = rangoData?.rawDatos;
@@ -397,29 +525,67 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
 
       {/* Gráficas */}
       <Card className="border-gray-200 shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2">
           <CardTitle className="text-lg text-gray-800">{t('detail_monitoring_evolution_title')}</CardTitle>
-          <div className="flex bg-gray-100 p-1 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setChartTab('environment')}
-              className={clsx(
-                'px-3 py-1 text-xs font-medium rounded-md transition-all',
-                chartTab === 'environment' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
-              )}
-            >
-              {t('detail_monitoring_charts_env')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setChartTab('gases')}
-              className={clsx(
-                'px-3 py-1 text-xs font-medium rounded-md transition-all',
-                chartTab === 'gases' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
-              )}
-            >
-              {t('detail_monitoring_charts_gas')}
-            </button>
+          <div className="flex flex-wrap items-center gap-2 justify-end">
+            {canToggleEthyleneView && (
+              <>
+                <div className="flex bg-slate-100 p-0.5 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAsClient(false)}
+                    className={clsx(
+                      'px-2.5 py-1 text-[11px] font-medium rounded-md transition-all',
+                      !previewAsClient ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                    )}
+                  >
+                    {t('detail_monitoring_view_admin')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewAsClient(true)}
+                    className={clsx(
+                      'px-2.5 py-1 text-[11px] font-medium rounded-md transition-all',
+                      previewAsClient ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+                    )}
+                  >
+                    {t('detail_monitoring_view_client')}
+                  </button>
+                </div>
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300"
+                    checked={faultlessEnabledForClient}
+                    disabled={faultlessBusy || !activeTracking?.process?.id}
+                    onChange={(e) => void onToggleFaultlessForClient(e.target.checked)}
+                  />
+                  {t('detail_monitoring_faultless_toggle')}
+                </label>
+              </>
+            )}
+            <div className="flex bg-gray-100 p-1 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setChartTab('environment')}
+                className={clsx(
+                  'px-3 py-1 text-xs font-medium rounded-md transition-all',
+                  chartTab === 'environment' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
+                )}
+              >
+                {t('detail_monitoring_charts_env')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChartTab('gases')}
+                className={clsx(
+                  'px-3 py-1 text-xs font-medium rounded-md transition-all',
+                  chartTab === 'gases' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500'
+                )}
+              >
+                {t('detail_monitoring_charts_gas')}
+              </button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

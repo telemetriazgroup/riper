@@ -102,11 +102,47 @@ function latestBatchJobs(jobs: TunnelCommandJob[]): TunnelCommandJob[] {
   return jobs.filter((j) => j.batch_id === batchId);
 }
 
+const MANUAL_STATUS_VISIBLE_MS = 24 * 60 * 60 * 1000;
+
+function jobTimestampMs(job: TunnelCommandJob): number {
+  const raw = job.completed_at || job.updated_at || job.created_at;
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function isJobActive(job: TunnelCommandJob): boolean {
+  return ['pending', 'sent', 'verifying', 'waiting'].includes(job.status);
+}
+
+/**
+ * Barra de control manual:
+ * - Si hay jobs en curso → todo el lote.
+ * - Si falló → solo el último evento fallido.
+ * - Si el lote ya tiene >24 h → no mostrar (queda en histórico).
+ */
+function jobsForManualStatusBar(jobs: TunnelCommandJob[], nowMs = Date.now()): TunnelCommandJob[] {
+  const latest = latestBatchJobs(jobs);
+  if (latest.length === 0) return [];
+
+  if (latest.some(isJobActive)) return latest;
+
+  const newestMs = Math.max(...latest.map(jobTimestampMs));
+  if (!newestMs || nowMs - newestMs > MANUAL_STATUS_VISIBLE_MS) return [];
+
+  const failed = latest
+    .filter((j) => j.status === 'failed' || j.status === 'cancelled')
+    .sort((a, b) => jobTimestampMs(b) - jobTimestampMs(a));
+
+  if (failed.length > 0) return [failed[0]];
+
+  return latest;
+}
+
 export const TunnelCommandCompliancePanel: React.FC<Props> = ({ deviceId }) => {
   const { t, formatTemp, formatDateTime } = useSettings();
   const { jobs, isLoading, error, refresh, hasActive } = useTunnelCommandJobs(deviceId, true);
 
-  const latestJobs = useMemo(() => latestBatchJobs(jobs), [jobs]);
+  const latestJobs = useMemo(() => jobsForManualStatusBar(jobs), [jobs]);
 
   if (isLoading && jobs.length === 0) {
     return (

@@ -224,8 +224,16 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
   }
 
   const isManualSession = session?.process_type === 'Manual';
+  const manualSessionStale =
+    isManualSession &&
+    session?.status !== 'active' &&
+    (() => {
+      const raw = session?.updated_at || session?.started_at || session?.created_at;
+      const ts = raw ? new Date(raw).getTime() : NaN;
+      return !Number.isFinite(ts) || Date.now() - ts > 24 * 60 * 60 * 1000;
+    })();
   const showSession =
-    Boolean(session) && (session!.status === 'active' || isManualSession);
+    Boolean(session) && !manualSessionStale && (session!.status === 'active' || isManualSession);
 
   if (!showSession) {
     return (
@@ -339,7 +347,9 @@ export const DeviceControlProcessPanel: React.FC<Props> = ({ deviceId }) => {
             <p className="text-xs text-rose-900/80 dark:text-rose-100/80 mt-1 leading-relaxed">
               {ethyleneSafety?.phase === 'ventilate'
                 ? t('ethylene_safety_banner_vent')
-                : t('ethylene_safety_banner_watch')}
+                : ethyleneSafety?.phase === 'hold_no_inject'
+                  ? t('ethylene_safety_banner_hold')
+                  : t('ethylene_safety_banner_watch')}
             </p>
           </div>
         )}

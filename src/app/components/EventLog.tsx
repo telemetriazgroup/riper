@@ -23,7 +23,7 @@ import {
   processActionLogEntriesFromBitacora,
   processActionLogEntriesFromTracking,
 } from '@/app/lib/controlProcessDisplay';
-import { resolveEthyleneDisplayTargetPpm } from '@/app/lib/ethyleneDisplayPolicy';
+import { resolveEthyleneDisplayTargetPpm, isUnfilteredEthyleneViewer } from '@/app/lib/ethyleneDisplayPolicy';
 
 interface EventLogProps {
   deviceId: string;
@@ -117,6 +117,9 @@ function ControlKindBadge({ kind, t }: { kind: EventKind; t: (k: string) => stri
 export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
   const { t, formatTemp, formatDateTime } = useSettings();
   const [filter, setFilter] = useState<'all' | 'control' | 'samplings'>('all');
+  /** Superadmin: por defecto ve crudo; puede simular vista cliente. */
+  const canToggleClientView = isUnfilteredEthyleneViewer();
+  const [viewAsClient, setViewAsClient] = useState(!canToggleClientView);
   const { sessions } = useControlSessionsList(false);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
   const { rows: bitacoraRows } = useDeviceBitacora(deviceId, BITACORA_LIVE_HOURS);
@@ -137,14 +140,15 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
     [deviceId, activeTracking?.process, panelActiveSession, sessions]
   );
 
+  const clientFacing = !canToggleClientView || viewAsClient;
   const clientLogDisplayOpts = useMemo(
     () => ({
-      clientSafe: true,
-      clientFacingLog: true,
+      clientSafe: clientFacing,
+      clientFacingLog: clientFacing,
       programmedEthyleneTarget,
       deviceId,
     }),
-    [programmedEthyleneTarget, deviceId]
+    [clientFacing, programmedEthyleneTarget, deviceId]
   );
 
   /** Lifecycle (start/cancel/complete) desde sesiones slim; eventos de acción desde bitácora. */
@@ -222,7 +226,18 @@ export const EventLog: React.FC<EventLogProps> = ({ deviceId }) => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {canToggleClientView && (
+              <label className="inline-flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none mr-1">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300"
+                  checked={viewAsClient}
+                  onChange={(e) => setViewAsClient(e.target.checked)}
+                />
+                {t('telemetry_view_as_client')}
+              </label>
+            )}
             <Filter className="h-4 w-4 text-gray-400" />
             <div className="flex rounded-lg border border-gray-200 overflow-hidden">
               {(['all', 'control', 'samplings'] as const).map((f) => (

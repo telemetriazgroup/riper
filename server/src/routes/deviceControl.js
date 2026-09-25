@@ -69,7 +69,7 @@ deviceControlRouter.get('/active', async (req, res) => {
     }
     const linkedIds = gourmetLinkedDeviceIds(deviceId);
     const ids = linkedIds.length ? linkedIds : [deviceId];
-    /** Prioriza proceso de panel activo (no Manual); si no hay, Manual activo; si no, último Manual. */
+    /** Prioriza proceso de panel activo (no Manual); si no hay, Manual activo; si no, último Manual (<24 h). */
     const { rows } = await pool.query(
       `SELECT s.*, u.name AS user_name, u.email AS user_email,
               uc.name AS cancelled_by_name, uc.email AS cancelled_by_email
@@ -79,7 +79,10 @@ deviceControlRouter.get('/active', async (req, res) => {
        WHERE s.device_id = ANY($1::text[]) AND s.archived_at IS NULL
          AND (
            s.status = 'active'
-           OR s.process_type = 'Manual'
+           OR (
+             s.process_type = 'Manual'
+             AND COALESCE(s.updated_at, s.started_at, s.created_at) > now() - interval '24 hours'
+           )
          )
        ORDER BY
          CASE

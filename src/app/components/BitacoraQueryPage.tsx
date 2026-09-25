@@ -10,6 +10,7 @@ import {
   type ControlBitacoraRow,
 } from '@/app/lib/controlBitacoraApi';
 import { processActionLogEntriesFromBitacora } from '@/app/lib/controlProcessDisplay';
+import { isUnfilteredEthyleneViewer } from '@/app/lib/ethyleneDisplayPolicy';
 
 function toLocalInputValue(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -42,11 +43,17 @@ export const BitacoraQueryPage: React.FC = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const [searched, setSearched] = useState(false);
+  const canToggleClientView = isUnfilteredEthyleneViewer();
+  const [viewAsClient, setViewAsClient] = useState(!canToggleClientView);
 
-  const displayOpts = useMemo(
-    () => ({ clientSafe: true, clientFacingLog: true, deviceId: deviceId.trim() }),
-    [deviceId]
-  );
+  const displayOpts = useMemo(() => {
+    const asClient = !canToggleClientView || viewAsClient;
+    return {
+      clientSafe: asClient,
+      clientFacingLog: asClient,
+      deviceId: deviceId.trim(),
+    };
+  }, [deviceId, canToggleClientView, viewAsClient]);
 
   const displayRows = useMemo(
     () => processActionLogEntriesFromBitacora(deviceId.trim() || '_', rows, t, formatTemp, displayOpts),
@@ -139,6 +146,17 @@ export const BitacoraQueryPage: React.FC = () => {
               <p className="text-sm text-slate-600 mt-1 max-w-2xl">{t('bitacora_query_subtitle')}</p>
             </div>
           </div>
+          {canToggleClientView && (
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none shrink-0">
+              <input
+                type="checkbox"
+                className="rounded border-slate-300"
+                checked={viewAsClient}
+                onChange={(e) => setViewAsClient(e.target.checked)}
+              />
+              {t('telemetry_view_as_client')}
+            </label>
+          )}
         </CardHeader>
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

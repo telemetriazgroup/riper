@@ -71,99 +71,58 @@ Umbrales existentes (útiles, no suficientes):
 
 ## 3. Comportamiento deseado (máquina de seguridad)
 
-### 3.1 Constantes propuestas
+### 3.1 Constantes
 
 ```text
-ETHYLENE_OVERSHOOT_RATIO     = 1.20      # 150 → dispara a ≥ 180
-ETHYLENE_STUCK_PULSE_DATO    = 1         # 1 s físico tipo 5
-ETHYLENE_STUCK_WATCH_MS      = 10 * 60s  # vigilar tendencia alcista
-ETHYLENE_RUNAWAY_PPM         = 270       # ventilación de emergencia
-ETHYLENE_VENT_AVL            = 200       # CFM durante emergencia
-ETHYLENE_VENT_DURATION_MS    = 15 * 60s
-# Salida de ventilación: lectura ≤ target * OVERSHOOT_RATIO (o ≤ target + margen)
+ETHYLENE_OVERSHOOT_RATIO       = 1.20   # +20% set → 1er pulso (150 → 180)
+ETHYLENE_OVERSHOOT_60_RATIO    = 1.60   # +60% set → 2º pulso
+ETHYLENE_OVERSHOOT_100_RATIO   = 2.00   # +100% set → 3er pulso
+ETHYLENE_HIGH_PULSE_PPM        = 400    # pulso extra si ya hubo +20% y +60%
+ETHYLENE_VENT_PPM              = 410    # ventilación de emergencia
+ETHYLENE_STUCK_PULSE_DATO      = 1      # 1 s físico tipo 5
+ETHYLENE_STUCK_WATCH_MS        = 20 min # modo consulta tras pulso
+ETHYLENE_SAFETY_POLL_MS        = 2 min  # ritmo de consulta
+ETHYLENE_VENT_AVL              = 200
+ETHYLENE_VENT_DURATION_MS      = 20 min
+ETHYLENE_DRASTIC_DROP_RATIO    = 0.5    # vs pico → reanudar inyección
 ```
 
 ### 3.2 Fases
 
 ```text
-                    ┌─────────────────────────────────────────┐
-  Ripening steady   │  NORMAL (tickEthyleneSteadyMonitor)     │
-                    └───────────────┬─────────────────────────┘
-                                    │ lectura > target × 1.20
-                                    │ (y hubo dosis reciente o tendencia post-dosis)
-                                    ▼
-                           ┌─────────────────┐
-                           │  PULSE_UNSTICK  │  tipo 5, dato=1 (físico)
-                           │  suspende dosis │
-                           └────────┬────────┘
-                                    │
-                                    ▼
-                           ┌─────────────────┐
-                           │  WATCH_RISE     │  hasta 10 min
-                           │  sin dosis      │  normales
-                           │  proporcionales │
-                           └────────┬────────┘
-                     tendencia↓ OK  │  sigue subiendo
-                     → NORMAL       │  desproporcionada
-                                    ▼
-                           otro PULSE_UNSTICK (1 s)
-                                    │
-                    lectura > 270 ──┼──────────────────┐
-                                    │                  ▼
-                                    │         ┌─────────────────┐
-                                    │         │  EMERGENCY_VENT │
-                                    │         │  AVL=200, 15 min│
-                                    │         │  (o hasta ≤120% │
-                                    │         │   del set)      │
-                                    │         └────────┬────────┘
-                                    │                  │
-                                    └──────────────────┘
-                                              ▼
-                                         NORMAL
+  NORMAL
+    │ lectura ≥ target × 1.20 (2 lecturas)
+    ▼
+  PULSE 1 s ──► CONSULT 20 min (poll 2 min; tolerar lectura nula)
+    │              ├ ≥ target×1.60 → otro pulso
+    │              ├ ≥ target×2.00 → otro pulso
+    │              ├ ≥ 400 y ya hubo +20%/+60% → otro pulso
+    │              └ ≥ 410 → VENT AVL 200 × 20 min
+    │                         ├ < 400: sin pulsos
+    │                         └ vuelve ≥ 400: pulso 1 s
+    ▼
+  HOLD (sin reinfiltración) hasta caída brusca (puerta)
+    └ drastic drop → NORMAL
 ```
 
 ### 3.3 Reglas detalladas
 
-**A) Entrada a seguridad (overshoot)**
+**A) Entrada (+20 %)**  
+`effective >= target * 1.20` (2 lecturas) → pulso físico `tipo 5 dato=1`, suspende dosis normal, `phase=consult` 20 min.
 
-- Condición: `effective >= target * 1.20`  
-  (ej. set 150 → umbral 180).  
-- Preferible exigir: existe `lastDoseAt` en la sesión **o** subida clara desde la última dosis sin nuevo comando (el síntoma del relé pegado).  
-- Acción inmediata:
-  1. Marcar `auto.ethyleneSafety.phase = 'pulse'`.  
-  2. **No** enviar dosis proporcionales/normales.  
-  3. Enviar **pulso físico** `tipo=5, dato=1` (bypass multiplier).  
-  4. Bitácora: `ethylene_safety_unstick_pulse` + lectura/set.  
-  5. Pasar a `watch_rise` con `watchUntil = now + 10 min`, guardar `readingAtPulse`.
+**B) Consulta 20 min / cada 2 min**  
+Prioridad a obtener lectura. Si nula: conservar `lastKnownReading` y bitácora `ethylene_safety_consult_null`.  
+Escalada: +60 % → pulso; +100 % → pulso; ≥400 con hit20+hit60 → pulso.  
+Si se estabiliza bajo +20 % sin escalar → NORMAL.
 
-**B) Vigilancia 10 minutos**
+**C) Ventilación ≥ 410**  
+AVL 200 por 20 min. Durante vent: sin pulso si &lt; 400; si vuelve ≥ 400 → pulso 1 s. Al terminar → `hold_no_inject`.
 
-- En cada tick de etileno (o poll más frecuente, p. ej. 1–2 min mientras safety activo):
-  - Si `effective` **baja o se estabiliza** hacia el set → salir a NORMAL.  
-  - Si **sigue alcista de forma desproporcionada** (ej. Δ ≥ +X ppm desde `readingAtPulse`, o sigue > target×1.20 y pendiente positiva) → otro pulso de 1 s y reiniciar reloj de 10 min (con tope de pulsos, p. ej. 3, para no martillar el relé).  
-- Mientras tanto: **suspendido** el control normal de etileno (no `computeProportionalEthyleneDose`).
+**D) Hold / no reinfiltración**  
+Tras saturación contenida no se vuelve a inyectar (la fruta consume el exceso). Solo se reanuda si hay **caída brusca** (p. ej. ≤ 50 % del pico o bajo el set tras saturación).
 
-**C) Emergencia ≥ 270 ppm**
-
-- Si en cualquier fase `effective > 270` (o ≥ 270):
-  1. `phase = 'ventilate'`.  
-  2. Enviar **AVL = 200** (tipo 6) a las unidades del adapter.  
-  3. `ventUntil = now + 15 min`.  
-  4. Bitácora: `ethylene_safety_emergency_vent`.  
-  5. Poll cada 1–2 min; **no** inyectar etileno.  
-  6. Salida cuando:
-     - `effective <= target * 1.20` **y** (opcional) `now >= ventUntil`, **o**  
-     - `now >= ventUntil` y lectura ya bajó de 270 con tendencia no alcista.  
-  7. Restaurar AVL al valor de proceso / steady (si había política de ventilación Ripening) y volver a NORMAL.
-
-**D) Prioridad**
-
-```text
-EMERGENCY_VENT  >  PULSE/WATCH  >  dosificación normal  >  otros ajustes etileno
-```
-
-Cooling intervention / StopPlan: si el proceso no es Ripening, este módulo **no aplica**.  
-Si hay `interventionActive` en Cooling, no mezclar.
+**E) Prioridad**  
+`VENT (≥410) > pulsos de escalada > consulta > dosificación normal`
 
 ---
 
@@ -276,13 +235,13 @@ Orden recomendado: **G0 → G1 → G2 → G3** (mínimo viable de seguridad); lu
 
 ## 8. Criterios de aceptación
 
-- [x] Con set 150, si `campo_1` efectivo ≥ 180 tras una dosis, se envía **un** comando tipo 5 con **dato físico 1** y se deja de dosificar en modo normal.  
-- [x] Si en los siguientes 10 min la lectura sigue subiendo sin nuevos comandos de dosis normal, se repite el pulso 1 s (con tope de repeticiones).  
-- [x] Si la lectura supera **270**, se abre ventilación AVL **200** ~15 min (o hasta bajar a ≤ 120 % del set) y no se inyecta etileno.  
-- [x] Al estabilizar, el control Ripening normal se reanuda sin reiniciar el proceso completo.  
-- [x] Eventos visibles en bitácora; operador ve aviso en UI.  
-- [x] Spikes de un solo punto (sensor) no disparan ventilación de 15 min (doble confirmación).  
-- [x] Multiplier del equipo **no** alarga el pulso de seguridad a N segundos.
+- [x] Con set 150, si efectivo ≥ 180 → pulso tipo 5 **dato físico 1** y consulta 20 min / 2 min.  
+- [x] Escalada +60 % / +100 % / ≥400 (tras 20 %+60 %) → pulsos adicionales.  
+- [x] Si lectura ≥ **410** → ventilación AVL **200** ~20 min; &lt;400 sin pulso; vuelve ≥400 → pulso.  
+- [x] Tras saturación: **hold** sin reinfiltración hasta caída brusca.  
+- [x] Lectura nula en consulta: se conserva último valor conocido + evento bitácora.  
+- [x] Spikes de un solo punto no disparan el primer pulso (doble confirmación).  
+- [x] Multiplier del equipo **no** alarga el pulso de seguridad.
 
 ---
 

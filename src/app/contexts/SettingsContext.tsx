@@ -324,6 +324,11 @@ const translations: Record<Language, Record<string, string>> = {
     'detail_monitoring_charts_env': 'Ambiente',
     'detail_monitoring_charts_gas': 'Gases',
     'detail_monitoring_evolution_title': 'Evolución de parámetros (seguimiento)',
+    'detail_monitoring_view_admin': 'Administrador',
+    'detail_monitoring_view_client': 'Cliente',
+    'detail_monitoring_faultless_toggle': 'Vista sin fallas al cliente',
+    'detail_monitoring_faultless_on': 'Vista sin fallas activada para el cliente',
+    'detail_monitoring_faultless_off': 'Vista sin fallas desactivada (cliente verá dato real)',
     'detail_monitoring_pulp': 'Temp. pulpa (return_air)',
     'detail_monitoring_air': 'Temp. aire (temp_supply_1)',
     'detail_monitoring_last_sampling': 'Último muestreo del seguimiento',
@@ -1232,19 +1237,25 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_safety_vent_end': 'Seguridad etileno: fin de ventilación de emergencia',
     'log_ctrl_ethylene_safety_cleared': 'Seguridad etileno: niveles estabilizados',
     'log_ctrl_ethylene_safety_error': 'Seguridad etileno: error de comando',
+    'log_ctrl_ethylene_safety_consult_null': 'Seguridad etileno: lectura nula en consulta',
     'log_ctrl_reason_ethylene_safety_pulse':
       'Lectura {{effective}} ppm > 120% del set {{target}} ppm → pulso físico 1 s para despegar relé.',
     'log_ctrl_reason_ethylene_safety_vent':
-      'Lectura {{effective}} ppm ≥ 270 → ventilación AVL 200 de emergencia.',
+      'Lectura {{effective}} ppm ≥ 410 → ventilación AVL 200 de emergencia (20 min).',
     'log_ctrl_reason_ethylene_safety_vent_end': 'Fin de la ventilación de emergencia por etileno.',
     'log_ctrl_reason_ethylene_safety_cleared': 'Se reanuda el control normal de etileno.',
-    'log_ctrl_ethylene_safety_phase_watch': 'Seguridad etileno (vigilancia)',
-    'log_ctrl_ethylene_safety_phase_vent': 'Seguridad etileno (ventilación)',
+    'log_ctrl_reason_ethylene_safety_consult_null':
+      'Sensor sin dato en consulta; último valor conocido {{last}} ppm. Se sigue consultando cada 2 min.',
+    'log_ctrl_ethylene_safety_phase_watch': 'Seguridad etileno (consulta 20 min)',
+    'log_ctrl_ethylene_safety_phase_vent': 'Seguridad etileno (ventilación 20 min)',
+    'log_ctrl_ethylene_safety_phase_hold': 'Seguridad etileno (sin reinfiltración)',
     'ethylene_safety_banner_title': 'Seguridad etileno activa',
     'ethylene_safety_banner_watch':
-      'Posible relé pegado: control de dosis normal suspendido. Vigilando tendencia ~10 min.',
+      'Posible relé pegado: dosis normal suspendida. Consulta cada 2 min durante ~20 min (+20% / +60% / +100% / 400 ppm).',
     'ethylene_safety_banner_vent':
-      'Lectura ≥ 270 ppm: ventilación de emergencia AVL 200. No se inyecta etileno.',
+      'Lectura ≥ 410 ppm: ventilación de emergencia AVL 200 (~20 min). Sin inyección salvo que vuelva ≥ 400.',
+    'ethylene_safety_banner_hold':
+      'Saturación contenida: no se reinyecta etileno hasta una caída brusca (p. ej. apertura de puerta).',
     'log_ctrl_reason_ethylene_inject_client':
       'Lectura {{baseline}} ppm < objetivo {{target}} ppm → se envía inyección con dato {{dato}}.',
     'log_ctrl_reason_ethylene_skip_client':
@@ -1321,6 +1332,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ethylene_steady_read': 'Lectura {{value}} ppm en monitoreo continuo. Objetivo {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_read_ok':
       'Lectura {{value}} ppm ≥ objetivo {{target}} ppm (−0.5) → en rango; no se requiere inyección.',
+    'log_ctrl_reason_ethylene_steady_read_ok_client':
+      'Lectura {{value}} ppm en objetivo {{target}} ppm; no se requiere inyección.',
     'log_ctrl_reason_ethylene_steady_read_low':
       'Lectura {{value}} ppm < objetivo {{target}} ppm → por debajo del control; se evalúa inyección.',
     'log_ctrl_reason_ethylene_read': 'Lectura {{value}} ppm (muestras: {{readings}}). Objetivo {{target}} ppm.',
@@ -1332,7 +1345,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_generic_data': 'Datos: {{data}}',
     'manual_control_logged': 'Cambios manuales registrados en Control de dispositivos.',
     'tunnel_cmd_states_title': 'Estado del control manual',
-    'tunnel_cmd_states_hint': 'Último envío. El historial completo está en Control de dispositivos.',
+    'tunnel_cmd_states_hint':
+      'Último envío (si falla, solo el último error; se oculta tras 24 h). Historial en Control de dispositivos.',
     'tunnel_cmd_pending': 'Pendiente',
     'tunnel_cmd_sent': 'Enviado',
     'tunnel_cmd_verifying': 'Verificando',
@@ -2024,6 +2038,11 @@ const translations: Record<Language, Record<string, string>> = {
     'detail_monitoring_charts_env': 'Environment',
     'detail_monitoring_charts_gas': 'Gases',
     'detail_monitoring_evolution_title': 'Parameter evolution (tracking)',
+    'detail_monitoring_view_admin': 'Administrator',
+    'detail_monitoring_view_client': 'Client',
+    'detail_monitoring_faultless_toggle': 'Faultless view for client',
+    'detail_monitoring_faultless_on': 'Faultless view enabled for the client',
+    'detail_monitoring_faultless_off': 'Faultless view disabled (client will see raw data)',
     'detail_monitoring_pulp': 'Pulp temp (return_air)',
     'detail_monitoring_air': 'Air temp (temp_supply_1)',
     'detail_monitoring_last_sampling': 'Last tracking sampling',
@@ -2932,19 +2951,25 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_ethylene_safety_vent_end': 'Ethylene safety: emergency ventilation ended',
     'log_ctrl_ethylene_safety_cleared': 'Ethylene safety: levels stabilized',
     'log_ctrl_ethylene_safety_error': 'Ethylene safety: command error',
+    'log_ctrl_ethylene_safety_consult_null': 'Ethylene safety: null reading during consult',
     'log_ctrl_reason_ethylene_safety_pulse':
       'Reading {{effective}} ppm > 120% of set {{target}} ppm → physical 1 s pulse to unstick relay.',
     'log_ctrl_reason_ethylene_safety_vent':
-      'Reading {{effective}} ppm ≥ 270 → emergency AVL 200 ventilation.',
+      'Reading {{effective}} ppm ≥ 410 → emergency AVL 200 ventilation (20 min).',
     'log_ctrl_reason_ethylene_safety_vent_end': 'End of ethylene emergency ventilation.',
     'log_ctrl_reason_ethylene_safety_cleared': 'Normal ethylene control resumed.',
-    'log_ctrl_ethylene_safety_phase_watch': 'Ethylene safety (watch)',
-    'log_ctrl_ethylene_safety_phase_vent': 'Ethylene safety (ventilate)',
+    'log_ctrl_reason_ethylene_safety_consult_null':
+      'No sensor reading during consult; last known {{last}} ppm. Still polling every 2 min.',
+    'log_ctrl_ethylene_safety_phase_watch': 'Ethylene safety (20 min consult)',
+    'log_ctrl_ethylene_safety_phase_vent': 'Ethylene safety (20 min ventilate)',
+    'log_ctrl_ethylene_safety_phase_hold': 'Ethylene safety (no reinjection)',
     'ethylene_safety_banner_title': 'Ethylene safety active',
     'ethylene_safety_banner_watch':
-      'Possible stuck relay: normal dosing suspended. Watching trend ~10 min.',
+      'Possible stuck relay: normal dosing suspended. Consult every 2 min for ~20 min (+20% / +60% / +100% / 400 ppm).',
     'ethylene_safety_banner_vent':
-      'Reading ≥ 270 ppm: emergency AVL 200 ventilation. Ethylene injection blocked.',
+      'Reading ≥ 410 ppm: emergency AVL 200 (~20 min). No injection unless it returns ≥ 400.',
+    'ethylene_safety_banner_hold':
+      'Saturation contained: no ethylene reinjection until a drastic drop (e.g. door opening).',
     'log_ctrl_reason_ethylene_inject_client':
       'Reading {{baseline}} ppm < control target {{target}} ppm → injection sent with value {{dato}}.',
     'log_ctrl_reason_ethylene_skip_client':
@@ -3021,6 +3046,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_ethylene_steady_read': 'Reading {{value}} ppm during continuous monitor. Target {{target}} ppm.',
     'log_ctrl_reason_ethylene_steady_read_ok':
       'Reading {{value}} ppm ≥ target {{target}} ppm (−0.5) → in range; no injection needed.',
+    'log_ctrl_reason_ethylene_steady_read_ok_client':
+      'Reading {{value}} ppm at target {{target}} ppm; no injection needed.',
     'log_ctrl_reason_ethylene_steady_read_low':
       'Reading {{value}} ppm < target {{target}} ppm → below control; injection will be evaluated.',
     'log_ctrl_reason_ethylene_read': 'Reading {{value}} ppm (samples: {{readings}}). Target {{target}} ppm.',
@@ -3032,7 +3059,8 @@ const translations: Record<Language, Record<string, string>> = {
     'log_ctrl_reason_generic_data': 'Data: {{data}}',
     'manual_control_logged': 'Manual changes saved to Device Control.',
     'tunnel_cmd_states_title': 'Manual control status',
-    'tunnel_cmd_states_hint': 'Latest send. Full history is in Device Control.',
+    'tunnel_cmd_states_hint':
+      'Latest send (on failure, only the last error; hidden after 24 h). Full history is in Device Control.',
     'tunnel_cmd_pending': 'Pending',
     'tunnel_cmd_sent': 'Sent',
     'tunnel_cmd_verifying': 'Verifying',
