@@ -20,7 +20,7 @@ import { cn } from '@/app/lib/utils';
 import { Button } from './ui/Button';
 import { useSettings } from '@/app/contexts/SettingsContext';
 import { isGourmetSession } from '@/app/lib/gourmet';
-import { isFleetDemoSession, isUltraorganicsSession, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, isThermoKingSession, isGreenyardSession, isBraedtSession } from '@/app/lib/fleetDemo';
 
 interface SidebarProps {
   activeView: string;
@@ -35,7 +35,12 @@ const ZTRACK_LOGO_SRC = `${import.meta.env.BASE_URL}ztrack-logo.png`;
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onChangeView, isOpen, onClose, onLogout }) => {
   const { t } = useSettings();
   const restrictedDemo =
-    isGourmetSession() || isFleetDemoSession() || isUltraorganicsSession() || isThermoKingSession() || isGreenyardSession();
+    isGourmetSession() ||
+    isFleetDemoSession() ||
+    isUltraorganicsSession() ||
+    isThermoKingSession() ||
+    isGreenyardSession() ||
+    isBraedtSession();
   const isSuperAdmin = getStoredUser()?.role === 'superadmin';
 
   const menuItems = [

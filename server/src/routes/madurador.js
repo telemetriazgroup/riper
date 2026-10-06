@@ -22,6 +22,10 @@ import {
   isDemoMaduradorFleetEmail,
   demoMaduradorEmpresaIdentificadores,
 } from '../demoMaduradorFleet.js';
+import {
+  braedtEmpresaIdentificador,
+  isBraedtFleetEmail,
+} from '../braedtFleet.js';
 import { sanitizeMaduradorRowAgainstZeroGlitch } from '../telemetrySanity.js';
 import {
   listRegistryPayloads,
@@ -142,17 +146,23 @@ function superadminEmpresa5001Identificador() {
 }
 
 /**
- * Empresas extra en fusión superadmin (default 6001,7001 — misma flota que demo-madurador).
+ * Empresas extra en fusión superadmin (default 6001,7001 — demo-madurador + BRAEDT).
  * `SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES=NONE` → no cargar.
+ * La empresa 7001 queda siempre incluida salvo que el env la omita explícitamente.
  */
 function superadminExtraEmpresaIdentificadores() {
   const raw = process.env.SUPERUSER_MADURADOR_EXTRA_EMPRESA_IDENTIFICADORES;
   const s = raw != null ? String(raw).trim() : '6001,7001';
   if (!s || s.toUpperCase() === 'NONE') return [];
-  return s
+  const ids = s
     .split(/[,;\s]+/)
     .map((x) => String(x || '').trim())
     .filter((x) => x && x.toUpperCase() !== 'NONE' && x !== '0');
+  /** Garantiza flota BRAEDT (7001) visible para superadmin salvo override NONE arriba. */
+  if (!ids.includes('7001') && braedtEmpresaIdentificador() === '7001') {
+    ids.push('7001');
+  }
+  return ids;
 }
 
 /** Misma regla que el front (`fleetDemo`): recepción/operación/calidad/*.ultraorganics@riper.local */
@@ -376,6 +386,23 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
         return jsonDispositivosDegraded(res, { fleetKey: 'demo-madurador' }, 'upstream demo-madurador');
       }
       return jsonDispositivos(res, merged, { fleetKey: 'demo-madurador' });
+    }
+
+    if (isBraedtFleetEmail(email)) {
+      const braedtIdent = braedtEmpresaIdentificador();
+      const listBraedt = await fetchMaduradorDispositivosList(base, braedtIdent, ctrl);
+      if (listBraedt === null) {
+        console.error('[madurador] braedt upstream failed', braedtIdent);
+        return jsonDispositivosDegraded(
+          res,
+          { empresaIdentificador: braedtIdent, fleetKey: 'braedt' },
+          `upstream braedt ${braedtIdent}`
+        );
+      }
+      return jsonDispositivos(res, listBraedt, {
+        empresaIdentificador: braedtIdent,
+        fleetKey: 'braedt',
+      });
     }
 
     if (isUltraorganicsFleetEmail(email)) {

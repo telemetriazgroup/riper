@@ -9,6 +9,7 @@ import {
   isUltraorganicsFleetEmail,
   isUltraorganicsScopedDeviceId,
 } from '../ultraorganicsFleet.js';
+import { isBraedtControlSuspended, isBraedtFleetEmail } from '../braedtFleet.js';
 import { isAutomatedControlDeviceId } from '../processControlAdapter.js';
 import {
   createTunnelCommandJobs,
@@ -26,6 +27,7 @@ function isViewer(req) {
 
 function canUseTunnelCommands(req, deviceId) {
   if (isViewer(req)) return false;
+  if (isBraedtControlSuspended(req.user?.email)) return false;
   const email = req.user?.email;
   const id = String(deviceId || '').trim();
   if (!id) return false;
@@ -133,6 +135,12 @@ tunnelCommandsRouter.get('/', async (req, res) => {
     }
     if (deviceId && isGreenyardFleetEmail(email) && !isGreenyardDeviceId(deviceId)) {
       return res.status(403).json({ error: 'forbidden', message: 'device not in scope' });
+    }
+    if (deviceId && isBraedtFleetEmail(email) && isBraedtControlSuspended(email)) {
+      return res.status(403).json({
+        error: 'control_suspended',
+        message: 'Control suspendido para BRAEDT mientras se validan los equipos',
+      });
     }
     if (
       deviceId &&

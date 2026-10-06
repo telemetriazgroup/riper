@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { fetchDevices, fetchDevice, fetchDeviceHistory, type FetchHistoryOptions } from '@/app/lib/api';
 import { Device } from '@/app/data';
 import { isGourmetSession } from '@/app/lib/gourmet';
-import { isFleetDemoSession, isUltraorganicsSession, isThermoKingSession, isGreenyardSession } from '@/app/lib/fleetDemo';
+import { isFleetDemoSession, isUltraorganicsSession, isThermoKingSession, isGreenyardSession, isBraedtSession } from '@/app/lib/fleetDemo';
 import { getToken } from '@/app/lib/auth';
 import { devicesToProcessFollowPayload, syncDeviceProcessFollow } from '@/app/lib/deviceProcessFollowApi';
 import { getFleetListMeta } from '@/app/lib/fleetListMeta';
@@ -38,7 +38,8 @@ export function useDevices() {
     isGourmetSession() ||
     isUltraorganicsSession() ||
     isThermoKingSession() ||
-    isGreenyardSession();
+    isGreenyardSession() ||
+    isBraedtSession();
   const { data, error, isLoading, mutate } = useSWR<Device[]>(
     devicesSwrKey(),
     fetchDevices,
@@ -74,7 +75,8 @@ export function useDevice(id: string | null) {
     isGourmetSession() ||
     isUltraorganicsSession() ||
     isThermoKingSession() ||
-    isGreenyardSession();
+    isGreenyardSession() ||
+    isBraedtSession();
   const { data, error, isLoading, mutate } = useSWR<Device>(
     deviceSwrKey(id),
     () => fetchDevice(id!),

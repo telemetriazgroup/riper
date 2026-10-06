@@ -13,13 +13,19 @@ import {
   isUltraorganicsFleetEmail,
   isUltraorganicsScopedDeviceId,
 } from './ultraorganicsFleet.js';
+import {
+  filterRowsByBraedtDeviceIds,
+  isBraedtDeviceId,
+  isBraedtFleetEmail,
+} from './braedtFleet.js';
 
-/** Usuario demo con flota pin (Greenyard, Gourmet Trading, UltraOrganics). */
+/** Usuario demo con flota pin (Greenyard, Gourmet Trading, UltraOrganics, BRAEDT). */
 export function isPinnedFleetDemoEmail(email) {
   return (
     isGreenyardFleetEmail(email) ||
     isGourmetTradingFleetEmail(email) ||
-    isUltraorganicsFleetEmail(email)
+    isUltraorganicsFleetEmail(email) ||
+    isBraedtFleetEmail(email)
   );
 }
 
@@ -27,6 +33,7 @@ export function isPinnedFleetDeviceId(email, deviceId) {
   if (isGreenyardFleetEmail(email)) return isGreenyardDeviceId(deviceId);
   if (isGourmetTradingFleetEmail(email)) return isGourmetTunnelCommandDeviceId(deviceId);
   if (isUltraorganicsFleetEmail(email)) return isUltraorganicsScopedDeviceId(deviceId);
+  if (isBraedtFleetEmail(email)) return isBraedtDeviceId(deviceId);
   return true;
 }
 
@@ -34,6 +41,7 @@ export function filterRowsByPinnedFleetDeviceIds(email, rows, pickDeviceId) {
   if (isGreenyardFleetEmail(email)) return filterRowsByGreenyardDeviceIds(rows, pickDeviceId);
   if (isGourmetTradingFleetEmail(email)) return filterRowsByGourmetDeviceIds(rows, pickDeviceId);
   if (isUltraorganicsFleetEmail(email)) return filterRowsByUltraorganicsScope(rows, pickDeviceId);
+  if (isBraedtFleetEmail(email)) return filterRowsByBraedtDeviceIds(rows, pickDeviceId);
   return rows;
 }
 
@@ -42,7 +50,12 @@ export function isScopedRecipeDemoUser(req) {
   const role = req.user?.role;
   if (role === 'superadmin') return false;
   const email = req.user?.email;
-  return isGreenyardFleetEmail(email) || isGourmetTradingFleetEmail(email) || isUltraorganicsFleetEmail(email);
+  return (
+    isGreenyardFleetEmail(email) ||
+    isGourmetTradingFleetEmail(email) ||
+    isUltraorganicsFleetEmail(email) ||
+    isBraedtFleetEmail(email)
+  );
 }
 
 export function scopedRecipeSql(userIdParamIndex) {

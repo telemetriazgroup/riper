@@ -7,6 +7,48 @@ export const FLEET_DEMO_EMAIL = 'demo-flota@riper.local';
 /** Demo Madurador: empresas upstream 6001 + 7001 (lista completa vía /madurador/dispositivos). */
 export const DEMO_MADURADOR_EMAIL = 'demo-madurador@riper.local';
 
+/** BRAEDT: solo empresa Madurador 7001; control suspendido hasta validación. */
+export const BRAEDT_EMAIL = 'braedt@riper.local';
+
+export function braedtLoginEmail(): string {
+  const raw =
+    (typeof import.meta !== 'undefined' &&
+      ((import.meta as unknown as { env?: { VITE_BRAEDT_EMAIL?: string } }).env?.VITE_BRAEDT_EMAIL)) ||
+    BRAEDT_EMAIL;
+  return String(raw).trim().toLowerCase() || BRAEDT_EMAIL;
+}
+
+export function isBraedtFleetEmail(email: string | undefined | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === braedtLoginEmail();
+}
+
+export function isBraedtSession(): boolean {
+  try {
+    const u = getStoredUser();
+    return isBraedtFleetEmail(u?.email);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Control panel suspendido para BRAEDT (validación de equipos).
+ * Override front: `VITE_BRAEDT_CONTROL_ENABLED=1` (debe coincidir con servidor).
+ */
+export function isBraedtControlSuspended(): boolean {
+  if (!isBraedtSession()) return false;
+  const raw =
+    typeof import.meta !== 'undefined'
+      ? (import.meta as unknown as { env?: { VITE_BRAEDT_CONTROL_ENABLED?: string } }).env
+          ?.VITE_BRAEDT_CONTROL_ENABLED
+      : undefined;
+  if (raw != null && String(raw).trim() !== '') {
+    if (raw === '1' || /^true$/i.test(String(raw).trim())) return false;
+  }
+  return true;
+}
+
 export function isDemoMaduradorSession(): boolean {
   const email = (getStoredUser()?.email ?? '').trim().toLowerCase();
   const envEmail =

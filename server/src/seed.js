@@ -289,6 +289,40 @@ export async function seedDemoMaduradorUser() {
   );
 }
 
+/**
+ * BRAEDT: solo equipos empresa Madurador 7001. Control suspendido hasta validación
+ * (`BRAEDT_CONTROL_ENABLED=1` para habilitar). Contraseña vía BRAEDT_PASSWORD.
+ */
+export async function seedBraedtUser() {
+  const email = String(process.env.BRAEDT_EMAIL || 'braedt@riper.local').trim().toLowerCase();
+  const ident = String(process.env.BRAEDT_IDENTIFICADOR || '7001').trim() || '7001';
+  const { rows } = await pool.query(
+    `SELECT id FROM app_users WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email]
+  );
+  if (rows.length === 0) {
+    const password = process.env.BRAEDT_PASSWORD || 'braedt2026!';
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query(
+      `INSERT INTO app_users (name, email, role, password_hash, company, is_superuser, active, identificador)
+       VALUES ($1, $2, 'admin', $3, 'BRAEDT', false, true, $4)`,
+      ['BRAEDT', email, hash, ident]
+    );
+    console.log(`[seed] BRAEDT user: ${email} (empresa ${ident}; control suspended; set BRAEDT_PASSWORD in production)`);
+  }
+
+  await pool.query(
+    `UPDATE app_users
+        SET identificador = $2,
+            role = 'admin',
+            company = 'BRAEDT',
+            active = true,
+            updated_at = now()
+      WHERE lower(email) = $1 AND deleted_at IS NULL`,
+    [email, ident]
+  );
+}
+
 /** ThermoKing: empresa 3001, un solo IMEI (`THERMOKING_DEVICE_IMEI`, por defecto PRUEBA_CA000001). Contraseña vía THERMOKING_PASSWORD. */
 export async function seedThermoKingUser() {
   const email = String(process.env.THERMOKING_EMAIL || 'thermoking@riper.local').trim().toLowerCase();

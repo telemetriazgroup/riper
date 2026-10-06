@@ -14,6 +14,7 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { isBraedtControlSuspended } from '../braedtFleet.js';
 import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { cancelActiveControlSessionsForDevice, kickTrackingControlForProcess } from '../ripeningTrackingControl.js';
 import {
@@ -438,6 +439,13 @@ ripeningProcessesRouter.post(
     if (isPinnedFleetDemoEmail(req.user?.email) && deviceId && !isPinnedFleetDeviceId(req.user?.email, deviceId)) {
       cleanupStaging();
       return res.status(403).json({ error: 'forbidden', message: 'device not in fleet scope' });
+    }
+    if (isBraedtControlSuspended(req.user?.email)) {
+      cleanupStaging();
+      return res.status(403).json({
+        error: 'control_suspended',
+        message: 'Control suspendido para BRAEDT mientras se validan los equipos',
+      });
     }
     const dataToStore = { ...data };
     delete dataToStore.replaceActiveProcess;

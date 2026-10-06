@@ -20,7 +20,8 @@ import { toast } from 'sonner';
 import { sendControlCommand } from '@/app/lib/api';
 import { applyTunnelManualCommands } from '@/app/lib/tunnelCommandsApi';
 import { isGourmetSession, isGourmetTunnelCommandDevice } from '@/app/lib/gourmet';
-import { isAutomatedControlDevice } from '@/app/lib/fleetDemo';
+import { isAutomatedControlDevice, isBraedtControlSuspended } from '@/app/lib/fleetDemo';
+import { canOperateDeviceControl } from '@/app/lib/permissions';
 import {
   cacheGourmetProgrammedEthylene,
   resolveGourmetProgrammedEthylenePpm,
@@ -38,7 +39,6 @@ import { revalidateControlSessionsList } from '@/app/hooks/useControlSessionsLis
 import { revalidateFleetActiveControlSessions } from '@/app/hooks/useFleetActiveControlMap';
 import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevice';
 import { isManualProcesoLabel, controlPanelTabFromProcessType } from '@/app/lib/madurador';
-import { canOperateDeviceControl } from '@/app/lib/permissions';
 import { isActivePanelProcess } from '@/app/lib/controlProcessDisplay';
 import { isFleetDegraded } from '@/app/lib/fleetListMeta';
 import { ActiveProcessProgrammedPanel } from '@/app/components/ActiveProcessProgrammedPanel';
@@ -110,7 +110,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
   const openStartFlow = (partial: ControlStartDraft) => {
     if (!deviceId) return;
     if (!canOperateDeviceControl()) {
-      toast.error(t('viewer_cannot_control_panel'));
+      toast.error(
+        isBraedtControlSuspended() ? t('braedt_control_suspended') : t('viewer_cannot_control_panel')
+      );
       return;
     }
     if (activePanelProcess) {
@@ -149,6 +151,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ mode, onChangeMode, 
 
   return (
     <Card className="h-full">
+      {isBraedtControlSuspended() ? (
+        <div className="px-4 py-2 border-b border-amber-200 bg-amber-50 text-xs text-amber-950 flex items-center gap-2">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          {t('braedt_control_suspended')}
+        </div>
+      ) : null}
       {fleetDegraded || isStandby ? (
         <div className="px-4 py-2 border-b border-amber-200 bg-amber-50 text-xs text-amber-950 flex items-center gap-2">
           <WifiOff className="h-3.5 w-3.5 shrink-0" />

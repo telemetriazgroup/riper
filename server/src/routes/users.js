@@ -48,12 +48,17 @@ function isGourmetTradingFleetEmail(email) {
 }
 
 /** Demo flotas restringidas: sin alta/baja/edición de usuarios ajenos. */
+function isBraedtFleetEmail(email) {
+  return normalizeEmail(email) === normalizeEmail(process.env.BRAEDT_EMAIL || 'braedt@riper.local');
+}
+
 function isDemoFleetRestricted(reqUserEmail) {
   return (
     isUltraorganicsFleetEmail(reqUserEmail) ||
     isThermoKingFleetEmail(reqUserEmail) ||
     isGreenyardFleetEmail(reqUserEmail) ||
-    isGourmetTradingFleetEmail(reqUserEmail)
+    isGourmetTradingFleetEmail(reqUserEmail) ||
+    isBraedtFleetEmail(reqUserEmail)
   );
 }
 

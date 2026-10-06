@@ -10,6 +10,7 @@ import {
   isPinnedFleetDeviceId,
   isPinnedFleetDemoEmail,
 } from '../demoFleetFilter.js';
+import { isBraedtControlSuspended } from '../braedtFleet.js';
 import { gourmetLinkedDeviceIds } from '../gourmetFleet.js';
 import { syncControlSessionForTunnelBatch } from '../tunnelControlHistory.js';
 import { initGourmetProcessOnSessionStart, initStopPlanOnSessionStart, shouldInitAutomatedProcessControl, shouldInitStopPlanAutomation, kickGourmetProcessForSession } from '../gourmetProcessControl.js';
@@ -138,6 +139,12 @@ deviceControlRouter.post('/start', async (req, res) => {
   }
   if (isViewer(req)) {
     return res.status(403).json({ error: 'forbidden', message: 'viewers cannot start control sessions' });
+  }
+  if (isBraedtControlSuspended(req.user?.email)) {
+    return res.status(403).json({
+      error: 'control_suspended',
+      message: 'Control suspendido para BRAEDT mientras se validan los equipos',
+    });
   }
 
   const controlGate = await canControlDevice(deviceId, {

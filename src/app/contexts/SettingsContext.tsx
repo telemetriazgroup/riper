@@ -935,6 +935,8 @@ const translations: Record<Language, Record<string, string>> = {
     'role_viewer': 'Visualizador',
     'role_superadmin': 'Super administrador',
     'viewer_cannot_control_panel': 'El rol Visualizador sólo puede observar: no puede ejecutar el panel de control ni iniciar procesos.',
+    'braedt_control_suspended':
+      'Control suspendido para BRAEDT mientras se validan los equipos. El superadministrador conserva el control normal.',
     'company_field': 'Empresa',
     'company_placeholder': 'Vacío = «sin empresa»',
     'identificador_field': 'Identificador empresa (Madurador)',
@@ -2656,6 +2658,8 @@ const translations: Record<Language, Record<string, string>> = {
     'role_viewer': 'Viewer',
     'role_superadmin': 'Super administrator',
     'viewer_cannot_control_panel': 'Viewer role is read-only here: you cannot run the control panel or start processes.',
+    'braedt_control_suspended':
+      'Control suspended for BRAEDT while devices are being validated. Superadmin retains normal control.',
     'company_field': 'Company',
     'company_placeholder': 'Empty = “no company”',
     'identificador_field': 'Company ID (Madurador API)',

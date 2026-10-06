@@ -1,5 +1,6 @@
 import { getStoredUser } from '@/app/lib/auth';
 import { isGourmetSession } from '@/app/lib/gourmet';
+import { isBraedtControlSuspended } from '@/app/lib/fleetDemo';
 
 /** Reglas de rol: Visualizador sólo lectura; Operador sin recetas ni nuevo seguimiento; Administrador escritura recetas y nuevos seguimientos. */
 
@@ -22,6 +23,7 @@ export function isViewer(): boolean {
 }
 
 export function canCreateRipeningProcess(): boolean {
+  if (isBraedtControlSuspended()) return false;
   const r = getAppRole();
   return r === 'admin' || r === 'superadmin';
 }
@@ -60,9 +62,12 @@ export function canViewGourmetTunnelUnitDevices(): boolean {
   return r === 'admin' || r === 'superadmin';
 }
 
-/** Panel Homogenización / manual: Visualizador no ejecuta ni inicia procesos del panel. */
+/** Panel Homogenización / manual: Visualizador no ejecuta ni inicia procesos del panel.
+ * BRAEDT: control suspendido mientras se validan los equipos (superadmin no afectado). */
 export function canOperateDeviceControl(): boolean {
-  return !isViewer();
+  if (isViewer()) return false;
+  if (isBraedtControlSuspended()) return false;
+  return true;
 }
 
 /** Archivar/eliminar fila soft seguimiento (API DELETE) sólo admins. */

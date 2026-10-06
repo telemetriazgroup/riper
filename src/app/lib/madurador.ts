@@ -18,6 +18,7 @@ import {
   isThermoKingSession,
   isGreenyardSession,
   getGreenyardPinnedImeis,
+  isBraedtSession,
 } from '@/app/lib/fleetDemo';
 import { holdCriticalTempsAgainstZeroGlitch } from '@/app/lib/telemetrySanity';
 import { isGourmetSession, isGourmetMaduradorFleetSession } from '@/app/lib/gourmet';
@@ -63,6 +64,7 @@ export function shouldUseMaduradorDispositivosApi(): boolean {
     hasMaduradorIdentificador() ||
     isUltraorganicsSession() ||
     isGreenyardSession() ||
+    isBraedtSession() ||
     isFleetDemoSession() ||
     isDemoMaduradorSession() ||
     (isGourmetSession() && isGourmetMaduradorFleetSession())
@@ -616,8 +618,8 @@ export async function fetchMaduradorDevicesFromApi(): Promise<Device[]> {
     const allow = new Set(getGreenyardPinnedImeis());
     return withSim.filter((d) => allow.has(String(d.id ?? '').trim()));
   }
-  /** Demo Madurador / superadmin: lista ya fusionada en API (6001+7001, etc.) sin filtro por sufijo. */
-  if (isDemoMaduradorSession() || isMaduradorSuperadminFullList()) {
+  /** Demo Madurador / BRAEDT / superadmin: lista ya fusionada o filtrada en API sin filtro por sufijo. */
+  if (isDemoMaduradorSession() || isBraedtSession() || isMaduradorSuperadminFullList()) {
     return withSim;
   }
   return filterDevicesToIdentificadorImeiSuffix(withSim, getStoredUser()?.identificador);
@@ -966,6 +968,7 @@ export function shouldUseMaduradorRangoHistory(): boolean {
     isUltraorganicsSession() ||
     isThermoKingSession() ||
     isGreenyardSession() ||
+    isBraedtSession() ||
     isGourmetSession()
   );
 }
