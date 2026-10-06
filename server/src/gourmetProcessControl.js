@@ -40,6 +40,7 @@ import {
 } from './ethyleneSafety.js';
 import { evaluateEthyleneSupplyWarning } from './ethyleneSupplyWarning.js';
 import { fireEmailNotification } from './emailNotifications.js';
+import { isMeatRipenerDeviceId, ripeningPhasesForDevice } from './meatRipenerDevice.js';
 
 export const GOURMET_PROCESS_POLL_MS = 30 * 1000;
 
@@ -478,6 +479,8 @@ async function patchAutomation(ctx, patchFn) {
 function maybeAnnotateEthyleneSupplyWarn(ctx, params) {
   const processType = String(ctx?.process_type || params?.process_type || '').trim();
   if (processType !== 'Ripening') return params;
+  if (isMeatRipenerDeviceId(ctx?.device_id)) return params;
+  if (params?.meatControl === true || params?.meat_control === true) return params;
 
   const auto = params.processAutomation && typeof params.processAutomation === 'object'
     ? { ...params.processAutomation }
@@ -1257,12 +1260,18 @@ async function tickEthyleneCycle(ctx, params, auto) {
 async function advanceSequentialPhase(ctx, params, auto, phase, done) {
   if (!done) return auto;
   const completed = [...(auto.completedPhases ?? []), phase];
-  const order = getPhaseOrder(ctx.process_type);
+  const order = getPhaseOrder(ctx.process_type, ctx.device_id, params);
   const idx = order.indexOf(phase);
   const nextPhase = order[idx + 1];
+  const meatRipening =
+    String(ctx.process_type || '') === 'Ripening' &&
+    (isMeatRipenerDeviceId(ctx.device_id) ||
+      params?.meatControl === true ||
+      params?.meat_control === true);
 
   if (!nextPhase) {
-    const mode = ctx.process_type === 'Ripening' ? 'steady' : 'maintenance';
+    /** Carne / meatControl: sin fase etileno → mantenimiento temp/HR como homogenización. */
+    const mode = ctx.process_type === 'Ripening' && !meatRipening ? 'steady' : 'maintenance';
     return {
       ...auto,
       mode,
@@ -1282,8 +1291,8 @@ async function advanceSequentialPhase(ctx, params, auto, phase, done) {
   };
 }
 
-function getPhaseOrder(processType) {
-  if (processType === 'Ripening') return ['temperature', 'humidity', 'co2', 'ethylene'];
+function getPhaseOrder(processType, deviceId, params) {
+  if (processType === 'Ripening') return ripeningPhasesForDevice(deviceId, params);
   if (processType === 'Homogenization') return ['temperature', 'humidity'];
   if (processType === 'Cooling') return ['temperature'];
   return [];
@@ -1331,11 +1340,16 @@ async function tickHomogenization(ctx, params, auto) {
 }
 
 async function tickRipening(ctx, params, auto) {
+  const meatRipening =
+    isMeatRipenerDeviceId(ctx.device_id) ||
+    params?.meatControl === true ||
+    params?.meat_control === true;
+
   const hourlyDue =
     !auto.lastHourlyReviewAt ||
     Date.now() - new Date(auto.lastHourlyReviewAt).getTime() >= HOURLY_REVIEW_MS;
 
-  if (hourlyDue && auto.mode === 'steady' && String(ctx.process_type) === 'Ripening') {
+  if (hourlyDue && auto.mode === 'steady' && String(ctx.process_type) === 'Ripening' && !meatRipening) {
     if (isEthyleneSafetyActive(auto.ethyleneSafety)) {
       const eth = await tickEthyleneCycle(ctx, params, auto);
       await patchAutomation(ctx, () => ({
@@ -1358,11 +1372,32 @@ async function tickRipening(ctx, params, auto) {
     return;
   }
 
-  if (auto.mode === 'sequential' && auto.phase === 'ethylene') {
+  /** Maduración carne: mantenimiento temp/HR (sin CO₂/etileno). */
+  if (meatRipening && (auto.mode === 'maintenance' || auto.mode === 'steady')) {
+    const temp = await ensureTemperature(ctx, params, auto, ctx.process_type);
+    if (temp.rescheduled) {
+      await patchAutomation(ctx, () => ({
+        ...temp.auto,
+        mode: 'maintenance',
+        newEvents: temp.events,
+      }));
+      return;
+    }
+    const hum = await ensureHumidity(ctx, params, temp.auto);
+    await patchAutomation(ctx, () => ({
+      ...hum.auto,
+      mode: 'maintenance',
+      nextActionAt: msFromNow(TEMP_HUMIDITY_MAINTENANCE_MS),
+      newEvents: [...temp.events, ...hum.events],
+    }));
+    return;
+  }
+
+  if (auto.mode === 'sequential' && auto.phase === 'ethylene' && !meatRipening) {
     auto = { ...auto, mode: 'steady', lastHourlyReviewAt: nowIso() };
   }
 
-  if (auto.mode === 'steady') {
+  if (auto.mode === 'steady' && !meatRipening) {
     const co2Due =
       !auto.lastCo2CheckAt ||
       Date.now() - new Date(auto.lastCo2CheckAt).getTime() >= CO2_MAINTENANCE_MS;
@@ -1411,7 +1446,7 @@ async function tickRipening(ctx, params, auto) {
     auto = await advanceSequentialPhase(ctx, params, hum.auto, 'humidity', hum.done);
   }
 
-  if (auto.phase === 'co2') {
+  if (!meatRipening && auto.phase === 'co2') {
     const co2 = await ensureCo2Limit(ctx, params, auto, { allowSkipAfterMaxAttempts: true });
     events = [...events, ...co2.events];
     if (co2.rescheduled) {
@@ -1421,7 +1456,7 @@ async function tickRipening(ctx, params, auto) {
     auto = await advanceSequentialPhase(ctx, params, co2.auto, 'co2', co2.done);
   }
 
-  if (auto.phase === 'ethylene' || auto.mode === 'steady') {
+  if (!meatRipening && (auto.phase === 'ethylene' || auto.mode === 'steady')) {
     const eth = await tickEthyleneCycle(ctx, params, auto);
     events = [...events, ...eth.events];
     auto = eth.auto;

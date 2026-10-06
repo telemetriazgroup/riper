@@ -2,6 +2,9 @@
  * Cuenta BRAEDT: flota Madurador empresa 7001 (lista completa).
  * Control de procesos suspendido mientras se validan los equipos
  * (`BRAEDT_CONTROL_ENABLED=1` para habilitar).
+ *
+ * Nota: si upstream `listar_dispositivos…?identificador=7001` responde `[]`,
+ * la cuenta verá cero equipos aunque el enlace esté bien (ver cuenta_link.md).
  */
 
 export function braedtEmailLogin() {
@@ -10,6 +13,13 @@ export function braedtEmailLogin() {
 
 export function isBraedtFleetEmail(email) {
   return String(email || '').trim().toLowerCase() === braedtEmailLogin();
+}
+
+/** Fila app_users: email BRAEDT o company = BRAEDT. */
+export function isBraedtUserRow(row) {
+  if (!row || typeof row !== 'object') return false;
+  if (isBraedtFleetEmail(row.email)) return true;
+  return String(row.company || '').trim().toUpperCase() === 'BRAEDT';
 }
 
 export function braedtEmpresaIdentificador() {
@@ -35,7 +45,7 @@ export function isBraedtDeviceId(deviceId) {
   return String(deviceId || '').trim().length > 0;
 }
 
-export function filterRowsByBraedtDeviceIds(rows, pickDeviceId) {
+export function filterRowsByBraedtDeviceIds(rows, _pickDeviceId) {
   if (!Array.isArray(rows) || rows.length === 0) return rows;
   /** Sin pin list: devolver filas tal cual (alcance = flota empresa 7001 del login). */
   return rows;

@@ -29,6 +29,10 @@ import { useRipeningActiveForDevice } from '@/app/hooks/useRipeningActiveForDevi
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
 import { resolveFleetEthyleneDisplayPpm } from '@/app/lib/ethyleneDisplayPolicy';
 import { modulateHumidityDisplayPct } from '@/app/lib/humidityDisplayPolicy';
+import {
+  deviceSupportsCo2,
+  deviceSupportsEthylene,
+} from '@/app/lib/meatRipenerDevice';
 
 type TFn = (k: string, r?: Record<string, string> | string) => string;
 
@@ -146,7 +150,8 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
   }, [device.last_seen, formatDateTime]);
 
   const primary = useMemo(
-    () => [
+    () => {
+      const rows = [
       {
         key: 's1',
         icon: Thermometer,
@@ -204,7 +209,15 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
         label: t('status_capacity'),
         value: m?.capacity_load != null && Number.isFinite(m.capacity_load) ? formatUiPercent(m.capacity_load) : '—',
       },
-    ],
+    ];
+      const showEth = deviceSupportsEthylene(device.id);
+      const showCo2 = deviceSupportsCo2(device.id);
+      return rows.filter((r) => {
+        if (r.key === 'et' && !showEth) return false;
+        if (r.key === 'c2' && !showCo2) return false;
+        return true;
+      });
+    },
     [device, m, t, formatTemp, tel, ethyleneDisplayPpm, humidityDisplayPct]
   );
 
@@ -311,6 +324,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
               />
             );
           })}
+          {deviceSupportsCo2(device.id) ? (
           <StatusTile
             icon={Cloud}
             label={t('status_sp_co2')}
@@ -322,6 +336,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
                   : '—'
             }
           />
+          ) : null}
           <StatusTile
             icon={Zap}
             label={t('status_kwh')}
@@ -332,6 +347,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
             label={t('status_gas_exchange')}
             value={gasExchangeLabel(op.fresh_air_ex_mode, t)}
           />
+          {deviceSupportsEthylene(device.id) ? (
           <StatusTile
             icon={Flame}
             label={t('status_sp_ethylene')}
@@ -341,6 +357,7 @@ export const DeviceCurrentStatusPanel: React.FC<DeviceCurrentStatusPanelProps> =
                 : '—'
             }
           />
+          ) : null}
         </div>
       )}
     </div>

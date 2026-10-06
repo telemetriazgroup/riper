@@ -26,7 +26,8 @@ export function isBraedtFleetEmail(email: string | undefined | null): boolean {
 export function isBraedtSession(): boolean {
   try {
     const u = getStoredUser();
-    return isBraedtFleetEmail(u?.email);
+    if (isBraedtFleetEmail(u?.email)) return true;
+    return String(u?.company || '').trim().toUpperCase() === 'BRAEDT';
   } catch {
     return false;
   }

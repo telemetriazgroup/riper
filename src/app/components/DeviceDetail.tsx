@@ -25,6 +25,11 @@ import { formatUiDecimal } from '@/app/lib/formatUiNumber';
 import { EthyleneSupplyWarningDialog } from '@/app/components/EthyleneSupplyWarningDialog';
 import { EthyleneInstallNoticeDialog } from '@/app/components/EthyleneInstallNoticeDialog';
 import { EthyleneInstallationPanel } from '@/app/components/EthyleneInstallationPanel';
+import {
+  deviceSupportsCo2,
+  deviceSupportsEthylene,
+  deviceSupportsEthyleneInstallation,
+} from '@/app/lib/meatRipenerDevice';
 
 interface DeviceDetailProps {
   deviceId: string;
@@ -44,8 +49,18 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
   const { history } = useDeviceHistory(deviceId);
   const { session: activeControlSession } = useDeviceControlSession(deviceId);
   const [controlMode, setControlMode] = useState('manual');
-  const [activeView, setActiveView] = useState(initialView);
+  const [activeView, setActiveView] = useState(() =>
+    initialView === 'installation' && !deviceSupportsEthyleneInstallation(deviceId)
+      ? 'operation'
+      : initialView
+  );
   const { t, convertTemp, tempUnit, formatTemp, toggleTempUnit, formatDateTime } = useSettings();
+
+  useEffect(() => {
+    if (!deviceSupportsEthyleneInstallation(deviceId) && activeView === 'installation') {
+      setActiveView('operation');
+    }
+  }, [deviceId, activeView]);
 
   useEffect(() => {
     if (!device) return;
@@ -112,6 +127,9 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
 
   if (!device) return <div>{t('device_not_found')}</div>;
 
+  const supportsEthyleneInstall = deviceSupportsEthyleneInstallation(deviceId);
+  const showCo2Detail = deviceSupportsCo2(deviceId);
+
   if (device.tunnel) {
     return <TunnelDeviceDetail device={device} onBack={onBack} onGoToCreateTracking={onGoToCreateTracking} />;
   }
@@ -121,11 +139,13 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right duration-300">
-      <EthyleneSupplyWarningDialog deviceId={deviceId} />
+      {deviceSupportsEthylene(deviceId) ? <EthyleneSupplyWarningDialog deviceId={deviceId} /> : null}
+      {supportsEthyleneInstall ? (
       <EthyleneInstallNoticeDialog
         deviceId={deviceId}
         onOpenInstallation={() => setActiveView('installation')}
       />
+      ) : null}
       {/* Header Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
         <div className="flex items-center gap-4">
@@ -203,6 +223,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                 <ClipboardList className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('event_log')}</span>
               </Tabs.Trigger>
+              {supportsEthyleneInstall ? (
               <Tabs.Trigger 
                 value="installation" 
                 className={clsx(
@@ -213,6 +234,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                 <Beaker className="h-4 w-4" />
                 <span className="hidden sm:inline">{t('install_tab')}</span>
               </Tabs.Trigger>
+              ) : null}
             </Tabs.List>
           </Tabs.Root>
         </div>
@@ -354,12 +376,14 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
                          {formatMaduradorScalar(device.madurador.line_voltage_display)}
                        </span>
                      </div>
+                     {showCo2Detail ? (
                      <div className="flex justify-between gap-2 border-b border-border pb-2">
                        <span className="text-muted-foreground">{t('madurador_detail_set_co2')}</span>
                        <span className="font-mono text-right">
                          {formatMaduradorScalar(device.madurador.set_point_co2_display)}
                        </span>
                      </div>
+                     ) : null}
                      <div className="flex justify-between gap-2 border-b border-border pb-2">
                        <span className="text-muted-foreground">{t('madurador_detail_set_hum')}</span>
                        <span className="font-mono">
@@ -434,7 +458,7 @@ export const DeviceDetail: React.FC<DeviceDetailProps> = ({
         <div className="min-h-[400px]">
           <EventLog deviceId={deviceId} />
         </div>
-      ) : activeView === 'installation' ? (
+      ) : activeView === 'installation' && supportsEthyleneInstall ? (
         <div className="min-h-[400px]">
           <EthyleneInstallationPanel deviceId={deviceId} />
         </div>

@@ -38,6 +38,10 @@ import { es, enUS } from 'date-fns/locale';
 import { isThermoKingSession } from '@/app/lib/fleetDemo';
 import { isManualProcesoLabel } from '@/app/lib/madurador';
 import { formatFleetEthyleneLabel } from '@/app/lib/ethyleneDisplayPolicy';
+import {
+  deviceSupportsCo2,
+  deviceSupportsEthylene,
+} from '@/app/lib/meatRipenerDevice';
 import { formatUiDecimal, formatUiPercent } from '@/app/lib/formatUiNumber';
 import type { DeviceControlSessionRow } from '@/app/lib/deviceControlProcessApi';
 
@@ -74,6 +78,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   const [trackingDetailsOpen, setTrackingDetailsOpen] = useState(false);
   const displayName = resolveDeviceDisplayName(device);
   const ethyleneFleetLabel = fleetEthyleneText(device, trackingProcess, panelActiveSession);
+  const showEthylene = deviceSupportsEthylene(device.id);
+  const showCo2 = deviceSupportsCo2(device.id);
 
   useEffect(() => {
     setNewName(displayName);
@@ -499,6 +505,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                  </div>
                </div>
                <div className="space-y-3">
+                 {showEthylene ? (
                  <div className="flex items-center gap-2">
                    <Activity className="h-4 w-4 text-green-500" />
                    <div>
@@ -506,6 +513,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                      <div className="font-bold text-card-foreground">{ethyleneFleetLabel}</div>
                    </div>
                  </div>
+                 ) : null}
+                 {showCo2 ? (
                  <div className="flex items-center gap-2">
                    <Wind className="h-4 w-4 text-muted-foreground" />
                    <div>
@@ -515,6 +524,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                      </div>
                    </div>
                  </div>
+                 ) : null}
                </div>
              </div>
              {renderFleetProcessStrip('offline')}
@@ -555,6 +565,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
             </div>
 
             <div className="space-y-3">
+              {showEthylene ? (
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4 text-green-500" />
                 <div>
@@ -562,7 +573,8 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   <div className="font-bold text-card-foreground">{ethyleneFleetLabel}</div>
                 </div>
               </div>
-
+              ) : null}
+              {showCo2 ? (
               <div className="flex items-center gap-2">
                 <Wind className="h-4 w-4 text-muted-foreground" />
                 <div>
@@ -572,6 +584,7 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
                   </div>
                 </div>
               </div>
+              ) : null}
             </div>
 
             {renderFleetProcessStrip('online')}

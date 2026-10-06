@@ -1588,6 +1588,9 @@ const translations: Record<Language, Record<string, string>> = {
     'phase_homogenization_desc': 'Uniformizar temperatura de la pulpa.',
     'phase_homogenization_meats': 'Homogenización - Carnes',
     'homogenization_meat_control': 'Control carnes',
+    'phase_ripening_meats': 'Maduración - Carnes',
+    'ripening_meats_no_gas_hint':
+      'Este equipo (madurador de carne) no usa etileno ni CO₂: solo temperatura, humedad, ventilación e intercambio/renovación de aire.',
     'homogenization_air_exchange': 'Intercambio de aire',
     'homogenization_air_renewal': 'Renovación de aire',
     'homogenization_control_desc':
@@ -3312,6 +3315,9 @@ const translations: Record<Language, Record<string, string>> = {
     'phase_homogenization_desc': 'Uniformize pulp temperature.',
     'phase_homogenization_meats': 'Homogenization - Meats',
     'homogenization_meat_control': 'Meat control',
+    'phase_ripening_meats': 'Ripening - Meats',
+    'ripening_meats_no_gas_hint':
+      'This unit (meat ripener) does not use ethylene or CO₂: only temperature, humidity, ventilation and air exchange/renewal.',
     'homogenization_air_exchange': 'Air exchange',
     'homogenization_air_renewal': 'Air renewal',
     'homogenization_control_desc':

@@ -25,6 +25,7 @@ import {
 import {
   braedtEmpresaIdentificador,
   isBraedtFleetEmail,
+  isBraedtUserRow,
 } from '../braedtFleet.js';
 import { sanitizeMaduradorRowAgainstZeroGlitch } from '../telemetrySanity.js';
 import {
@@ -263,6 +264,21 @@ function greenyardFilterNormalOperationEnabled() {
   return String(v).trim() === '1' || /^true$/i.test(String(v).trim());
 }
 
+async function isBraedtAccountByUserId(userId) {
+  const id = String(userId || '').trim();
+  if (!id) return false;
+  try {
+    const { rows } = await pool.query(
+      `SELECT email, company, identificador FROM app_users WHERE id = $1::uuid AND deleted_at IS NULL`,
+      [id]
+    );
+    return isBraedtUserRow(rows[0]);
+  } catch (e) {
+    console.warn('[madurador] braedt user lookup', e.message);
+    return false;
+  }
+}
+
 async function fetchMaduradorDispositivosList(base, identificadorEmpresa, ctrl) {
   const url = `${base}/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=${encodeURIComponent(identificadorEmpresa)}`;
   const r = await fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl });
@@ -388,7 +404,7 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
       return jsonDispositivos(res, merged, { fleetKey: 'demo-madurador' });
     }
 
-    if (isBraedtFleetEmail(email)) {
+    if (isBraedtFleetEmail(email) || (await isBraedtAccountByUserId(req.user?.id))) {
       const braedtIdent = braedtEmpresaIdentificador();
       const listBraedt = await fetchMaduradorDispositivosList(base, braedtIdent, ctrl);
       if (listBraedt === null) {
@@ -399,6 +415,12 @@ maduradorRouter.get('/dispositivos', async (req, res) => {
           `upstream braedt ${braedtIdent}`
         );
       }
+      if (!listBraedt.length) {
+        console.warn(
+          `[madurador] braedt: upstream empresa ${braedtIdent} devolvió 0 dispositivos (lista vacía en Madurador)`
+        );
+      }
+      /** Lista completa de la empresa; sin filtro por sufijo IMEI. */
       return jsonDispositivos(res, listBraedt, {
         empresaIdentificador: braedtIdent,
         fleetKey: 'braedt',

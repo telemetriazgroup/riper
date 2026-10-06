@@ -23,6 +23,11 @@ import { isGourmetSession, isGourmetTunnelCommandDevice } from '@/app/lib/gourme
 import { isAutomatedControlDevice, isBraedtControlSuspended } from '@/app/lib/fleetDemo';
 import { canOperateDeviceControl } from '@/app/lib/permissions';
 import {
+  deviceSupportsEthylene,
+  deviceSupportsCo2,
+  deviceUsesMeatRipeningControl,
+} from '@/app/lib/meatRipenerDevice';
+import {
   cacheGourmetProgrammedEthylene,
   resolveGourmetProgrammedEthylenePpm,
 } from '@/app/lib/gourmetEthyleneDisplay';
@@ -380,12 +385,13 @@ const ManualControl = ({
   readOnly?: boolean;
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
+  const supportsEthylene = deviceSupportsEthylene(deviceId);
   const { mutate: sessionMutate } = useDeviceControlSession(deviceId);
   const { sessions: controlSessions } = useControlSessionsList(false);
   const md = device?.madurador;
   const isMadurador = Boolean(md);
   const gourmetManualEthylene = useMemo(() => {
-    if (!isGourmetSession() || !deviceId) return null;
+    if (!supportsEthylene || !isGourmetSession() || !deviceId) return null;
     const programmed = resolveGourmetProgrammedEthylenePpm(deviceId, controlSessions);
     if (programmed != null) return programmed;
     if (device?.telemetry.ethylene_programmed != null) return device.telemetry.ethylene_programmed;
@@ -486,7 +492,7 @@ const ManualControl = ({
   const changes = [];
   if (temp !== originalTemp) changes.push({ name: t('target_temperature'), from: `${convertTemp(originalTemp)}°${tempUnit}`, to: `${convertTemp(temp)}°${tempUnit}` });
   if (humidity !== originalHumidity) changes.push({ name: t('relative_humidity'), from: `${originalHumidity}%`, to: `${humidity}%` });
-  if (ethylene !== originalEthylene) changes.push({ name: 'Etileno', from: `${originalEthylene} PPM`, to: `${ethylene} PPM` });
+  if (supportsEthylene && ethylene !== originalEthylene) changes.push({ name: 'Etileno', from: `${originalEthylene} PPM`, to: `${ethylene} PPM` });
   if (fan !== originalFan) changes.push({ name: t('ventilation_speed'), from: `${originalFan}%`, to: `${fan}%` });
 
   const hasChanges = changes.length > 0;
@@ -503,7 +509,7 @@ const ManualControl = ({
       } = {};
       if (temp !== originalTemp) tunnelCommands.set_point = Number(temp.toFixed(1));
       if (humidity !== originalHumidity) tunnelCommands.humidity_set_point = Math.round(humidity);
-      if (ethylene !== originalEthylene) tunnelCommands.ethylene = Math.round(ethylene);
+      if (supportsEthylene && ethylene !== originalEthylene) tunnelCommands.ethylene = Math.round(ethylene);
       if (fan !== originalFan) tunnelCommands.fan_speed = Math.round(fan);
 
       if (isAutomatedControlDevice(deviceId) || isGourmetTunnelCommandDevice(deviceId)) {
@@ -785,6 +791,7 @@ const ManualControl = ({
         </ControlGroup>
 
         <ControlGroup title={t('gases_ventilation')}>
+            {supportsEthylene ? (
             <RangeControl 
             label={t('ethylene_injection')}
             value={ethylene} 
@@ -797,6 +804,7 @@ const ManualControl = ({
             decimals={0}
             step={1}
             />
+            ) : null}
             <RangeControl 
             label={t('ventilation_speed')}
             value={fan} 
@@ -882,16 +890,22 @@ const HomogenizationControl = ({
   tempUnitKey: string;
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
+  const forceMeat = deviceUsesMeatRipeningControl(deviceId);
   const [temp, setTemp] = useState(18);
   const [humidity, setHumidity] = useState(95);
   const [duration, setDuration] = useState(6);
-  const [meatControl, setMeatControl] = useState(false);
+  const [meatControl, setMeatControl] = useState(forceMeat);
   const [airExchangeMinutes, setAirExchangeMinutes] = useState(5);
   const [airRenewalHours, setAirRenewalHours] = useState(12);
 
+  useEffect(() => {
+    if (forceMeat) setMeatControl(true);
+  }, [forceMeat]);
+
   const handleStart = () => {
     if (!deviceId) return;
-    const label = meatControl ? t('phase_homogenization_meats') : t('homogenization');
+    const useMeat = forceMeat || meatControl;
+    const label = useMeat ? t('phase_homogenization_meats') : t('homogenization');
     onBeginStart({
       processType: 'Homogenization',
       displayLabel: label,
@@ -901,7 +915,7 @@ const HomogenizationControl = ({
         durationHours: duration,
         name: label,
         tempUnit: tempUnitKey,
-        ...(meatControl
+        ...(useMeat
           ? {
               meatControl: true,
               airExchangeMinutes,
@@ -956,14 +970,17 @@ const HomogenizationControl = ({
         <label className="flex items-start gap-2 text-sm text-foreground cursor-pointer pt-1">
           <input
             type="checkbox"
-            checked={meatControl}
-            onChange={(e) => setMeatControl(e.target.checked)}
-            disabled={disabled}
+            checked={forceMeat || meatControl}
+            onChange={(e) => {
+              if (forceMeat) return;
+              setMeatControl(e.target.checked);
+            }}
+            disabled={disabled || forceMeat}
             className="mt-0.5 rounded border-border text-blue-600"
           />
           <span>{t('homogenization_meat_control')}</span>
         </label>
-        {meatControl ? (
+        {forceMeat || meatControl ? (
           <>
             <RangeControl
               label={t('homogenization_air_exchange')}
@@ -994,7 +1011,7 @@ const HomogenizationControl = ({
       <div className="p-4 border border-dashed border-border rounded-lg text-center bg-muted/30">
         <p className="text-sm text-muted-foreground mb-1">{t('preview')}</p>
         <p className="font-medium text-foreground">
-          {meatControl
+          {forceMeat || meatControl
             ? t('homogenization_meat_control_preview', {
                 tempFrom: formatUiDecimal(convertTemp(8)),
                 tempTo: formatUiDecimal(convertTemp(temp)),
@@ -1033,25 +1050,37 @@ const RipeningControl = ({
   tempUnitKey: string;
 }) => {
   const { t, convertTemp, tempUnit } = useSettings();
+  const meatMode = deviceUsesMeatRipeningControl(deviceId);
   const [temp, setTemp] = useState(20);
   const [humidity, setHumidity] = useState(95);
   const [ethylene, setEthylene] = useState(100);
   const [co2, setCo2] = useState(3.5);
   const [duration, setDuration] = useState(72);
+  const [airExchangeMinutes, setAirExchangeMinutes] = useState(5);
+  const [airRenewalHours, setAirRenewalHours] = useState(12);
 
   const handleStart = () => {
     if (!deviceId) return;
+    const label = meatMode ? t('phase_ripening_meats') : t('ripening');
     onBeginStart({
       processType: 'Ripening',
-      displayLabel: t('ripening'),
+      displayLabel: label,
       params: {
         setPoint: clamp(temp, RIPENING_TARGET_TEMP_MIN_C, RIPENING_TARGET_TEMP_MAX_C),
         humiditySetPoint: humidity,
         durationHours: duration,
-        ethylene,
-        co2,
-        name: t('ripening'),
+        name: label,
         tempUnit: tempUnitKey,
+        ...(meatMode
+          ? {
+              meatControl: true,
+              airExchangeMinutes,
+              airRenewalHours,
+            }
+          : {
+              ethylene,
+              co2,
+            }),
       },
       durationHours: duration,
     });
@@ -1083,10 +1112,38 @@ const RipeningControl = ({
         <RangeControl label={t('relative_humidity')} value={humidity} unit="%" min={80} max={99} onChange={(v) => setHumidity(Math.round(clamp(v, 80, 99)))} disabled={disabled} decimals={0} step={1} />
       </ControlGroup>
 
-      <ControlGroup title={t('control_gases')}>
-        <RangeControl label={t('ethylene_injection')} value={ethylene} unit="PPM" min={0} max={250} onChange={(v) => setEthylene(Math.round(clamp(v, 0, 250)))} disabled={disabled} decimals={0} step={1} />
-        <RangeControl label={t('co2_limit')} value={co2} unit="%" min={1} max={10} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
-      </ControlGroup>
+      {meatMode ? (
+        <ControlGroup title={t('homogenization_meat_control')}>
+          <p className="text-xs text-muted-foreground -mt-2 mb-2">{t('ripening_meats_no_gas_hint')}</p>
+          <RangeControl
+            label={t('homogenization_air_exchange')}
+            value={airExchangeMinutes}
+            unit={t('unit_minutes')}
+            min={1}
+            max={120}
+            onChange={(v) => setAirExchangeMinutes(Math.round(clamp(v, 1, 120)))}
+            disabled={disabled}
+            decimals={0}
+            step={1}
+          />
+          <RangeControl
+            label={t('homogenization_air_renewal')}
+            value={airRenewalHours}
+            unit={t('unit_hours')}
+            min={1}
+            max={48}
+            onChange={(v) => setAirRenewalHours(Math.round(clamp(v, 1, 48)))}
+            disabled={disabled}
+            decimals={0}
+            step={1}
+          />
+        </ControlGroup>
+      ) : (
+        <ControlGroup title={t('control_gases')}>
+          <RangeControl label={t('ethylene_injection')} value={ethylene} unit="PPM" min={0} max={250} onChange={(v) => setEthylene(Math.round(clamp(v, 0, 250)))} disabled={disabled} decimals={0} step={1} />
+          <RangeControl label={t('co2_limit')} value={co2} unit="%" min={1} max={10} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
+        </ControlGroup>
+      )}
 
       <ControlGroup title={t('duration')}>
         <RangeControl label={t('process_time')} value={duration} unit={t('unit_hours')} min={24} max={120} onChange={setDuration} disabled={disabled} decimals={0} />
@@ -1109,6 +1166,7 @@ const VentilationControl = ({
   onBeginStart: (d: ControlStartDraft) => void;
 }) => {
   const { t } = useSettings();
+  const supportsCo2 = deviceSupportsCo2(deviceId);
   const [co2, setCo2] = useState(0.5);
   const [durationMin, setDurationMin] = useState(60);
   const durationHours = Math.max(durationMin / 60, 1 / 60);
@@ -1119,7 +1177,7 @@ const VentilationControl = ({
       processType: 'Ventilation',
       displayLabel: t('ventilation'),
       params: {
-        targetCo2: co2,
+        ...(supportsCo2 ? { targetCo2: co2 } : { targetCo2: 0 }),
         durationMin,
         name: t('ventilation'),
       },
@@ -1133,7 +1191,9 @@ const VentilationControl = ({
       <p>{t('ventilation_control_desc')}</p>
     </div>
     <ControlGroup title={t('control_parameters')}>
-       <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
+       {supportsCo2 ? (
+         <RangeControl label={t('target_co2')} value={co2} unit="%" min={0} max={5} step={0.1} onChange={setCo2} disabled={disabled} decimals={1} />
+       ) : null}
        <RangeControl label={t('max_duration')} value={durationMin} unit="min" min={10} max={180} onChange={setDurationMin} disabled={disabled} decimals={0} />
     </ControlGroup>
     <Button className="w-full" onClick={handleStart} disabled={disabled}>{t('start_process')}</Button>

@@ -69,6 +69,10 @@ import {
 } from '@/app/lib/ethyleneDisplayPolicy';
 import { useControlSessionsList } from '@/app/hooks/useControlSessionsList';
 import { useDeviceControlSession } from '@/app/hooks/useDeviceControlSession';
+import {
+  deviceSupportsCo2,
+  deviceSupportsEthylene,
+} from '@/app/lib/meatRipenerDevice';
 
 interface DeviceMonitoringAnalysisProps {
   deviceId: string;
@@ -111,10 +115,12 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
   const { t, formatDateTime, displayTimeZone, language } = useSettings();
   const { activeTracking, isLoading: trackingLoading, mutate: mutateTracking } =
     useRipeningActiveForDevice(deviceId);
+  const showEthyleneMon = deviceSupportsEthylene(deviceId);
+  const showCo2Mon = deviceSupportsCo2(deviceId);
   const [chartTab, setChartTab] = useState<'environment' | 'gases'>('environment');
   const [samplingModalOpen, setSamplingModalOpen] = useState(false);
   const [samplingSaving, setSamplingSaving] = useState(false);
-  const canToggleEthyleneView = isUnfilteredEthyleneViewer();
+  const canToggleEthyleneView = showEthyleneMon && isUnfilteredEthyleneViewer();
   /** Vista gráfica: admin ve crudo por defecto; cliente siempre regulado si faultless activo. */
   const [previewAsClient, setPreviewAsClient] = useState(!canToggleEthyleneView);
   const [faultlessBusy, setFaultlessBusy] = useState(false);
@@ -501,6 +507,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
           secondary={t('detail_monitoring_energy_hint')}
           icon={<Zap className="w-5 h-5 text-yellow-600" />}
         />
+        {showEthyleneMon ? (
         <MetricCard
           title={t('detail_monitoring_ethylene_title')}
           primary={
@@ -511,6 +518,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
           secondary={pruebaCaMonitoring ? t('detail_monitoring_ethylene_prueba_hint') : undefined}
           icon={<FlaskConical className="w-5 h-5 text-purple-500" />}
         />
+        ) : null}
         <MetricCard
           title={t('detail_monitoring_vent_state')}
           primary={metrics.avlLbl.closed ? t('detail_monitoring_vent_closed') : metrics.avlLbl.label}
@@ -575,6 +583,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
               >
                 {t('detail_monitoring_charts_env')}
               </button>
+              {showEthyleneMon || showCo2Mon ? (
               <button
                 type="button"
                 onClick={() => setChartTab('gases')}
@@ -585,6 +594,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
               >
                 {t('detail_monitoring_charts_gas')}
               </button>
+              ) : null}
             </div>
           </div>
         </CardHeader>
@@ -594,7 +604,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
           ) : (
             <div className="h-[340px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                {chartTab === 'environment' ? (
+                {chartTab === 'environment' || !(showEthyleneMon || showCo2Mon) ? (
                   <AreaChart data={chartRows}>
                     <defs>
                       <linearGradient id="gradAir" x1="0" y1="0" x2="0" y2="1">
@@ -630,10 +640,13 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                   <LineChart data={chartRows}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                     <XAxis dataKey="tick" fontSize={10} tickLine={false} axisLine={false} minTickGap={24} />
+                    {showEthyleneMon ? (
                     <YAxis yAxisId="l" domain={[0, CHART_ETHYLENE_MAX_PPM]} fontSize={11} />
+                    ) : null}
                     <YAxis yAxisId="r" orientation="right" domain={[0, 25]} fontSize={11} />
                     <Tooltip />
                     <Legend />
+                    {showEthyleneMon ? (
                     <Line
                       yAxisId="l"
                       type="monotone"
@@ -644,6 +657,8 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       strokeWidth={2}
                       connectNulls
                     />
+                    ) : null}
+                    {showCo2Mon ? (
                     <Line
                       yAxisId="r"
                       type="monotone"
@@ -655,6 +670,7 @@ export const DeviceMonitoringAnalysis: React.FC<DeviceMonitoringAnalysisProps> =
                       strokeWidth={2}
                       connectNulls
                     />
+                    ) : null}
                     <Line
                       yAxisId="r"
                       type="monotone"

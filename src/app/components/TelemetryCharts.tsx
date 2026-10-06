@@ -12,6 +12,10 @@ import {
   type TelemetryDisplayContext,
 } from '@/app/lib/telemetryDisplayPolicy';
 import { isUnfilteredEthyleneViewer } from '@/app/lib/ethyleneDisplayPolicy';
+import {
+  deviceSupportsCo2,
+  deviceSupportsEthylene,
+} from '@/app/lib/meatRipenerDevice';
 import { fetchRipeningProcesses } from '@/app/lib/ripeningProcessesApi';
 import { showsUnfilteredTelemetry } from '@/app/lib/telemetryViewPolicy';
 import { CHART_ETHYLENE_MAX_PPM } from '@/app/lib/historySeriesSanitize';
@@ -115,6 +119,17 @@ function mapHistoryPointsToHistoricalRows(history: any[]): any[] {
 }
 
 type HistoricalChartPreset = 'cooling' | 'ripening' | 'standard' | 'gases' | 'controlled_atmosphere';
+
+function filterMetricsForMeatDevice(deviceId: string | undefined, keys: string[]): string[] {
+  const noEth = !deviceSupportsEthylene(deviceId);
+  const noCo2 = !deviceSupportsCo2(deviceId);
+  return keys.filter((k) => {
+    if (noEth && (k === 'ethylene' || k === 'sp_ethyleno')) return false;
+    if (noCo2 && (k === 'co2_reading' || k === 'set_point_co2')) return false;
+    return true;
+  });
+}
+
 
 /** «Valores» activos por defecto al elegir cada vista predefinida. */
 function defaultShowLabelsForPreset(preset: HistoricalChartPreset | null): Record<string, boolean> {
@@ -276,6 +291,8 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
   const { device } = useDevice(deviceId || null);
   const { activeTracking } = useRipeningActiveForDevice(deviceId);
   const { session: panelSession } = useDeviceControlSession(deviceId);
+  const meatNoEthylene = !deviceSupportsEthylene(deviceId);
+  const meatNoCo2 = !deviceSupportsCo2(deviceId);
   const { sessions: controlSessions } = useControlSessionsList(false);
   const { data: ripeningProcesses = [] } = useSWR('ripening-processes-chart', () => fetchRipeningProcesses());
 
@@ -591,6 +608,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                   </ResponsiveContainer>
                 </div>
               </div>
+{!(meatNoEthylene && meatNoCo2) ? (
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-2">{t('last12_chart_ethylene_co2')}</p>
                 <div className="h-[260px] w-full">
@@ -640,6 +658,7 @@ export const TelemetryCharts: React.FC<TelemetryChartsProps> = ({ deviceId }) =>
                   </ResponsiveContainer>
                 </div>
               </div>
+              ) : null}
             </>
           )}
         </div>
@@ -706,8 +725,14 @@ const HistoricalDataModal = ({
     isThermoKingSession() ? 'controlled_atmosphere' : 'standard'
   );
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(() =>
-    isThermoKingSession() ? [...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE] : [...HISTORICAL_PRESET_STANDARD]
+    filterMetricsForMeatDevice(
+      deviceId,
+      isThermoKingSession() ? [...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE] : [...HISTORICAL_PRESET_STANDARD]
+    )
   );
+  useEffect(() => {
+    setSelectedMetrics((prev) => filterMetricsForMeatDevice(deviceId, prev));
+  }, [deviceId]);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [metricColors, setMetricColors] = useState<Record<string, string>>({});
@@ -761,8 +786,11 @@ const HistoricalDataModal = ({
 
   const sidebarMetricKeys = useMemo(() => {
     const allowed = new Set(CHART_METRIC_KEYS);
-    return HISTORICAL_SIDEBAR_METRIC_ORDER.filter((k) => allowed.has(k));
-  }, []);
+    return filterMetricsForMeatDevice(
+      deviceId,
+      HISTORICAL_SIDEBAR_METRIC_ORDER.filter((k) => allowed.has(k))
+    );
+  }, [deviceId]);
 
   const filteredSidebarMetricKeys = useMemo(() => {
     const q = variablesColorSearch.trim().toLowerCase();
@@ -921,14 +949,14 @@ const HistoricalDataModal = ({
 
   const applyHistoricalPreset = useCallback((preset: HistoricalChartPreset) => {
     setHistoricalPreset(preset);
-    if (preset === 'cooling') setSelectedMetrics([...HISTORICAL_PRESET_COOLING]);
-    else if (preset === 'ripening') setSelectedMetrics([...HISTORICAL_PRESET_RIPENING]);
-    else if (preset === 'gases') setSelectedMetrics([...HISTORICAL_PRESET_GASES]);
+    if (preset === 'cooling') setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_COOLING]));
+    else if (preset === 'ripening') setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_RIPENING]));
+    else if (preset === 'gases') setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_GASES]));
     else if (preset === 'controlled_atmosphere')
-      setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
-    else setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+      setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]));
+    else setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_STANDARD]));
     setShowLabelsByMetric(defaultShowLabelsForPreset(preset));
-  }, []);
+  }, [deviceId]);
 
   const clearAllHistoricalMetrics = useCallback(() => {
     setHistoricalPreset(null);
@@ -946,11 +974,13 @@ const HistoricalDataModal = ({
       const range = defaultLast12hDateTimeLocalRange(displayTimeZone);
       setDateRange(range);
       if (isThermoKingSession()) {
-        setSelectedMetrics([...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE]);
+        setSelectedMetrics(
+          filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_CONTROLLED_ATMOSPHERE])
+        );
         setHistoricalPreset('controlled_atmosphere');
         setShowLabelsByMetric(defaultShowLabelsForPreset('controlled_atmosphere'));
       } else {
-        setSelectedMetrics([...HISTORICAL_PRESET_STANDARD]);
+        setSelectedMetrics(filterMetricsForMeatDevice(deviceId, [...HISTORICAL_PRESET_STANDARD]));
         setHistoricalPreset('standard');
         setShowLabelsByMetric(defaultShowLabelsForPreset('standard'));
       }
@@ -964,7 +994,7 @@ const HistoricalDataModal = ({
       }
     }
     chartModalWasOpenRef.current = isOpen;
-  }, [isOpen, tempUnit, displayTimeZone, preloadedHistory, applyHistoryToChart]);
+  }, [isOpen, tempUnit, displayTimeZone, preloadedHistory, applyHistoryToChart, deviceId]);
 
   /** Si el detalle aún cargaba el historial al abrir el modal, aplícalo al llegar. */
   useEffect(() => {
@@ -1624,12 +1654,12 @@ const TABLE_PRESETS = [
   { id: 'full', columns: CHART_METRIC_KEYS },
 ];
 
-function tableModalDefaultPresetColumns(): string[] {
+function tableModalDefaultPresetColumns(deviceId?: string): string[] {
   if (isThermoKingSession()) {
     const preset = TABLE_PRESETS.find((p) => p.id === 'controlled_atmosphere');
-    if (preset) return [...preset.columns];
+    if (preset) return filterMetricsForMeatDevice(deviceId, [...preset.columns]);
   }
-  return [...TABLE_PRESETS[0].columns];
+  return filterMetricsForMeatDevice(deviceId, [...TABLE_PRESETS[0].columns]);
 }
 
 const HistoricalDataTableModal = ({
@@ -1657,9 +1687,19 @@ const HistoricalDataTableModal = ({
     useSettings();
   const metricLabels = useMemo(() => buildChartMetricLabels(t), [t, language]);
   const [dateRange, setDateRange] = useState(() => defaultLast12hDateTimeLocalRange(displayTimeZone));
-  const [selectedColumns, setSelectedColumns] = useState<string[]>(() => tableModalDefaultPresetColumns());
+  const [selectedColumns, setSelectedColumns] = useState<string[]>(() =>
+    tableModalDefaultPresetColumns(deviceId)
+  );
   const [tableData, setTableData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const tableColumnChoices = useMemo(
+    () => filterMetricsForMeatDevice(deviceId, [...CHART_METRIC_KEYS]),
+    [deviceId]
+  );
+
+  useEffect(() => {
+    setSelectedColumns((prev) => filterMetricsForMeatDevice(deviceId, prev));
+  }, [deviceId]);
 
   const tableDataLabeled = useMemo(
     () => tableData.map((row) => ({ ...row, timeStr: formatDateTime(row.timestamp) })),
@@ -1756,7 +1796,7 @@ const HistoricalDataTableModal = ({
 
   const applyPreset = (presetId: string) => {
     const preset = TABLE_PRESETS.find((p) => p.id === presetId);
-    if (preset) setSelectedColumns(preset.columns);
+    if (preset) setSelectedColumns(filterMetricsForMeatDevice(deviceId, [...preset.columns]));
     if (presetId === 'last12') {
       setDateRange(defaultLast12hDateTimeLocalRange(displayTimeZone));
       if (preloadedHistory.length > 0) {
@@ -1903,7 +1943,7 @@ const HistoricalDataTableModal = ({
             <div>
               <h4 className="font-medium text-sm text-gray-900 mb-2">{t('columns_to_show')}</h4>
               <div className="space-y-1 max-h-[30vh] overflow-y-auto">
-                {CHART_METRIC_KEYS.map((key) => (
+                {tableColumnChoices.map((key) => (
                   <label key={key} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1.5 rounded">
                     <input
                       type="checkbox"

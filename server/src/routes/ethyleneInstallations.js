@@ -17,6 +17,7 @@ import {
   serializeInstallation,
   startInstallationTest,
 } from '../ethyleneInstallation.js';
+import { isMeatRipenerDeviceId } from '../meatRipenerDevice.js';
 
 export const ethyleneInstallationsRouter = express.Router();
 
@@ -194,6 +195,12 @@ ethyleneInstallationsRouter.post(
   async (req, res) => {
     try {
       const deviceId = String(req.body.deviceId || '').trim();
+      if (isMeatRipenerDeviceId(deviceId)) {
+        return res.status(403).json({
+          error: 'not_supported',
+          message: 'Ethylene installation is not available for meat ripener devices',
+        });
+      }
       const notes = req.body.notes != null ? String(req.body.notes) : null;
       const flowmeterLpm =
         req.body.flowmeterLpm != null && String(req.body.flowmeterLpm).trim() !== ''

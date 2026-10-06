@@ -2,6 +2,8 @@
 
 Cómo Riper decide **qué equipos ve cada cuenta** y **qué API/link** alimenta la lista, el detalle y el historial.
 
+**Mapa completo cuenta ↔ empresa ↔ IMEI (incl. BRAEDT / 7001):** ver [`cuenta_link.md`](./cuenta_link.md).
+
 Detalle de endpoints: `apis.md`. Implementación: `src/app/lib/api.ts` → `fetchDevices` / `fetchDevice` / `fetchDeviceHistory`.
 
 ---
@@ -65,6 +67,16 @@ Bases habituales:
 | **Historial** | `buscar_datos_madurador_rango/?imei=` |
 | **Env** | `DEMO_MADURADOR_EMPRESA_IDENTIFICADORES=6001,7001` |
 
+### 2b) BRAEDT — `braedt@riper.local`
+
+| | |
+|--|--|
+| **Rol** | `admin` (control **suspendido** hasta validación) |
+| **Contraseña** | `braedt2026!` (o `BRAEDT_PASSWORD`) |
+| **Empresa** | **7001** (lista completa) |
+| **Lista** | `GET /api/v1/madurador/dispositivos` → solo `…?identificador=7001` |
+| **Nota** | Si upstream 7001 responde `[]`, la UI queda vacía. Detalle: `cuenta_link.md` |
+
 ### 3) Demo flota — `demo-flota@riper.local`
 
 | | |
@@ -94,9 +106,14 @@ Cuentas típicas:
 | **Dispositivos en panel** | `MEX1001`, `MEX2001`, `MEX3001` (empaquetados; etileno/humedad de compañeros físicos) |
 | **Físicos asociados** | p. ej. `MEX1001+MEX1002`, `MEX2001+MEX2002`, `MEX3001` |
 | **Upstream empresas** | `1001`, `2001`, `3001` |
-| **Lista** | `GET /api/v1/madurador/dispositivos` → servidor empaqueta panel |
-| **Historial** | `buscar_datos_madurador_rango/?imei=` (IMEI panel o físico según mapeo) |
-| **Comandos** | Upstream `GET …/TermoKing/comando_control/{deviceId}?tipo=&dato=` |
+| **Lista (interno)** | `GET {RIPENER}/api/v1/madurador/dispositivos` |
+| **Lista (fuente real)** | El servidor consulta **exactamente** estas 3 URLs (base def. `http://161.132.53.51:9051`): |
+| | `GET …/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=1001` |
+| | `GET …/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=2001` |
+| | `GET …/Madurador/listar_dispositivos_proceso_identificador_empresa/?identificador=3001` |
+| **Historial** | `GET …/Madurador/buscar_datos_madurador_rango/?imei={imei}&fecha_inicio=&fecha_fin=` |
+| **Comandos** | `GET …/TermoKing/comando_control/{deviceId}?tipo=&dato=` |
+| **Detalle links** | Ver sección «Links exactos» en [`cuenta_link.md`](./cuenta_link.md) |
 
 ---
 
